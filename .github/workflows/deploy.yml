@@ -1,0 +1,117 @@
+name: Deploy
+
+# Deploys already built images to one environment on the VPS. Called by
+# ci.yml after a push to main (staging); can also be started by hand from the
+# Actions tab, e.g. to roll back to an older commit.
+#
+# Server details are not in this file. They live in the GitHub Environment
+# of the same name:
+#   secrets: SSH_PRIVATE_KEY, SSH_KNOWN_HOSTS
+#   vars:    SSH_HOST, SSH_USER, SSH_PORT (optional, default 22), DEPLOY_DIR,
+#            APP_URL (optional, shown as link on the deployment)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      image-tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [staging]
+        required: true
+      image-tag:
+        description: Full commit SHA on main whose images should be deployed
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: Deploy (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.APP_URL }}
+    # Never two deploys to the same environment at once, and never cancel a
+    # running one halfway; a newer one waits instead.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      IMAGE_TAG: ${{ inputs.image-tag }}
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+    steps:
+      # The tag ends up in a remote shell command; for a manual run it is
+      # free text, so only accept what ci.yml produces: a full commit SHA.
+      - name: Validate inputs
+        run: |
+          if [[ ! $IMAGE_TAG =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::image-tag must be a full 40-character commit SHA"
+            exit 1
+          fi
+          if [[ ! $DEPLOY_DIR =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+            echo "::error::DEPLOY_DIR is missing or invalid in environment '$ENVIRONMENT'"
+            exit 1
+          fi
+
+      # Compose files and deploy.sh from the same commit as the images.
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.image-tag }}
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.SSH_HOST }}
+          SSH_USER: ${{ vars.SSH_USER }}
+          SSH_PORT: ${{ vars.SSH_PORT || '22' }}
+        run: |
+          install -m 700 -d ~/.ssh
+          install -m 600 /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          # Pinned host key: the connection fails instead of trusting an
+          # unknown server.
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host server
+            HostName $SSH_HOST
+            Port $SSH_PORT
+            User $SSH_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Upload compose files and deploy script
+        run: |
+          files=(deploy/docker-compose.yml deploy/deploy.sh)
+          if [[ -f deploy/docker-compose.$ENVIRONMENT.yml ]]; then
+            files+=("deploy/docker-compose.$ENVIRONMENT.yml")
+          fi
+          # Expanding on the runner is intended; DEPLOY_DIR is validated above.
+          # shellcheck disable=SC2029
+          ssh server "rm -rf '$DEPLOY_DIR/incoming' && mkdir -p '$DEPLOY_DIR/incoming'"
+          scp "${files[@]}" "server:$DEPLOY_DIR/incoming/"
+
+      # The job's GITHUB_TOKEN may pull the private images (packages: read)
+      # and expires when the job ends. It goes to the server via stdin, so it
+      # never shows up in a process list or shell history.
+      - name: Deploy
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Expanding on the runner is intended; both values are validated above.
+        run: |
+          # shellcheck disable=SC2029
+          printf '%s\n' "$GHCR_TOKEN" \
+            | ssh server "cd '$DEPLOY_DIR' && bash incoming/deploy.sh '$IMAGE_TAG' '$GITHUB_ACTOR'"
