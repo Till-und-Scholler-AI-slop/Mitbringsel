@@ -1,0 +1,22 @@
+# Local development only: just PostgreSQL. The server runs on the host via `make dev`.
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: mitbringsel
+      POSTGRES_PASSWORD: mitbringsel
+      POSTGRES_DB: mitbringsel
+    ports:
+      # Bound to localhost so the dev database is not reachable from the network.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # Postgres 18 images keep versioned data directories below this path.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mitbringsel -d mitbringsel"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:

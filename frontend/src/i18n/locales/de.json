@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "Mitbringsel"
+  },
+  "home": {
+    "backend": {
+      "label": "Server",
+      "loading": "Verbindung wird geprüft …",
+      "ok": "Verbunden",
+      "retry": "Erneut prüfen"
+    }
+  },
+  "errors": {
+    "DB_UNAVAILABLE": "Die Datenbank ist gerade nicht erreichbar.",
+    "NETWORK": "Der Server ist nicht erreichbar.",
+    "UNKNOWN": "Etwas ist schiefgelaufen."
+  }
+}

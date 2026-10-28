@@ -1,0 +1,105 @@
+# Staging and production on the VPS, behind the Traefik that already runs
+# there. Shared by both environments: everything environment-specific comes
+# from the .env next to this file (see .env.example), staging additionally
+# loads docker-compose.staging.yml.
+#
+# The deploy workflow copies this file to the server; never edit it there.
+#
+# ${VAR:?message} makes Compose refuse to start when VAR is missing, instead
+# of silently using an empty value. One such check per variable is enough.
+
+# Docker keeps container logs forever by default; rotate them.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    volumes:
+      # Postgres 18 images keep versioned data directories below this path.
+      - pgdata:/var/lib/postgresql
+    networks:
+      internal:
+        # The backend is also on the shared proxy network, where other
+        # projects on the VPS may have a container called "db" as well.
+        # A name containing the project name always resolves to this one.
+        aliases: ["${COMPOSE_PROJECT_NAME}-db"]
+    healthcheck:
+      # $$ keeps Compose from substituting; the shell in the container does.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+  backend:
+    image: ghcr.io/till-und-scholler-ai-slop/mitbringsel-backend:${IMAGE_TAG:?IMAGE_TAG is required}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${COMPOSE_PROJECT_NAME}-db:5432/${POSTGRES_DB}?sslmode=disable
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    # proxy: reachable by Traefik and able to call external APIs (Google).
+    networks: [internal, proxy]
+    # The server writes nothing to disk and needs no Linux capabilities.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # The server waits up to 10s for open requests on SIGTERM; give it a bit
+    # more before Docker kills it.
+    stop_grace_period: 15s
+    labels:
+      - traefik.enable=true
+      # The container is on two networks; Traefik must use the shared one.
+      - traefik.docker.network=${TRAEFIK_NETWORK}
+      # Router names are global in Traefik, so they carry the project name
+      # to keep staging and production apart. The longer rule wins over the
+      # web router's Host-only rule, so /api always reaches the backend.
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME:?COMPOSE_PROJECT_NAME is required}-api.rule=Host(`${APP_DOMAIN:?APP_DOMAIN is required}`) && PathPrefix(`/api`)
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.entrypoints=${TRAEFIK_ENTRYPOINT:?TRAEFIK_ENTRYPOINT is required}
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.tls=true
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:?TRAEFIK_CERTRESOLVER is required}
+      - traefik.http.services.${COMPOSE_PROJECT_NAME}-api.loadbalancer.server.port=8080
+    logging: *logging
+
+  web:
+    image: ghcr.io/till-und-scholler-ai-slop/mitbringsel-web:${IMAGE_TAG}
+    restart: unless-stopped
+    networks: [proxy]
+    read_only: true
+    # nginx writes its pid file and temporary files below /tmp.
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK}
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-web.rule=Host(`${APP_DOMAIN}`)
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-web.entrypoints=${TRAEFIK_ENTRYPOINT}
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-web.tls=true
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-web.tls.certresolver=${TRAEFIK_CERTRESOLVER}
+      - traefik.http.services.${COMPOSE_PROJECT_NAME}-web.loadbalancer.server.port=8080
+    logging: *logging
+
+volumes:
+  pgdata:
+
+networks:
+  # Only db and backend. internal: true also cuts it off from the internet,
+  # so the database can neither be reached from nor reach outside.
+  internal:
+    internal: true
+  # Traefik's existing network; it is not created or removed by this project.
+  proxy:
+    external: true
+    name: ${TRAEFIK_NETWORK:?TRAEFIK_NETWORK is required}

@@ -1,0 +1,13 @@
+# Secrets and local configuration
+.env
+
+# Go
+/backend/server
+*.test
+
+# Frontend
+node_modules/
+dist/
+
+# OS / editor
+.DS_Store

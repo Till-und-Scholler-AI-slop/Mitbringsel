@@ -1,0 +1,8 @@
+# node_modules is installed fresh inside the image; copying the local one
+# would be slow and could contain binaries built for another platform.
+node_modules
+dist
+coverage
+Dockerfile
+.dockerignore
+.env*

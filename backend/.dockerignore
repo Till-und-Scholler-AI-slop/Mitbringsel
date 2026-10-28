@@ -1,0 +1,7 @@
+# Keep the build context small and avoid cache misses from files the image
+# does not need.
+Dockerfile
+.dockerignore
+.golangci.yml
+server
+*.test

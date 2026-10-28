@@ -1,0 +1,16 @@
+# golangci-lint v2 configuration. Run locally with `make lint`.
+version: "2"
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      # Keep our own packages in a separate import group after third-party ones.
+      local-prefixes:
+        - mitbringsel
