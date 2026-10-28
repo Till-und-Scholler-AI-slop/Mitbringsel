@@ -34,15 +34,18 @@ Im Repo unter `deploy/`:
 | `docker-compose.yml` | Basis für beide Umgebungen: `web`, `backend`, `db`, Traefik-Labels, Healthchecks |
 | `docker-compose.staging.yml` | Nur der Unterschied für Staging: Authelia-Middleware an beiden Routern |
 | `.env.example` | Vorlage für die `.env` auf dem Server, Werte für Staging, Abweichungen für Production als Kommentar |
+| `deploy.sh` | Läuft beim Deployment auf dem Server: Dateien installieren, Images ziehen, starten, bei Fehler zurückrollen |
 | `docker-compose.dev.yml` | Nur lokale Entwicklung (Postgres), kommt nie auf den Server |
 
-Auf dem VPS liegt je Umgebung ein Ordner. Der Deploy-Workflow kopiert die Compose-Dateien aus dem deployten Commit dorthin und überschreibt sie dabei; auf dem Server wird nur die `.env` von Hand gepflegt.
+Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im GitHub Environment). Der Deploy-Workflow kopiert die Compose-Dateien aus dem deployten Commit dorthin und überschreibt sie dabei; auf dem Server wird nur die `.env` von Hand gepflegt.
 
 ```
-/opt/mitbringsel/
-├── staging/   docker-compose.yml, docker-compose.staging.yml, .env
-└── prod/      docker-compose.yml, .env
+/opt/personal-projects/slop/mitbringsel/
+├── staging/   docker-compose.yml, docker-compose.staging.yml, .env, previous/
+└── prod/      docker-compose.yml, .env, previous/
 ```
+
+`previous/` hält die Compose-Dateien des vorherigen Deployments für den automatischen Rollback.
 
 `COMPOSE_PROJECT_NAME` und `COMPOSE_FILE` stehen in der `.env`, deshalb reicht in beiden Ordnern ein schlichtes `docker compose up -d --wait`.
 
@@ -70,8 +73,74 @@ Auf dem VPS liegt je Umgebung ein Ordner. Der Deploy-Workflow kopiert die Compos
 
 1. **Bei jedem Pull Request und Push auf `main`** (Workflow `.github/workflows/ci.yml`, auch manuell startbar): Lint (`golangci-lint`, ESLint, Prettier), Typprüfung (`vue-tsc`), Backend-Tests mit Postgres über `testcontainers-go`, Frontend-Tests, Build beider Teile. Dazu `docker compose config` für Staging und Production mit `deploy/.env.example` (Job `deploy-config`) und ein Build beider Container-Images ohne Push (Job `images`), damit kaputte Compose-Dateien oder Dockerfiles schon im PR auffallen. Feature-Branches ohne PR laufen nicht, damit ein PR nicht doppelt geprüft wird. Lokal entsprechen dem `make lint`, `make test`, `make frontend-lint`, `make frontend-test` und `make frontend-build`.
 2. **Push auf `main`, CI grün:** Der Job `images` läuft erst nach den Backend- und Frontend-Jobs und pusht `ghcr.io/till-und-scholler-ai-slop/mitbringsel-backend` und `…-web`, getaggt mit dem vollen Commit-SHA (kein `latest`). Nur dieser Job hat `packages: write`; angemeldet wird mit dem automatischen `GITHUB_TOKEN`. Der Layer-Cache liegt im GitHub-Actions-Cache (je Image ein eigener Bereich), sodass unveränderte Abhängigkeiten nicht neu gebaut werden. Da das Repo privat ist, sind auch die Images privat.
-3. **Deploy Staging:** Per SSH auf dem VPS im Projekt `mitbringsel-staging` `docker compose pull` und `docker compose up -d` ausführen; danach Healthcheck. Schlägt er fehl, wird auf das vorherige Image zurückgesetzt.
+3. **Deploy Staging:** Der Job `deploy-staging` läuft nach `images` und `deploy-config` und ruft den wiederverwendbaren Workflow `.github/workflows/deploy.yml` auf (siehe [Deployment-Ablauf](#deployment-ablauf)). Läufe auf `main` werden nicht abgebrochen, damit kein Deployment mittendrin stoppt; bei PRs bricht ein neuer Push den alten Lauf weiterhin ab.
 4. **GitHub Release veröffentlicht:** Die Images des Release-Commits zusätzlich mit der Version taggen und genauso in `mitbringsel-prod` deployen. Rollback heißt: die vorherige Version deployen.
 5. **E2E-Tests** laufen zunächst nur nightly oder manuell, um die Pipeline schnell zu halten.
 
 Secrets (SSH-Key, Google-Client-Secret je Umgebung) liegen ausschließlich in den GitHub Environments `staging` und `production` und auf dem Server.
+
+## Deployment-Ablauf
+
+`.github/workflows/deploy.yml` bekommt Umgebung und Image-Tag (voller Commit-SHA) und läuft im gleichnamigen GitHub Environment:
+
+1. Eingaben prüfen: Tag muss ein voller SHA sein, `DEPLOY_DIR` ein gültiger Pfad.
+2. Checkout genau dieses Commits, damit Compose-Dateien und `deploy.sh` zu den Images passen.
+3. SSH einrichten: privater Key und gepinnter Host-Key aus den Secrets, `StrictHostKeyChecking yes`. Keine fremden SSH-Actions.
+4. `docker-compose.yml`, die Override-Datei der Umgebung (falls vorhanden) und `deploy.sh` per `scp` nach `<DEPLOY_DIR>/incoming/`.
+5. Per `ssh` `deploy.sh <tag>` ausführen. Das `GITHUB_TOKEN` des Jobs (nur `packages: read`, läuft mit dem Job ab) geht per stdin mit.
+
+`deploy.sh` auf dem Server:
+
+- meldet sich mit einer temporären Docker-Konfiguration bei GHCR an, sodass kein Token liegen bleibt und Logins anderer Projekte desselben Users unberührt bleiben,
+- sichert die aktiven Compose-Dateien nach `previous/` und merkt sich das bisherige `IMAGE_TAG`,
+- installiert die neuen Dateien, setzt `IMAGE_TAG` in der `.env`, zieht nur `backend` und `web` (PostgreSQL wird bewusst nicht bei jedem Deployment aktualisiert, weil das die Datenbank neu startet),
+- startet mit `docker compose up --wait` und wartet bis zu 120 Sekunden auf gesunde Container,
+- stellt bei einem Fehler Compose-Dateien und Tag wieder her, startet den alten Stand und beendet sich mit Fehler (der Job wird rot); die letzten Log-Zeilen von `backend` und `web` stehen im Job-Log,
+- entfernt nach Erfolg alle Mitbringsel-Images, die kein Container mehr nutzt (Filter auf das Label `org.opencontainers.image.source`; Images anderer Projekte bleiben unberührt).
+
+**Migrationen werden nicht zurückgerollt.** Nach einem fehlgeschlagenen Deployment läuft das alte Backend gegen das bereits migrierte Schema. Migrationen müssen deshalb abwärtskompatibel sein (siehe [Konventionen](conventions.md)).
+
+**Manuell deployen oder zurückrollen:** Im Tab *Actions* den Workflow *Deploy* starten, Umgebung wählen und den vollen SHA eines Commits auf `main` angeben. Die Images aller Commits auf `main` liegen in GHCR.
+
+## Einrichtung
+
+Einmalig je Umgebung, hier am Beispiel Staging.
+
+**Auf dem Server** (User `deploy`, Mitglied der Gruppe `docker`; Docker Compose als System-Plugin, z.B. Paket `docker-compose-plugin`):
+
+```bash
+# Ordner anlegen und .env aus der Vorlage im Repo erstellen
+sudo mkdir -p /opt/personal-projects/slop/mitbringsel/staging
+sudo chown -R deploy: /opt/personal-projects/slop/mitbringsel
+# deploy/.env.example als .env dorthin kopieren und anpassen,
+# Passwort z.B. mit: openssl rand -hex 32
+chmod 600 /opt/personal-projects/slop/mitbringsel/staging/.env
+```
+
+Mitglied der Gruppe `docker` zu sein ist praktisch Root-Zugriff. Der SSH-Key für GitHub ist deshalb so wertvoll wie ein Root-Zugang.
+
+**SSH-Key nur für GitHub** (lokal erzeugen, nicht wiederverwenden):
+
+```bash
+ssh-keygen -t ed25519 -N '' -C github-actions-mitbringsel -f mitbringsel-deploy
+# Inhalt von mitbringsel-deploy.pub auf dem Server an ~deploy/.ssh/authorized_keys anhängen
+ssh-keyscan -p <port> <host>   # Ausgabe ist SSH_KNOWN_HOSTS
+```
+
+Danach die lokale Datei `mitbringsel-deploy` löschen, sobald sie in GitHub hinterlegt ist.
+
+**GitHub Environment** `staging` (*Settings → Environments*):
+
+| Art | Name | Inhalt |
+| --- | --- | --- |
+| Secret | `SSH_PRIVATE_KEY` | Inhalt von `mitbringsel-deploy` |
+| Secret | `SSH_KNOWN_HOSTS` | Ausgabe von `ssh-keyscan` |
+| Variable | `SSH_HOST` | Hostname oder IP des VPS |
+| Variable | `SSH_USER` | `deploy` |
+| Variable | `SSH_PORT` | nur nötig, wenn nicht 22 |
+| Variable | `DEPLOY_DIR` | `/opt/personal-projects/slop/mitbringsel/staging` |
+| Variable | `APP_URL` | optional, z.B. `https://mitbringsel-dev.tinowolter.com` |
+
+Unter *Deployment branches and tags* nur `main` erlauben, damit kein anderer Branch an die Secrets kommt.
+
+**Authelia:** eine `access_control`-Regel für `mitbringsel-dev.tinowolter.com` (siehe [ADR 0001](adr/0001-staging-und-production.md)).
