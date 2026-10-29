@@ -16,7 +16,7 @@ Claude spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hier 
 Jede Phase endet mit einem lauffähigen, getesteten Stand.
 
 1. **Fundament:** Monorepo, `Makefile`, lokales Postgres per Compose, Go-Server mit Health-Endpunkt, Vue-Projekt mit Router, Pinia, i18n und Platzhalter-Tokens, CI mit Lint und Tests.
-2. **Auth:** Google Login, Sessions, Dev-Login, `GET /api/v1/me`, Logout.
+2. **Auth:** Google Login, Sessions, Dev-Login, `GET /api/v1/me`, Logout. Abgelaufene Sessions werden zunächst nur abgewiesen; ein periodischer Aufräum-Job folgt, spätestens zusammen mit dem für `processed_ops` in Phase 5.
 3. **Gruppen und Einladungen:** REST-Endpunkte, Rollen, Einladungslinks, zugehörige Views.
 4. **Listen und Artikel online:** CRUD über REST, Seed-Daten, Basis-Komponenten.
 5. **Live-Sync:** WebSocket-Hub, Protokoll, LWW-Merge, Broadcast an Gruppenmitglieder.
