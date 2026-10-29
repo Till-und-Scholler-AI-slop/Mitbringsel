@@ -39,10 +39,12 @@ async function readErrorCode(response: Response): Promise<string> {
   }
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
+// Sends the request and turns every failure into an ApiError: no response
+// at all (NETWORK) and non-2xx responses with the backend's error code.
+async function request(path: string, init?: RequestInit): Promise<Response> {
   let response: Response
   try {
-    response = await fetch(`${API_BASE}${path}`)
+    response = await fetch(`${API_BASE}${path}`, init)
   } catch {
     throw new ApiError(ERROR_CODE_NETWORK)
   }
@@ -50,5 +52,23 @@ export async function apiGet<T>(path: string): Promise<T> {
   if (!response.ok) {
     throw new ApiError(await readErrorCode(response), response.status)
   }
+  return response
+}
+
+export async function apiGet<T>(path: string): Promise<T> {
+  const response = await request(path)
   return (await response.json()) as T
+}
+
+/**
+ * POSTs `body` as JSON, or nothing if it is omitted. Resolves without a value:
+ * every POST endpoint so far answers 204 No Content.
+ */
+export async function apiPost(path: string, body?: unknown): Promise<void> {
+  await request(path, {
+    method: 'POST',
+    ...(body === undefined
+      ? {}
+      : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  })
 }

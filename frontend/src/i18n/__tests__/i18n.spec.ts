@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import type { ApiErrorCode } from '@/types/api'
+
 import de from '../locales/de.json'
 import en from '../locales/en.json'
 import { detectLocale } from '../index'
@@ -17,6 +19,26 @@ function flattenKeys(obj: Record<string, unknown>, prefix = ''): string[] {
 describe('locale files', () => {
   it('have exactly the same keys in de and en', () => {
     expect(flattenKeys(en).sort()).toEqual(flattenKeys(de).sort())
+  })
+})
+
+// Listing the codes as object keys makes the type checker demand every code
+// from api/openapi.yaml: a new code fails the build here until it is added
+// (and translated below).
+const API_ERROR_CODES: Record<ApiErrorCode, true> = {
+  NOT_FOUND: true,
+  METHOD_NOT_ALLOWED: true,
+  DB_UNAVAILABLE: true,
+  UNAUTHENTICATED: true,
+  INTERNAL_ERROR: true,
+  CROSS_ORIGIN_REQUEST: true,
+  INVALID_REQUEST: true,
+  INVALID_IDENTITY: true,
+}
+
+describe('error messages', () => {
+  it.each(Object.keys(API_ERROR_CODES))('translate %s', (code) => {
+    expect(Object.keys(de.errors)).toContain(code)
   })
 })
 

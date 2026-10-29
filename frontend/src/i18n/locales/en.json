@@ -8,11 +8,28 @@
       "loading": "Checking connection …",
       "ok": "Connected",
       "retry": "Check again"
+    },
+    "user": {
+      "signedInAs": "Signed in as {name}",
+      "logout": "Log out"
     }
   },
+  "login": {
+    "intro": "Shared shopping lists for your flat, synced live.",
+    "google": "Sign in with Google",
+    "devLogin": "Sign in as {email} (dev)",
+    "retry": "Try again"
+  },
   "errors": {
+    "CROSS_ORIGIN_REQUEST": "The request was blocked for security reasons.",
     "DB_UNAVAILABLE": "The database is currently unavailable.",
+    "INTERNAL_ERROR": "Something went wrong on the server.",
+    "INVALID_IDENTITY": "The sign-in data is incomplete.",
+    "INVALID_REQUEST": "The request was invalid.",
+    "METHOD_NOT_ALLOWED": "This action is not possible here.",
     "NETWORK": "The server cannot be reached.",
+    "NOT_FOUND": "This does not exist (anymore).",
+    "UNAUTHENTICATED": "You are not signed in.",
     "UNKNOWN": "Something went wrong."
   }
 }
