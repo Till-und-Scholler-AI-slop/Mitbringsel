@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -28,6 +29,14 @@ type SessionValidator interface {
 	Validate(ctx context.Context, token string) (uuid.UUID, error)
 }
 
+// SessionManager adds creating and deleting sessions for the login and
+// logout handlers. requireUser keeps asking only for SessionValidator.
+type SessionManager interface {
+	SessionValidator
+	Create(ctx context.Context, userID uuid.UUID) (token string, expiresAt time.Time, err error)
+	Delete(ctx context.Context, token string) error
+}
+
 // userIDKey is unexported, so no other package can create the same key and
 // read or overwrite the value by accident.
 type userIDKey struct{}
@@ -37,6 +46,37 @@ func sessionCookieName(env config.Env) string {
 		return sessionCookieDev
 	}
 	return sessionCookieSecure
+}
+
+// setSessionCookie hands the session token to the browser.
+func setSessionCookie(w http.ResponseWriter, env config.Env, token string, expiresAt time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:    sessionCookieName(env),
+		Value:   token,
+		Path:    "/",
+		Expires: expiresAt,
+		// JavaScript cannot read the cookie, so an XSS bug cannot steal it.
+		HttpOnly: true,
+		// Required by the __Host- prefix; local development has no HTTPS.
+		Secure: env != config.EnvDevelopment,
+		// The browser leaves the cookie off requests other sites trigger,
+		// except plain top-level navigation such as following a link.
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// clearSessionCookie tells the browser to drop the session cookie. The
+// attributes must match setSessionCookie, otherwise the browser treats it
+// as a different cookie and keeps the old one.
+func clearSessionCookie(w http.ResponseWriter, env config.Env) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName(env),
+		Path:     "/",
+		MaxAge:   -1, // sent as Max-Age=0: expire now
+		HttpOnly: true,
+		Secure:   env != config.EnvDevelopment,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // requireUser wraps handlers that need a logged-in user. It answers 401
