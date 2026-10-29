@@ -17,11 +17,27 @@ import (
 )
 
 // fakeUsers returns users from a map. Like the real service, it wraps
-// user.ErrNotFound for unknown IDs.
+// user.ErrNotFound for unknown IDs and user.ErrInvalidIdentity for a
+// sign-in without email.
 type fakeUsers struct {
 	users map[uuid.UUID]user.User
-	// err, if set, is returned for every ID.
+	// err, if set, is returned by every method.
 	err error
+	// signIns records the identities SignIn was called with.
+	signIns []user.Identity
+}
+
+// SignIn needs a pointer receiver to record the call. Get keeps its value
+// receiver, so a plain fakeUsers still works where only Get is needed.
+func (f *fakeUsers) SignIn(_ context.Context, identity user.Identity) (user.User, error) {
+	f.signIns = append(f.signIns, identity)
+	if f.err != nil {
+		return user.User{}, f.err
+	}
+	if strings.TrimSpace(identity.Email) == "" {
+		return user.User{}, fmt.Errorf("sign in: %w", user.ErrInvalidIdentity)
+	}
+	return user.User{ID: testUserID, Email: identity.Email, DisplayName: identity.Name}, nil
 }
 
 func (f fakeUsers) Get(_ context.Context, id uuid.UUID) (user.User, error) {
@@ -159,8 +175,8 @@ func TestRouter_me(t *testing.T) {
 			router := NewRouter(Deps{
 				Env:      config.EnvDevelopment,
 				DB:       fakePinger{},
-				Sessions: &fakeValidator{validToken: validToken},
-				Users:    fakeUsers{users: map[uuid.UUID]user.User{testUserID: testUser()}},
+				Sessions: &fakeSessions{fakeValidator: fakeValidator{validToken: validToken}},
+				Users:    &fakeUsers{users: map[uuid.UUID]user.User{testUserID: testUser()}},
 			})
 			req := httptest.NewRequest(tt.method, mePath, nil)
 			if tt.cookie != nil {

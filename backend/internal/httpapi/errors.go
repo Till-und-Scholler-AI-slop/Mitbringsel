@@ -14,6 +14,9 @@ const (
 	CodeDBUnavailable    = "DB_UNAVAILABLE"
 	CodeUnauthenticated  = "UNAUTHENTICATED"
 	CodeInternal         = "INTERNAL_ERROR"
+	CodeCrossOrigin      = "CROSS_ORIGIN_REQUEST"
+	CodeInvalidRequest   = "INVALID_REQUEST"
+	CodeInvalidIdentity  = "INVALID_IDENTITY"
 )
 
 type errorResponse struct {

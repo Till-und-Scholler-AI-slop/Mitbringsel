@@ -18,15 +18,23 @@ type UserGetter interface {
 	Get(ctx context.Context, id uuid.UUID) (user.User, error)
 }
 
+// UserService is everything the handlers need from users. Embedding
+// UserGetter adds its Get method to this interface, so handlers that only
+// read users can keep asking for the smaller UserGetter.
+type UserService interface {
+	UserGetter
+	SignIn(ctx context.Context, identity user.Identity) (user.User, error)
+}
+
 // Deps holds everything the handlers need. A struct with named fields stays
 // readable as more domains are added, where a long parameter list would
 // make it easy to swap two arguments of the same type.
 type Deps struct {
-	// Env selects the session cookie name.
+	// Env selects the session cookie and whether the dev login exists.
 	Env      config.Env
 	DB       Pinger
-	Sessions SessionValidator
-	Users    UserGetter
+	Sessions SessionManager
+	Users    UserService
 }
 
 // router wraps http.ServeMux and remembers which methods each path allows.
@@ -50,10 +58,27 @@ func NewRouter(deps Deps) http.Handler {
 
 	r.handle(http.MethodGet, HealthPath, healthHandler(deps.DB))
 	r.handle(http.MethodGet, mePath, protect(meHandler(deps.Users)))
+	// Not behind requireUser: logging out must work with an expired
+	// session, too.
+	r.handle(http.MethodPost, logoutPath, logoutHandler(deps.Sessions, deps.Env))
+
+	// Outside development the route does not exist at all and answers 404
+	// like any unknown path, instead of being registered and then refused.
+	if deps.Env == config.EnvDevelopment {
+		r.handle(http.MethodPost, devLoginPath, devLoginHandler(deps.Users, deps.Sessions, deps.Env))
+	}
 
 	// "/" matches everything no other pattern matched.
 	r.mux.HandleFunc("/", r.fallback)
-	return r.mux
+
+	// CSRF protection around the whole router, so a new route cannot forget
+	// it. It rejects state-changing methods (POST, PUT, DELETE, ...) sent
+	// from another site; GET, HEAD and OPTIONS always pass.
+	csrf := http.NewCrossOriginProtection()
+	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeError(w, http.StatusForbidden, CodeCrossOrigin)
+	}))
+	return csrf.Handler(r.mux)
 }
 
 func (r *router) handle(method, path string, h http.HandlerFunc) {
