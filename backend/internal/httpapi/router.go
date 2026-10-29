@@ -2,9 +2,32 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
+
+	"mitbringsel/internal/config"
+	"mitbringsel/internal/user"
 )
+
+// UserGetter loads a user by ID. *user.Service satisfies it; tests use a
+// fake.
+type UserGetter interface {
+	Get(ctx context.Context, id uuid.UUID) (user.User, error)
+}
+
+// Deps holds everything the handlers need. A struct with named fields stays
+// readable as more domains are added, where a long parameter list would
+// make it easy to swap two arguments of the same type.
+type Deps struct {
+	// Env selects the session cookie name.
+	Env      config.Env
+	DB       Pinger
+	Sessions SessionValidator
+	Users    UserGetter
+}
 
 // router wraps http.ServeMux and remembers which methods each path allows.
 // The mux answers unknown paths and wrong methods with plain text; knowing
@@ -15,13 +38,18 @@ type router struct {
 }
 
 // NewRouter builds the HTTP handler with all API routes registered.
-func NewRouter(db Pinger) http.Handler {
+func NewRouter(deps Deps) http.Handler {
 	r := &router{
 		mux:     http.NewServeMux(),
 		methods: make(map[string][]string),
 	}
 
-	r.handle(http.MethodGet, HealthPath, healthHandler(db))
+	// protect puts requireUser in front of a handler: only requests with a
+	// valid session reach it.
+	protect := requireUser(deps.Sessions, sessionCookieName(deps.Env))
+
+	r.handle(http.MethodGet, HealthPath, healthHandler(deps.DB))
+	r.handle(http.MethodGet, mePath, protect(meHandler(deps.Users)))
 
 	// "/" matches everything no other pattern matched.
 	r.mux.HandleFunc("/", r.fallback)
