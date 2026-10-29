@@ -12,13 +12,13 @@ einkaufsliste/
 │   ├── cmd/server/main.go        # Einstieg, Dependency Injection von Hand
 │   ├── internal/
 │   │   ├── config/               # Konfiguration aus Umgebungsvariablen
-│   │   ├── auth/                 # Google OIDC, Sessions, Middleware
+│   │   ├── auth/                 # Google OIDC, Sessions (ohne HTTP)
 │   │   ├── user/                 # Domäne: Nutzer
 │   │   ├── group/                # Domäne: Gruppen, Mitgliedschaften, Einladungen
 │   │   ├── list/                 # Domäne: Listen
 │   │   ├── item/                 # Domäne: Artikel
 │   │   ├── sync/                 # WebSocket-Hub, Broadcast, Konfliktauflösung
-│   │   ├── httpapi/              # Routing, Handler, DTOs, Fehlerformat
+│   │   ├── httpapi/              # Routing, Handler, Middleware, DTOs, Fehlerformat
 │   │   └── platform/db/          # pgx-Pool, sqlc-Code, Transaktionen
 │   └── db/
 │       ├── migrations/           # goose-Migrationen

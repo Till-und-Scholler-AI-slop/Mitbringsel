@@ -1,8 +1,10 @@
 # Staging only, loaded on top of docker-compose.yml: every request has to
-# pass Authelia first. Compose merges labels by key, so these lines add the
-# middleware without repeating the other router labels.
+# pass Authelia first. Compose merges labels and environment by key, so these
+# lines add or replace single entries without repeating the others.
 services:
   backend:
+    environment:
+      APP_ENV: staging
     labels:
       - traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.middlewares=${AUTHELIA_MIDDLEWARE:?AUTHELIA_MIDDLEWARE is required}
   web:

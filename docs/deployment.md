@@ -9,7 +9,7 @@ Die App läuft auf einem VPS mit Docker Compose in zwei Umgebungen: Staging und 
 | Domain | `mitbringsel-dev.tinowolter.com` | `mitbringsel.tinowolter.com` |
 | Auslöser | Push auf `main` (nach grüner CI) | Veröffentlichter GitHub Release `vX.Y.Z` |
 | Image-Tag | Commit-SHA | Commit-SHA und Version |
-| `APP_ENV` | `staging` | `production` |
+| `APP_ENV` (fest in den Compose-Dateien, nicht in der `.env`) | `staging` | `production` |
 | Zugriff | Authelia (Traefik-ForwardAuth), dann Google-Login | Google-Login |
 | Backups | keine | täglich |
 
