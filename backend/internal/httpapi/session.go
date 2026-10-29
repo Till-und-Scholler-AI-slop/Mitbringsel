@@ -26,7 +26,7 @@ const (
 // SessionValidator resolves a session token to the user it belongs to.
 // *auth.SessionService satisfies it; tests use a fake.
 type SessionValidator interface {
-	Validate(ctx context.Context, token string) (uuid.UUID, error)
+	Validate(ctx context.Context, token string) (userID uuid.UUID, renewedUntil time.Time, err error)
 }
 
 // SessionManager adds creating and deleting sessions for the login and
@@ -82,7 +82,8 @@ func clearSessionCookie(w http.ResponseWriter, env config.Env) {
 // requireUser wraps handlers that need a logged-in user. It answers 401
 // itself, so the wrapped handler only runs with a valid session and can
 // read the user ID with userIDFrom.
-func requireUser(sessions SessionValidator, cookieName string) func(http.HandlerFunc) http.HandlerFunc {
+func requireUser(sessions SessionValidator, env config.Env) func(http.HandlerFunc) http.HandlerFunc {
+	cookieName := sessionCookieName(env)
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			// r.Cookie only fails with http.ErrNoCookie.
@@ -92,7 +93,7 @@ func requireUser(sessions SessionValidator, cookieName string) func(http.Handler
 				return
 			}
 
-			userID, err := sessions.Validate(r.Context(), cookie.Value)
+			userID, renewedUntil, err := sessions.Validate(r.Context(), cookie.Value)
 			if errors.Is(err, auth.ErrSessionNotFound) {
 				writeError(w, http.StatusUnauthorized, CodeUnauthenticated)
 				return
@@ -103,6 +104,14 @@ func requireUser(sessions SessionValidator, cookieName string) func(http.Handler
 				slog.Error("validate session", "error", err)
 				writeError(w, http.StatusInternalServerError, CodeInternal)
 				return
+			}
+
+			// The server extended the session, so the cookie must live as
+			// long, or the browser would drop it after the original expiry
+			// although the user stayed active. Set before next runs, because
+			// headers cannot change once the handler starts writing the body.
+			if !renewedUntil.IsZero() {
+				setSessionCookie(w, env, cookie.Value, renewedUntil)
 			}
 
 			ctx := context.WithValue(r.Context(), userIDKey{}, userID)

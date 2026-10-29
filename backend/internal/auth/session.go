@@ -76,31 +76,34 @@ func (s *SessionService) Create(ctx context.Context, userID uuid.UUID) (string, 
 }
 
 // Validate returns the user the token belongs to and renews the session if
-// it has not been renewed within touchInterval.
-func (s *SessionService) Validate(ctx context.Context, token string) (uuid.UUID, error) {
+// it has not been renewed within touchInterval. renewedUntil is the new
+// expiry after a renewal and zero otherwise, so the caller knows when to
+// extend the cookie as well.
+func (s *SessionService) Validate(ctx context.Context, token string) (userID uuid.UUID, renewedUntil time.Time, err error) {
 	if token == "" {
-		return uuid.Nil, ErrSessionNotFound
+		return uuid.Nil, time.Time{}, ErrSessionNotFound
 	}
 
 	idHash := hashToken(token)
 	session, err := s.repo.Get(ctx, idHash)
 	if err != nil {
 		// %w keeps ErrSessionNotFound recognisable for errors.Is.
-		return uuid.Nil, fmt.Errorf("get session: %w", err)
+		return uuid.Nil, time.Time{}, fmt.Errorf("get session: %w", err)
 	}
 
 	now := s.now()
 	// Not before expiry means expired, including the exact expiry instant.
 	if !now.Before(session.ExpiresAt) {
-		return uuid.Nil, ErrSessionNotFound
+		return uuid.Nil, time.Time{}, ErrSessionNotFound
 	}
 
 	if now.Sub(session.LastSeenAt) >= touchInterval {
-		if err := s.repo.Touch(ctx, idHash, now, now.Add(sessionLifetime)); err != nil {
-			return uuid.Nil, fmt.Errorf("touch session: %w", err)
+		renewedUntil = now.Add(sessionLifetime)
+		if err := s.repo.Touch(ctx, idHash, now, renewedUntil); err != nil {
+			return uuid.Nil, time.Time{}, fmt.Errorf("touch session: %w", err)
 		}
 	}
-	return session.UserID, nil
+	return session.UserID, renewedUntil, nil
 }
 
 // Delete ends the session (logout). An unknown token is not an error: the

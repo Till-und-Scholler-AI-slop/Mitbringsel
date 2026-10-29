@@ -172,7 +172,7 @@ func TestSessionService_Validate(t *testing.T) {
 			}
 			clock.Advance(tt.age)
 
-			userID, err := svc.Validate(context.Background(), token)
+			userID, renewedUntil, err := svc.Validate(context.Background(), token)
 
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Validate() error = %v, want %v", err, tt.wantErr)
@@ -184,10 +184,16 @@ func TestSessionService_Validate(t *testing.T) {
 				t.Errorf("touched = %t, want %t", got, tt.wantTouched)
 			}
 			if tt.wantTouched {
+				want := clock.Now().Add(sessionLifetime)
 				stored := repo.sessions[string(hashToken(token))]
-				if want := clock.Now().Add(sessionLifetime); !stored.ExpiresAt.Equal(want) {
+				if !stored.ExpiresAt.Equal(want) {
 					t.Errorf("renewed ExpiresAt = %v, want %v", stored.ExpiresAt, want)
 				}
+				if !renewedUntil.Equal(want) {
+					t.Errorf("renewedUntil = %v, want %v", renewedUntil, want)
+				}
+			} else if !renewedUntil.IsZero() {
+				t.Errorf("renewedUntil = %v, want zero without renewal", renewedUntil)
 			}
 		})
 	}
@@ -203,12 +209,12 @@ func TestSessionService_Validate_renewalExtendsLifetime(t *testing.T) {
 	}
 
 	clock.Advance(sessionLifetime - time.Hour)
-	if _, err := svc.Validate(context.Background(), token); err != nil {
+	if _, _, err := svc.Validate(context.Background(), token); err != nil {
 		t.Fatalf("Validate() before original expiry: %v", err)
 	}
 
 	clock.Advance(2 * time.Hour)
-	if _, err := svc.Validate(context.Background(), token); err != nil {
+	if _, _, err := svc.Validate(context.Background(), token); err != nil {
 		t.Errorf("Validate() after original expiry: %v, want the renewed session to be valid", err)
 	}
 }
@@ -226,7 +232,7 @@ func TestSessionService_Validate_unknownToken(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, _, _ := newTestService()
 
-			_, err := svc.Validate(context.Background(), tt.token)
+			_, _, err := svc.Validate(context.Background(), tt.token)
 			if !errors.Is(err, ErrSessionNotFound) {
 				t.Errorf("Validate() error = %v, want %v", err, ErrSessionNotFound)
 			}
@@ -243,7 +249,7 @@ func TestSessionService_Validate_touchError(t *testing.T) {
 	clock.Advance(touchInterval)
 	repo.failWith = errRepo
 
-	_, err = svc.Validate(context.Background(), token)
+	_, _, err = svc.Validate(context.Background(), token)
 	if !errors.Is(err, errRepo) {
 		t.Errorf("Validate() error = %v, want %v", err, errRepo)
 	}
@@ -259,7 +265,7 @@ func TestSessionService_Delete(t *testing.T) {
 	if err := svc.Delete(context.Background(), token); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
-	if _, err := svc.Validate(context.Background(), token); !errors.Is(err, ErrSessionNotFound) {
+	if _, _, err := svc.Validate(context.Background(), token); !errors.Is(err, ErrSessionNotFound) {
 		t.Errorf("Validate() after Delete() error = %v, want %v", err, ErrSessionNotFound)
 	}
 }
