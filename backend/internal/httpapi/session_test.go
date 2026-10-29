@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -15,7 +16,11 @@ import (
 	"mitbringsel/internal/config"
 )
 
-const testCookieName = "test-session"
+// testEnv is the environment the requireUser tests run in; testCookieName
+// is the cookie name that goes with it.
+const testEnv = config.EnvDevelopment
+
+var testCookieName = sessionCookieName(testEnv)
 
 var testUserID = uuid.MustParse("0190a8c4-0000-7000-8000-000000000001")
 
@@ -23,19 +28,22 @@ var testUserID = uuid.MustParse("0190a8c4-0000-7000-8000-000000000001")
 type fakeValidator struct {
 	validToken string
 	// err, if set, is returned for every token.
-	err       error
-	gotTokens []string
+	err error
+	// renewedUntil is returned for the valid token, as if the session had
+	// just been renewed. Zero means no renewal.
+	renewedUntil time.Time
+	gotTokens    []string
 }
 
-func (f *fakeValidator) Validate(_ context.Context, token string) (uuid.UUID, error) {
+func (f *fakeValidator) Validate(_ context.Context, token string) (uuid.UUID, time.Time, error) {
 	f.gotTokens = append(f.gotTokens, token)
 	if f.err != nil {
-		return uuid.Nil, f.err
+		return uuid.Nil, time.Time{}, f.err
 	}
 	if token != f.validToken {
-		return uuid.Nil, auth.ErrSessionNotFound
+		return uuid.Nil, time.Time{}, auth.ErrSessionNotFound
 	}
-	return testUserID, nil
+	return testUserID, f.renewedUntil, nil
 }
 
 func TestRequireUser(t *testing.T) {
@@ -108,7 +116,7 @@ func TestRequireUser(t *testing.T) {
 				req.AddCookie(tt.cookie)
 			}
 			rec := httptest.NewRecorder()
-			requireUser(validator, testCookieName)(next).ServeHTTP(rec, req)
+			requireUser(validator, testEnv)(next).ServeHTTP(rec, req)
 
 			if rec.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
@@ -123,12 +131,58 @@ func TestRequireUser(t *testing.T) {
 	}
 }
 
+func TestRequireUser_renewsCookie(t *testing.T) {
+	renewedUntil := time.Date(2026, time.March, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name         string
+		renewedUntil time.Time
+		wantCookie   bool
+	}{
+		{name: "session renewed", renewedUntil: renewedUntil, wantCookie: true},
+		// Most requests: without renewal the response sets no cookie.
+		{name: "session not renewed", wantCookie: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			validator := &fakeValidator{validToken: "VALID-TOKEN", renewedUntil: tt.renewedUntil}
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+			req.AddCookie(&http.Cookie{Name: testCookieName, Value: "VALID-TOKEN"})
+			rec := httptest.NewRecorder()
+
+			requireUser(validator, testEnv)(func(w http.ResponseWriter, _ *http.Request) {
+				// Writing the body sends the headers; the cookie must be
+				// in them already.
+				_, _ = w.Write([]byte("ok"))
+			}).ServeHTTP(rec, req)
+
+			cookie := findCookie(rec, testCookieName)
+			if !tt.wantCookie {
+				if cookie != nil {
+					t.Errorf("cookie set without renewal: %v", cookie)
+				}
+				return
+			}
+			if cookie == nil {
+				t.Fatal("renewed session did not refresh the cookie")
+			}
+			if cookie.Value != "VALID-TOKEN" {
+				t.Errorf("Value = %q, want the unchanged token", cookie.Value)
+			}
+			if !cookie.Expires.Equal(renewedUntil) {
+				t.Errorf("Expires = %v, want %v", cookie.Expires, renewedUntil)
+			}
+		})
+	}
+}
+
 func TestRequireUser_passesCookieValue(t *testing.T) {
 	validator := &fakeValidator{validToken: "VALID-TOKEN"}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	req.AddCookie(&http.Cookie{Name: testCookieName, Value: "VALID-TOKEN"})
 
-	requireUser(validator, testCookieName)(func(http.ResponseWriter, *http.Request) {}).
+	requireUser(validator, testEnv)(func(http.ResponseWriter, *http.Request) {}).
 		ServeHTTP(httptest.NewRecorder(), req)
 
 	if len(validator.gotTokens) != 1 || validator.gotTokens[0] != "VALID-TOKEN" {
@@ -139,7 +193,7 @@ func TestRequireUser_passesCookieValue(t *testing.T) {
 func TestRequireUser_noCookieSkipsValidation(t *testing.T) {
 	validator := &fakeValidator{}
 
-	requireUser(validator, testCookieName)(func(http.ResponseWriter, *http.Request) {}).
+	requireUser(validator, testEnv)(func(http.ResponseWriter, *http.Request) {}).
 		ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/me", nil))
 
 	if len(validator.gotTokens) != 0 {

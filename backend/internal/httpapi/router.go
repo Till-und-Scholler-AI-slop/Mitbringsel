@@ -54,7 +54,7 @@ func NewRouter(deps Deps) http.Handler {
 
 	// protect puts requireUser in front of a handler: only requests with a
 	// valid session reach it.
-	protect := requireUser(deps.Sessions, sessionCookieName(deps.Env))
+	protect := requireUser(deps.Sessions, deps.Env)
 
 	r.handle(http.MethodGet, HealthPath, healthHandler(deps.DB))
 	r.handle(http.MethodGet, mePath, protect(meHandler(deps.Users)))

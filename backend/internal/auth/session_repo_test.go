@@ -112,7 +112,7 @@ func TestPostgresSessionRepository(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
-		got, err := svc.Validate(ctx, token)
+		got, _, err := svc.Validate(ctx, token)
 		if err != nil {
 			t.Fatalf("Validate() error = %v", err)
 		}
@@ -123,7 +123,7 @@ func TestPostgresSessionRepository(t *testing.T) {
 		if err := svc.Delete(ctx, token); err != nil {
 			t.Fatalf("Delete() error = %v", err)
 		}
-		if _, err := svc.Validate(ctx, token); !errors.Is(err, ErrSessionNotFound) {
+		if _, _, err := svc.Validate(ctx, token); !errors.Is(err, ErrSessionNotFound) {
 			t.Errorf("Validate() after Delete() error = %v, want %v", err, ErrSessionNotFound)
 		}
 	})
