@@ -12,9 +12,12 @@ import (
 	"syscall"
 	"time"
 
+	"mitbringsel/internal/auth"
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/httpapi"
 	"mitbringsel/internal/platform/db"
+	"mitbringsel/internal/platform/db/sqlcgen"
+	"mitbringsel/internal/user"
 )
 
 const (
@@ -67,9 +70,20 @@ func run() error {
 		return nil
 	}
 
+	// Wiring by hand: each service gets its repository through the
+	// constructor. All repositories share one set of sqlc queries.
+	queries := sqlcgen.New(pool)
+	sessions := auth.NewSessionService(auth.NewPostgresSessionRepository(queries))
+	users := user.NewService(user.NewPostgresRepository(queries))
+
 	srv := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewRouter(pool),
+		Addr: cfg.HTTPAddr,
+		Handler: httpapi.NewRouter(httpapi.Deps{
+			Env:      cfg.Env,
+			DB:       pool,
+			Sessions: sessions,
+			Users:    users,
+		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
 

@@ -62,7 +62,7 @@ func TestRouter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			NewRouter(tt.db).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
+			NewRouter(Deps{DB: tt.db}).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
 
 			if rec.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
