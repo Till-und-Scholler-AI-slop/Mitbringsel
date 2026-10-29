@@ -12,6 +12,8 @@ const (
 	CodeNotFound         = "NOT_FOUND"
 	CodeMethodNotAllowed = "METHOD_NOT_ALLOWED"
 	CodeDBUnavailable    = "DB_UNAVAILABLE"
+	CodeUnauthenticated  = "UNAUTHENTICATED"
+	CodeInternal         = "INTERNAL_ERROR"
 )
 
 type errorResponse struct {

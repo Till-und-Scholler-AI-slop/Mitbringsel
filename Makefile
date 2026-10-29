@@ -4,6 +4,7 @@ COMPOSE := docker compose -f deploy/docker-compose.dev.yml
 -include .env
 export
 
+APP_ENV      ?= development
 DATABASE_URL ?= postgres://mitbringsel:mitbringsel@localhost:5432/mitbringsel?sslmode=disable
 HTTP_ADDR    ?= 127.0.0.1:8080
 IMAGE_TAG    ?= dev
