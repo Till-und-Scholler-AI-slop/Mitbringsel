@@ -11,6 +11,7 @@ import (
 
 	"mitbringsel/internal/auth"
 	"mitbringsel/internal/config"
+	"mitbringsel/internal/httpapi/apigen"
 )
 
 const (
@@ -89,20 +90,20 @@ func requireUser(sessions SessionValidator, env config.Env) func(http.HandlerFun
 			// r.Cookie only fails with http.ErrNoCookie.
 			cookie, err := r.Cookie(cookieName)
 			if err != nil {
-				writeError(w, http.StatusUnauthorized, CodeUnauthenticated)
+				writeError(w, http.StatusUnauthorized, apigen.ErrorCodeUnauthenticated)
 				return
 			}
 
 			userID, renewedUntil, err := sessions.Validate(r.Context(), cookie.Value)
 			if errors.Is(err, auth.ErrSessionNotFound) {
-				writeError(w, http.StatusUnauthorized, CodeUnauthenticated)
+				writeError(w, http.StatusUnauthorized, apigen.ErrorCodeUnauthenticated)
 				return
 			}
 			if err != nil {
 				// Not 401: the frontend would log the user out because the
 				// database is briefly unreachable.
 				slog.Error("validate session", "error", err)
-				writeError(w, http.StatusInternalServerError, CodeInternal)
+				writeError(w, http.StatusInternalServerError, apigen.ErrorCodeInternal)
 				return
 			}
 

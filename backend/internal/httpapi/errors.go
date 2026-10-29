@@ -4,28 +4,9 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"mitbringsel/internal/httpapi/apigen"
 )
-
-// Error codes are part of the API contract: the backend sends codes, the
-// frontend translates them into user-facing text.
-const (
-	CodeNotFound         = "NOT_FOUND"
-	CodeMethodNotAllowed = "METHOD_NOT_ALLOWED"
-	CodeDBUnavailable    = "DB_UNAVAILABLE"
-	CodeUnauthenticated  = "UNAUTHENTICATED"
-	CodeInternal         = "INTERNAL_ERROR"
-	CodeCrossOrigin      = "CROSS_ORIGIN_REQUEST"
-	CodeInvalidRequest   = "INVALID_REQUEST"
-	CodeInvalidIdentity  = "INVALID_IDENTITY"
-)
-
-type errorResponse struct {
-	Error errorBody `json:"error"`
-}
-
-type errorBody struct {
-	Code string `json:"code"`
-}
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -36,6 +17,8 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	}
 }
 
-func writeError(w http.ResponseWriter, status int, code string) {
-	writeJSON(w, status, errorResponse{Error: errorBody{Code: code}})
+// writeError answers in the error format of the API contract. The codes are
+// defined in api/openapi.yaml, so the frontend knows every one of them.
+func writeError(w http.ResponseWriter, status int, code apigen.ErrorCode) {
+	writeJSON(w, status, apigen.Error{Error: apigen.ErrorBody{Code: code}})
 }

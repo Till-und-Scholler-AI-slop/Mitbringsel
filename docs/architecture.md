@@ -8,6 +8,7 @@ Verwandte Dokumente: [Live-Sync](sync.md), [Authentifizierung](auth.md), [Datenm
 
 ```
 einkaufsliste/
+├── api/openapi.yaml              # API-Vertrag, Quelle der generierten Typen
 ├── backend/
 │   ├── cmd/server/main.go        # Einstieg, Dependency Injection von Hand
 │   ├── internal/
@@ -18,7 +19,8 @@ einkaufsliste/
 │   │   ├── list/                 # Domäne: Listen
 │   │   ├── item/                 # Domäne: Artikel
 │   │   ├── sync/                 # WebSocket-Hub, Broadcast, Konfliktauflösung
-│   │   ├── httpapi/              # Routing, Handler, Middleware, DTOs, Fehlerformat
+│   │   ├── httpapi/              # Routing, Handler, Middleware, Fehlerformat
+│   │   │   └── apigen/           # aus api/openapi.yaml generierte Typen
 │   │   └── platform/db/          # pgx-Pool, sqlc-Code, Transaktionen
 │   └── db/
 │       ├── migrations/           # goose-Migrationen
@@ -35,7 +37,7 @@ einkaufsliste/
 │       ├── services/sync/        # WebSocket, Outbox, IndexedDB
 │       ├── i18n/locales/         # de.json, en.json
 │       ├── styles/tokens.css     # Design-Tokens (hell/dunkel)
-│       └── types/                # Gemeinsame TypeScript-Typen
+│       └── types/                # api.ts mit kurzen Namen, openapi.gen.ts generiert
 ├── deploy/                       # Compose-Dateien (dev, staging, prod)
 ├── .github/workflows/            # CI/CD
 └── docs/                         # Dokumentation, ADRs unter docs/adr/
@@ -60,5 +62,6 @@ einkaufsliste/
 ## REST und WebSocket
 
 - REST unter `/api/v1/...` für Auth, Profil, Gruppen, Einladungen, Listen und das initiale Laden von Daten.
+- Der Vertrag steht in `api/openapi.yaml`. Eine API-Änderung beginnt dort, danach `make generate`; Handler und Frontend nutzen die generierten Typen (siehe [ADR 0002](adr/0002-openapi-als-api-vertrag.md)).
 - WebSocket unter `/api/v1/ws` für Artikel-Änderungen in Echtzeit und das Nachsynchronisieren.
 - Wichtige Entscheidungen werden als kurzer ADR in [`adr/`](adr/README.md) festgehalten.

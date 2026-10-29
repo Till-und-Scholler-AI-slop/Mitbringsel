@@ -1,0 +1,14 @@
+# oapi-codegen turns the schemas of api/openapi.yaml into Go types. Only the
+# models are generated: routing, middleware and handlers stay hand-written.
+# Regenerate with `make generate`; never edit the generated file by hand.
+package: apigen
+output: internal/httpapi/apigen/apigen.gen.go
+generate:
+  models: true
+output-options:
+  # Go spells initialisms in all caps: ID and AvatarURL, not Id and AvatarUrl.
+  name-normalizer: ToCamelCaseWithInitialisms
+compatibility:
+  # Enum constants carry their type name (ErrorCodeNotFound, LocaleDe), so
+  # two enums with the same value cannot collide.
+  always-prefix-enum-values: true

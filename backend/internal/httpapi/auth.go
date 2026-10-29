@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"mitbringsel/internal/config"
+	"mitbringsel/internal/httpapi/apigen"
 	"mitbringsel/internal/user"
 )
 
@@ -39,16 +40,11 @@ func logoutHandler(sessions SessionManager, env config.Env) http.HandlerFunc {
 
 		if err := sessions.Delete(r.Context(), cookie.Value); err != nil {
 			slog.Error("logout: delete session", "error", err)
-			writeError(w, http.StatusInternalServerError, CodeInternal)
+			writeError(w, http.StatusInternalServerError, apigen.ErrorCodeInternal)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
-}
-
-type devLoginRequest struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
 }
 
 // devLoginHandler logs in as any user without Google. The router registers
@@ -58,9 +54,9 @@ func devLoginHandler(users UserService, sessions SessionManager, env config.Env)
 		// Decode fails once the limit is reached, so an oversized body ends
 		// up as INVALID_REQUEST like any other broken one.
 		r.Body = http.MaxBytesReader(w, r.Body, maxDevLoginBodyBytes)
-		var req devLoginRequest
+		var req apigen.DevLoginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, CodeInvalidRequest)
+			writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidRequest)
 			return
 		}
 
@@ -72,19 +68,19 @@ func devLoginHandler(users UserService, sessions SessionManager, env config.Env)
 			Name:    req.Name,
 		})
 		if errors.Is(err, user.ErrInvalidIdentity) {
-			writeError(w, http.StatusBadRequest, CodeInvalidIdentity)
+			writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidIdentity)
 			return
 		}
 		if err != nil {
 			slog.Error("dev login: sign in", "error", err)
-			writeError(w, http.StatusInternalServerError, CodeInternal)
+			writeError(w, http.StatusInternalServerError, apigen.ErrorCodeInternal)
 			return
 		}
 
 		token, expiresAt, err := sessions.Create(r.Context(), u.ID)
 		if err != nil {
 			slog.Error("dev login: create session", "error", err)
-			writeError(w, http.StatusInternalServerError, CodeInternal)
+			writeError(w, http.StatusInternalServerError, apigen.ErrorCodeInternal)
 			return
 		}
 

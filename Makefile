@@ -41,9 +41,11 @@ test-short:
 lint:
 	cd backend && golangci-lint run ./...
 
-## generate: regenerate the sqlc code from db/queries (commit the result)
+## generate: regenerate sqlc code and the API types from api/openapi.yaml (commit the result)
 generate:
 	cd backend && go tool sqlc generate
+	cd backend && go tool oapi-codegen -config oapi-codegen.yaml ../api/openapi.yaml
+	cd frontend && npm run generate:api
 
 # The frontend targets need the Node version from frontend/.nvmrc.
 
