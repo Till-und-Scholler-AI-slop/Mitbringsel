@@ -15,6 +15,8 @@ Web-App für digitale Einkaufslisten, die in Echtzeit zwischen mehreren Personen
 
 Die Hierarchie ist: Nutzer gehören zu Gruppen, Gruppen haben mehrere Listen, Listen enthalten Artikel.
 
+**Begriffe:** In der Oberfläche heißt eine Gruppe **Haushalt** (englisch *household*), so wie im Design. Code, API, Datenbank und diese Dokumentation bleiben bei **Gruppe** (`group`).
+
 **Accounts**
 
 - Anmeldung ausschließlich über Google Login
@@ -25,8 +27,8 @@ Die Hierarchie ist: Nutzer gehören zu Gruppen, Gruppen haben mehrere Listen, Li
 
 - Nutzer können Gruppen erstellen (z.B. "WG Kaiserstraße")
 - Andere per Einladungslink beitreten lassen
-- Rollen: Owner (verwaltet Gruppe und Mitglieder) und Member
-- Gruppe verlassen, Mitglieder entfernen, Gruppe umbenennen und löschen
+- Rollen: Owner (verwaltet Gruppe und Mitglieder) und Member. Eine Gruppe kann mehrere Owner haben; Owner können Mitglieder zu Ownern machen.
+- Gruppe verlassen, Mitglieder entfernen, Gruppe umbenennen und löschen. Der letzte Owner kann weder austreten noch sich zum Member machen: Erst muss jemand anderes Owner werden, oder die Gruppe wird gelöscht. So bleibt keine Gruppe ohne Verwaltung zurück.
 
 **Listen**
 
