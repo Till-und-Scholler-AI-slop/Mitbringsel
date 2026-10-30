@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { ApiErrorCode } from '@/types/api'
 
 import de from '../locales/de.json'
 import en from '../locales/en.json'
-import { detectLocale } from '../index'
+import {
+  createAppI18n,
+  detectLocale,
+  LOCALE_STORAGE_KEY,
+  readStoredLocale,
+  storeLocale,
+} from '../index'
 
 // Turns { a: { b: 'x' } } into ['a.b'] so the key sets can be compared.
 function flattenKeys(obj: Record<string, unknown>, prefix = ''): string[] {
@@ -39,6 +45,27 @@ const API_ERROR_CODES: Record<ApiErrorCode, true> = {
 describe('error messages', () => {
   it.each(Object.keys(API_ERROR_CODES))('translate %s', (code) => {
     expect(Object.keys(de.errors)).toContain(code)
+  })
+})
+
+describe('stored locale', () => {
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  it('round-trips a supported language', () => {
+    storeLocale('en')
+    expect(readStoredLocale()).toBe('en')
+  })
+
+  it('ignores values that are not a supported language', () => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, 'fr')
+    expect(readStoredLocale()).toBeNull()
+  })
+
+  it('wins over the browser language', () => {
+    const i18n = createAppI18n(['de'], 'en')
+    expect(i18n.global.locale.value).toBe('en')
   })
 })
 

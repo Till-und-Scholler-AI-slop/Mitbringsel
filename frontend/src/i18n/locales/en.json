@@ -20,6 +20,9 @@
     "devLogin": "Sign in as {email} (dev)",
     "retry": "Try again"
   },
+  "language": {
+    "label": "Language"
+  },
   "errors": {
     "CROSS_ORIGIN_REQUEST": "The request was blocked for security reasons.",
     "DB_UNAVAILABLE": "The database is currently unavailable.",

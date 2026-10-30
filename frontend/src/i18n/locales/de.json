@@ -20,6 +20,9 @@
     "devLogin": "Als {email} anmelden (Dev)",
     "retry": "Erneut versuchen"
   },
+  "language": {
+    "label": "Sprache"
+  },
   "errors": {
     "CROSS_ORIGIN_REQUEST": "Die Anfrage wurde aus Sicherheitsgründen abgelehnt.",
     "DB_UNAVAILABLE": "Die Datenbank ist gerade nicht erreichbar.",
