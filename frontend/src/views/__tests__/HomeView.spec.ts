@@ -1,16 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createAppI18n } from '@/i18n'
 
 import HomeView from '../HomeView.vue'
 
 // Only fetch is faked, so this runs the whole chain: view -> store -> service -> client.
+// The router has no routes: the view only needs it to exist for useRouter.
 function mountHome(fetchImpl: () => Promise<Response>) {
   vi.stubGlobal('fetch', vi.fn(fetchImpl))
+  const router = createRouter({ history: createMemoryHistory(), routes: [] })
   return mount(HomeView, {
-    global: { plugins: [createPinia(), createAppI18n(['en'])] },
+    global: { plugins: [createPinia(), createAppI18n(['en']), router] },
   })
 }
 

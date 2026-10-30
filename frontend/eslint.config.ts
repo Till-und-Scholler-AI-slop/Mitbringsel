@@ -10,7 +10,8 @@ export default defineConfigWithVueTs(
     files: ['**/*.{vue,ts,mts,tsx}'],
   },
 
-  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
+  // openapi.gen.ts is generated from api/openapi.yaml (npm run generate:api).
+  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**', 'src/types/openapi.gen.ts']),
 
   ...pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,

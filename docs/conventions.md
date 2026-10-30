@@ -18,7 +18,7 @@ Best Practices und SOLID gelten für jeden Schritt. Claude weist aktiv darauf hi
 - Fehler werden nie still geschluckt: geloggt, an den Nutzer übersetzt gemeldet, oder bewusst kommentiert ignoriert.
 - Konventionelle Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
 - Migrationen sind abwärtskompatibel: Die vorherige Version des Backends muss mit dem neuen Schema noch laufen, weil ein fehlgeschlagenes Deployment nur die Images zurückrollt, nicht die Datenbank. Spalten und Tabellen also erst hinzufügen und erst in einem späteren Release entfernen oder umbenennen.
-- Generierter Code (sqlc unter `internal/platform/db/sqlcgen`) wird eingecheckt und nie von Hand bearbeitet. Nach Änderungen an `db/queries` oder `db/migrations` `make generate` ausführen; die CI prüft, ob der Stand aktuell ist.
+- Generierter Code (sqlc unter `internal/platform/db/sqlcgen`, API-Typen unter `internal/httpapi/apigen` und `frontend/src/types/openapi.gen.ts`) wird eingecheckt und nie von Hand bearbeitet. Nach Änderungen an `db/queries`, `db/migrations` oder `api/openapi.yaml` `make generate` ausführen; die CI prüft, ob der Stand aktuell ist.
 - Go-Werkzeuge, die zum Build gehören (z.B. sqlc), stehen als `tool` in `backend/go.mod` und werden mit `go tool <name>` aufgerufen. So nutzen alle Rechner und die CI dieselbe Version.
 
 ## Wiederverwendbare Komponenten

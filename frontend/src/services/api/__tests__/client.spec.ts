@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, apiGet } from '../client'
+import { ApiError, apiGet, apiPost } from '../client'
 
 function stubFetch(impl: () => Promise<Response>) {
   vi.stubGlobal('fetch', vi.fn(impl))
@@ -15,7 +15,7 @@ describe('apiGet', () => {
     stubFetch(() => Promise.resolve(Response.json({ status: 'ok' })))
 
     await expect(apiGet('/health')).resolves.toEqual({ status: 'ok' })
-    expect(fetch).toHaveBeenCalledWith('/api/v1/health')
+    expect(fetch).toHaveBeenCalledWith('/api/v1/health', undefined)
   })
 
   it('maps the backend error code and status', async () => {
@@ -49,5 +49,37 @@ describe('apiGet', () => {
 
     expect(err).toBeInstanceOf(ApiError)
     expect(err).toMatchObject({ code: 'NETWORK', status: undefined })
+  })
+})
+
+describe('apiPost', () => {
+  it('sends the body as json', async () => {
+    stubFetch(() => Promise.resolve(new Response(null, { status: 204 })))
+
+    await expect(apiPost('/auth/dev/login', { email: 'anna@example.com' })).resolves.toBeUndefined()
+    expect(fetch).toHaveBeenCalledWith('/api/v1/auth/dev/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"email":"anna@example.com"}',
+    })
+  })
+
+  it('sends no body and no content type without a body', async () => {
+    stubFetch(() => Promise.resolve(new Response(null, { status: 204 })))
+
+    await apiPost('/auth/logout')
+
+    expect(fetch).toHaveBeenCalledWith('/api/v1/auth/logout', { method: 'POST' })
+  })
+
+  it('maps the backend error code and status', async () => {
+    stubFetch(() =>
+      Promise.resolve(Response.json({ error: { code: 'CROSS_ORIGIN_REQUEST' } }, { status: 403 })),
+    )
+
+    await expect(apiPost('/auth/logout')).rejects.toMatchObject({
+      code: 'CROSS_ORIGIN_REQUEST',
+      status: 403,
+    })
   })
 })

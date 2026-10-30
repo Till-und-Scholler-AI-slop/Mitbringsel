@@ -77,15 +77,15 @@ func TestMeHandler(t *testing.T) {
 			name:       "user found",
 			users:      fakeUsers{users: map[uuid.UUID]user.User{testUserID: testUser()}},
 			wantStatus: http.StatusOK,
-			wantBody: `{"id":"0190a8c4-0000-7000-8000-000000000001","email":"anna@example.com",` +
-				`"displayName":"Anna Müller","avatarUrl":"https://example.com/anna.png","locale":"de","theme":"system"}`,
+			wantBody: `{"avatarUrl":"https://example.com/anna.png","displayName":"Anna Müller",` +
+				`"email":"anna@example.com","id":"0190a8c4-0000-7000-8000-000000000001","locale":"de","theme":"system"}`,
 		},
 		{
 			name:       "user without avatar",
 			users:      fakeUsers{users: map[uuid.UUID]user.User{testUserID: withoutAvatar}},
 			wantStatus: http.StatusOK,
-			wantBody: `{"id":"0190a8c4-0000-7000-8000-000000000001","email":"anna@example.com",` +
-				`"displayName":"Anna Müller","avatarUrl":null,"locale":"de","theme":"system"}`,
+			wantBody: `{"avatarUrl":null,"displayName":"Anna Müller",` +
+				`"email":"anna@example.com","id":"0190a8c4-0000-7000-8000-000000000001","locale":"de","theme":"system"}`,
 		},
 		{
 			name:       "user deleted while session is valid",
@@ -117,6 +117,26 @@ func TestMeHandler(t *testing.T) {
 				t.Errorf("body = %s, want %s", got, tt.wantBody)
 			}
 		})
+	}
+}
+
+// TestNewMeResponse_enumsMatchContract catches a locale or theme added to the
+// user domain but not to api/openapi.yaml: the conversion in newMeResponse
+// compiles either way, so only this test notices the drift.
+func TestNewMeResponse_enumsMatchContract(t *testing.T) {
+	for _, locale := range []user.Locale{user.LocaleDE, user.LocaleEN} {
+		u := testUser()
+		u.Locale = locale
+		if got := newMeResponse(u).Locale; !got.Valid() {
+			t.Errorf("locale %q is not in the API contract", got)
+		}
+	}
+	for _, theme := range []user.Theme{user.ThemeLight, user.ThemeDark, user.ThemeSystem} {
+		u := testUser()
+		u.Theme = theme
+		if got := newMeResponse(u).Theme; !got.Valid() {
+			t.Errorf("theme %q is not in the API contract", got)
+		}
 	}
 }
 

@@ -8,11 +8,28 @@
       "loading": "Verbindung wird geprüft …",
       "ok": "Verbunden",
       "retry": "Erneut prüfen"
+    },
+    "user": {
+      "signedInAs": "Angemeldet als {name}",
+      "logout": "Abmelden"
     }
   },
+  "login": {
+    "intro": "Geteilte Einkaufslisten für deine WG, live synchron.",
+    "google": "Mit Google anmelden",
+    "devLogin": "Als {email} anmelden (Dev)",
+    "retry": "Erneut versuchen"
+  },
   "errors": {
+    "CROSS_ORIGIN_REQUEST": "Die Anfrage wurde aus Sicherheitsgründen abgelehnt.",
     "DB_UNAVAILABLE": "Die Datenbank ist gerade nicht erreichbar.",
+    "INTERNAL_ERROR": "Auf dem Server ist ein Fehler aufgetreten.",
+    "INVALID_IDENTITY": "Die Anmeldedaten sind unvollständig.",
+    "INVALID_REQUEST": "Die Anfrage war ungültig.",
+    "METHOD_NOT_ALLOWED": "Diese Aktion ist hier nicht möglich.",
     "NETWORK": "Der Server ist nicht erreichbar.",
+    "NOT_FOUND": "Das gibt es nicht (mehr).",
+    "UNAUTHENTICATED": "Du bist nicht angemeldet.",
     "UNKNOWN": "Etwas ist schiefgelaufen."
   }
 }

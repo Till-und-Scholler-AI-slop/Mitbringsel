@@ -1,0 +1,209 @@
+# The API contract between backend and frontend. This file is the source:
+# `make generate` derives the Go types (backend/internal/httpapi/apigen) and
+# the TypeScript types (frontend/src/types/openapi.gen.ts) from it.
+# Change the API here first, then regenerate and let both compilers point
+# out what no longer fits.
+#
+# OpenAPI 3.0 instead of 3.1, because oapi-codegen does not fully support
+# 3.1 yet.
+openapi: 3.0.3
+
+info:
+  title: Mitbringsel API
+  version: "1"
+  description: |
+    REST API of Mitbringsel. All endpoints answer JSON; errors share one
+    format (`Error`) with a machine-readable code that the frontend
+    translates.
+
+    State-changing requests (POST, PUT, PATCH, DELETE) sent from another
+    site are rejected with `403 CROSS_ORIGIN_REQUEST` (CSRF protection).
+
+servers:
+  - url: /api/v1
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check that the server and the database are reachable
+      tags: [system]
+      responses:
+        "200":
+          description: Server and database are up.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          $ref: "#/components/responses/Error"
+
+  /me:
+    get:
+      operationId: getMe
+      summary: Get the logged-in user
+      tags: [auth]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The logged-in user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: End the session
+      description: |
+        Deletes the session and clears the cookie. Works without a valid
+        session as well; the user is logged out either way.
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out; the response clears the session cookie.
+        "403":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /auth/dev/login:
+    post:
+      operationId: devLogin
+      summary: Log in without Google (development only)
+      description: |
+        Only exists with `APP_ENV=development`; elsewhere it answers 404.
+        Creates the user on first login and sets the session cookie.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevLoginRequest"
+      responses:
+        "204":
+          description: Logged in; the response sets the session cookie.
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      # Staging and production; local development uses "session".
+      name: __Host-session
+
+  responses:
+    Error:
+      description: The request failed; `error.code` says why.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    Me:
+      type: object
+      required: [id, email, displayName, avatarUrl, locale, theme]
+      properties:
+        id:
+          type: string
+          format: uuid
+          # The Go side uses google/uuid like the rest of the backend,
+          # instead of oapi-codegen's own UUID type.
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          description: null if the user has no avatar.
+        locale:
+          $ref: "#/components/schemas/Locale"
+        theme:
+          $ref: "#/components/schemas/Theme"
+
+    Locale:
+      type: string
+      enum: [de, en]
+
+    Theme:
+      type: string
+      enum: [light, dark, system]
+
+    DevLoginRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+        name:
+          type: string
+          description: Optional; the part of the email before the @ if empty.
+          # A missing name is the same as an empty one, so Go gets a plain
+          # string instead of a pointer.
+          x-go-type-skip-optional-pointer: true
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/ErrorBody"
+
+    ErrorBody:
+      type: object
+      required: [code]
+      properties:
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+
+    ErrorCode:
+      type: string
+      description: Machine-readable error; the frontend translates it.
+      enum:
+        - NOT_FOUND
+        - METHOD_NOT_ALLOWED
+        - DB_UNAVAILABLE
+        - UNAUTHENTICATED
+        - INTERNAL_ERROR
+        - CROSS_ORIGIN_REQUEST
+        - INVALID_REQUEST
+        - INVALID_IDENTITY
+      # Go constant names; without them oapi-codegen would turn NOT_FOUND
+      # into NOTFOUND.
+      x-enum-varnames:
+        - NotFound
+        - MethodNotAllowed
+        - DBUnavailable
+        - Unauthenticated
+        - Internal
+        - CrossOrigin
+        - InvalidRequest
+        - InvalidIdentity

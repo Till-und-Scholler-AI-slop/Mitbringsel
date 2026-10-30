@@ -1,18 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
-import { ERROR_CODE_UNKNOWN } from '@/services/api/client'
+import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useAuthStore } from '@/stores/auth'
 import { useHealthStore } from '@/stores/health'
 
-const { t, te } = useI18n()
+const { t } = useI18n()
+const router = useRouter()
+const auth = useAuthStore()
 const health = useHealthStore()
+const errorMessage = useErrorMessage(() => health.errorCode)
 
-// Codes the frontend has no translation for fall back to the generic message.
-const errorMessage = computed(() => {
-  const code = health.errorCode ?? ERROR_CODE_UNKNOWN
-  return t(te(`errors.${code}`) ? `errors.${code}` : `errors.${ERROR_CODE_UNKNOWN}`)
-})
+async function logout() {
+  try {
+    await auth.logout()
+  } finally {
+    // The store is logged out even if the request failed, so leave anyway.
+    await router.push({ name: 'login' })
+  }
+}
 
 onMounted(() => health.check())
 </script>
@@ -20,6 +28,11 @@ onMounted(() => health.check())
 <template>
   <main class="home">
     <h1>{{ t('app.name') }}</h1>
+
+    <p v-if="auth.user" class="user">
+      {{ t('home.user.signedInAs', { name: auth.user.displayName }) }}
+      <button type="button" @click="logout">{{ t('home.user.logout') }}</button>
+    </p>
 
     <p class="status" role="status">
       <span class="label">{{ t('home.backend.label') }}:</span>
@@ -41,6 +54,13 @@ onMounted(() => health.check())
   max-width: 40rem;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
+}
+
+.user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
 }
 
 .label {

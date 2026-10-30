@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"mitbringsel/internal/config"
+	"mitbringsel/internal/httpapi/apigen"
 	"mitbringsel/internal/user"
 )
 
@@ -76,7 +77,7 @@ func NewRouter(deps Deps) http.Handler {
 	// from another site; GET, HEAD and OPTIONS always pass.
 	csrf := http.NewCrossOriginProtection()
 	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		writeError(w, http.StatusForbidden, CodeCrossOrigin)
+		writeError(w, http.StatusForbidden, apigen.ErrorCodeCrossOrigin)
 	}))
 	return csrf.Handler(r.mux)
 }
@@ -89,8 +90,8 @@ func (r *router) handle(method, path string, h http.HandlerFunc) {
 func (r *router) fallback(w http.ResponseWriter, req *http.Request) {
 	if allowed, ok := r.methods[req.URL.Path]; ok {
 		w.Header().Set("Allow", strings.Join(allowed, ", "))
-		writeError(w, http.StatusMethodNotAllowed, CodeMethodNotAllowed)
+		writeError(w, http.StatusMethodNotAllowed, apigen.ErrorCodeMethodNotAllowed)
 		return
 	}
-	writeError(w, http.StatusNotFound, CodeNotFound)
+	writeError(w, http.StatusNotFound, apigen.ErrorCodeNotFound)
 }
