@@ -28,7 +28,7 @@ async function loadAndContinue() {
 <template>
   <main class="login">
     <h1>{{ t('app.name') }}</h1>
-    <p>{{ t('login.intro') }}</p>
+    <p>{{ t('login.tagline') }}</p>
 
     <p v-if="auth.status === 'error'" role="alert">
       {{ errorMessage }}

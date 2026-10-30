@@ -15,10 +15,33 @@
     }
   },
   "login": {
-    "intro": "Geteilte Einkaufslisten für deine WG, live synchron.",
+    "title": "Anmelden",
+    "tagline": "Geteilte Einkaufslisten für eure WG – live synchron, auch offline.",
+    "lead": "Der erste Login legt dein Konto an – eine extra Registrierung gibt es nicht.",
     "google": "Mit Google anmelden",
     "devLogin": "Als {email} anmelden (Dev)",
-    "retry": "Erneut versuchen"
+    "redirecting": "Weiterleitung zu Google …",
+    "retry": "Nochmal versuchen",
+    "shops": {
+      "supermarket": "Supermarkt",
+      "drugstore": "Drogerie",
+      "hardware": "Baumarkt"
+    },
+    "failed": {
+      "title": "Anmeldung hat nicht geklappt",
+      "body": "Sie wurde abgebrochen oder ist fehlgeschlagen. Versuch es einfach noch einmal."
+    },
+    "serverError": {
+      "title": "Anmeldung gerade nicht möglich"
+    },
+    "sessionExpired": {
+      "title": "Du wurdest abgemeldet, bitte melde dich neu an.",
+      "body": "Deine Listen und Gruppen bleiben erhalten."
+    },
+    "offline": {
+      "title": "Offline",
+      "body": "Ohne Internet ist die Anmeldung gerade nicht möglich. Sobald du wieder online bist, kannst du dich anmelden."
+    }
   },
   "language": {
     "label": "Sprache"
