@@ -5,13 +5,24 @@ Das Backend wickelt den Google-Login selbst ab (OpenID Connect, Authorization Co
 ## Login-Ablauf
 
 1. Frontend leitet auf `GET /api/v1/auth/google/login` weiter.
-2. Backend erzeugt `state`, `nonce` und PKCE-Verifier, speichert sie kurzlebig und leitet zu Google weiter.
-3. Google leitet auf `/api/v1/auth/google/callback` zurück. Das Backend prüft `state`, tauscht den Code gegen Tokens und validiert das ID-Token.
+2. Backend erzeugt `state`, `nonce` und PKCE-Verifier und speichert sie in einem kurzlebigen Cookie (`__Secure-google-login`, lokal `google-login`): `HttpOnly`, `SameSite=Lax`, 10 Minuten gültig und nur für den Pfad des Callbacks. Danach leitet es zu Google weiter.
+3. Google leitet auf `/api/v1/auth/google/callback` zurück. Das Backend prüft `state` gegen das Cookie, tauscht den Code mit dem PKCE-Verifier gegen Tokens und validiert das ID-Token (Signatur, Aussteller, Ablauf, Client-ID als Audience, `nonce`). Konten ohne bestätigte E-Mail-Adresse (`email_verified`) werden abgelehnt. Das Cookie wird in jedem Fall gelöscht, ein Versuch gilt nur einmal.
 4. Backend legt den Nutzer an oder aktualisiert ihn (Schlüssel: Google `sub`, nicht die E-Mail).
-5. Backend erstellt eine Session in der Datenbank und setzt ein Cookie: `HttpOnly`, `Secure`, `SameSite=Lax`.
+5. Backend erstellt eine Session in der Datenbank, setzt das Session-Cookie (`HttpOnly`, `Secure`, `SameSite=Lax`) und leitet auf `/` weiter.
 6. Frontend lädt den aktuellen Nutzer über `GET /api/v1/me`.
 
-Bricht der Nutzer bei Google ab oder schlägt ein Schritt fehl, leitet das Backend auf `/login?error=<code>` um; die Login-Seite zeigt dann einen Fehlerhinweis mit "Nochmal versuchen". Stellt das Frontend fest, dass eine Sitzung abgelaufen ist (`401` bei einem angemeldeten Nutzer), leitet es auf `/login?reason=session_expired` um, damit die Seite erklärt, warum man sich neu anmelden muss.
+Bricht der Nutzer bei Google ab, leitet das Backend auf `/login?error=access_denied` um, bei jedem anderen Fehler auf `/login?error=login_failed`; die Login-Seite zeigt dann einen Fehlerhinweis mit "Nochmal versuchen". Details stehen nur im Server-Log.
+
+Warum ein Cookie statt einer Tabelle für `state` und Co.: Die Werte gehören zu genau einem Browser und leben wenige Minuten. Im Cookie brauchen sie weder Migration noch Aufräum-Job, und für Fremde sind sie wertlos (der Verifier passt nur zu einem Code für genau diesen Versuch).
+
+Die Google-Endpunkte sind fest im Code hinterlegt statt beim Start aus Googles Discovery-Dokument gelesen, damit der Server auch startet, wenn Google kurz nicht erreichbar ist. Googles Signaturschlüssel lädt `go-oidc` bei Bedarf nach.
+
+## Einrichtung
+
+- In der Google Cloud Console unter *Google Auth Platform* einen Zustimmungsbildschirm (Nutzertyp extern, Scopes `openid email profile`) und je Umgebung einen OAuth-Client vom Typ *Webanwendung* anlegen. Solange die App im Status "Testen" ist, können sich nur eingetragene Testnutzer anmelden.
+- Autorisierte Weiterleitungs-URI je Client: `<PUBLIC_BASE_URL>/api/v1/auth/google/callback`, also lokal `http://localhost:5173/api/v1/auth/google/callback` (über den Vite-Proxy), sonst `https://<domain>/api/v1/auth/google/callback`.
+- Konfiguration über `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` und `PUBLIC_BASE_URL`. Auf Staging und Production sind alle Pflicht (`PUBLIC_BASE_URL` leitet Compose aus `APP_DOMAIN` ab), lokal sind sie optional: Ohne Client gibt es nur den Dev-Login, und die Google-Endpunkte antworten `404`.
+- Die Weiterleitungs-URL entsteht aus `PUBLIC_BASE_URL`, nie aus dem `Host`-Header: Den kann ein Client beliebig setzen, und der Vite-Proxy schreibt ihn um. Stellt das Frontend fest, dass eine Sitzung abgelaufen ist (`401` bei einem angemeldeten Nutzer), leitet es auf `/login?reason=session_expired` um, damit die Seite erklärt, warum man sich neu anmelden muss.
 
 ## Sessions und Sicherheit
 
