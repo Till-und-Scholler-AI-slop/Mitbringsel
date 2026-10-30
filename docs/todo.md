@@ -12,6 +12,10 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 - [ ] **Stores bei Logout und abgelaufener Sitzung leeren:** Sobald Gruppen- und Listen-Stores Daten halten, müssen `logout()` und `expireSession()` im Auth-Store sie zurücksetzen (z.B. über einen gemeinsamen Reset), damit nach einem Nutzerwechsel keine fremden Daten sichtbar bleiben.
 - [ ] **Sprache aus dem Nutzerprofil:** Der Sprachschalter merkt sich die Wahl vorerst nur in `localStorage`. Sobald das Profil die Sprache speichern kann, gewinnt nach dem Login das Profil (siehe [Konventionen](conventions.md), i18n).
 
+## Gruppen
+
+- [ ] **Account löschen und letzter Owner:** Löscht der letzte Owner einer Gruppe seinen Account, fällt seine Mitgliedschaft per `ON DELETE CASCADE` weg und die Gruppe hat keinen Owner mehr. Beim Bau der Account-Löschung festlegen: vorher einen Owner bestimmen lassen, das älteste Mitglied automatisch befördern oder leere Gruppen löschen.
+
 ## Komponenten
 
 - [ ] **`BaseButton`:** Varianten `danger` und Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen, im Login-Design noch nicht vorhanden).
