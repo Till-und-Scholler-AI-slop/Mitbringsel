@@ -2,6 +2,22 @@ import type { ApiErrorBody } from '@/types/api'
 
 const API_BASE = '/api/v1'
 
+/** The status the backend answers when the request has no valid session. */
+export const HTTP_STATUS_UNAUTHORIZED = 401
+
+type UnauthenticatedHandler = () => void
+
+let unauthenticatedHandler: UnauthenticatedHandler | null = null
+
+/**
+ * Registers the function called on every 401 answer, before the request
+ * rejects. The app reacts to an expired session there, in one place, instead
+ * of in every store (see router/sessionExpiry.ts). null removes it.
+ */
+export function setUnauthenticatedHandler(handler: UnauthenticatedHandler | null) {
+  unauthenticatedHandler = handler
+}
+
 /** Codes produced by the frontend itself, next to the codes sent by the backend. */
 export const ERROR_CODE_NETWORK = 'NETWORK'
 export const ERROR_CODE_UNKNOWN = 'UNKNOWN'
@@ -50,6 +66,9 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   }
 
   if (!response.ok) {
+    if (response.status === HTTP_STATUS_UNAUTHORIZED) {
+      unauthenticatedHandler?.()
+    }
     throw new ApiError(await readErrorCode(response), response.status)
   }
   return response

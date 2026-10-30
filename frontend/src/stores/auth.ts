@@ -1,9 +1,10 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
+import { ApiError, ERROR_CODE_UNKNOWN, HTTP_STATUS_UNAUTHORIZED } from '@/services/api/client'
 import { authService, type AuthService } from '@/services/api/auth'
 import { resolveDevUser } from '@/services/devUser'
+import { localSignedInMarker, type SignedInMarker } from '@/services/signedInMarker'
 import type { DevLoginRequest, MeResponse } from '@/types/api'
 
 /**
@@ -13,20 +14,26 @@ import type { DevLoginRequest, MeResponse } from '@/types/api'
  */
 export type AuthStatus = 'unknown' | 'loading' | 'authenticated' | 'anonymous' | 'error'
 
-const HTTP_UNAUTHORIZED = 401
-
 /**
  * Builds the store around a service and the dev user. Setup stores cannot
  * take parameters, so this factory is how tests inject fakes.
  *
  * devUser is set only in development: if the backend reports nobody (or
  * somebody else) as logged in, the store logs in as devUser by itself.
+ * marker remembers across visits that someone was signed in.
  */
-export function defineAuthStore(service: AuthService, devUser: DevLoginRequest | null) {
+export function defineAuthStore(
+  service: AuthService,
+  devUser: DevLoginRequest | null,
+  marker: SignedInMarker = localSignedInMarker,
+) {
   return defineStore('auth', () => {
     const user = ref<MeResponse | null>(null)
     const status = ref<AuthStatus>('unknown')
     const errorCode = ref<string | null>(null)
+    // True when the user was signed in and the session ran out; the login
+    // page then explains why it is shown. Reset by the next sign-in.
+    const sessionExpired = ref(false)
 
     // The router guard and a view may both call load(); they share one run.
     let running: Promise<void> | null = null
@@ -48,7 +55,17 @@ export function defineAuthStore(service: AuthService, devUser: DevLoginRequest |
           me = await getMeOrNull()
         }
         user.value = me
-        status.value = me ? 'authenticated' : 'anonymous'
+        if (me) {
+          status.value = 'authenticated'
+          sessionExpired.value = false
+          marker.set()
+        } else {
+          // Nobody is signed in now. If somebody was on the last visit, the
+          // session ran out in between (or was ended on another device).
+          status.value = 'anonymous'
+          sessionExpired.value = marker.isSet()
+          marker.clear()
+        }
       } catch (err) {
         status.value = 'error'
         errorCode.value = err instanceof ApiError ? err.code : ERROR_CODE_UNKNOWN
@@ -60,11 +77,27 @@ export function defineAuthStore(service: AuthService, devUser: DevLoginRequest |
       try {
         return await service.getMe()
       } catch (err) {
-        if (err instanceof ApiError && err.status === HTTP_UNAUTHORIZED) {
+        if (err instanceof ApiError && err.status === HTTP_STATUS_UNAUTHORIZED) {
           return null
         }
         throw err
       }
+    }
+
+    /**
+     * Called when the server answers 401 although the user is signed in.
+     * Returns false if nobody was signed in: a 401 while loading (that is
+     * just "nobody") or a second one right after the first changes nothing.
+     */
+    function expireSession(): boolean {
+      if (status.value !== 'authenticated') {
+        return false
+      }
+      user.value = null
+      status.value = 'anonymous'
+      sessionExpired.value = true
+      marker.clear()
+      return true
     }
 
     /**
@@ -77,6 +110,9 @@ export function defineAuthStore(service: AuthService, devUser: DevLoginRequest |
       } finally {
         user.value = null
         status.value = 'anonymous'
+        // Logged out on purpose: no "your session ran out" next time.
+        sessionExpired.value = false
+        marker.clear()
       }
     }
 
@@ -84,7 +120,7 @@ export function defineAuthStore(service: AuthService, devUser: DevLoginRequest |
     // a page reload. null outside development.
     const devUserEmail = devUser?.email ?? null
 
-    return { user, status, errorCode, devUserEmail, load, logout }
+    return { user, status, errorCode, sessionExpired, devUserEmail, load, expireSession, logout }
   })
 }
 

@@ -4,6 +4,7 @@ import { useAuthStore, type AuthStatus } from '@/stores/auth'
 
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
+import { loginRoute } from './loginQuery'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -15,6 +16,8 @@ declare module 'vue-router' {
 /** The part of the auth store the guard needs; tests pass a fake. */
 export interface AuthGuardStore {
   status: AuthStatus
+  /** The user was signed in and the session ran out; the login page says so. */
+  sessionExpired: boolean
   load(): Promise<void>
 }
 
@@ -40,7 +43,7 @@ export function createAppRouter(
     // 'error' passes on purpose: if the server is briefly unreachable, the
     // page shows the error instead of pretending the user is logged out.
     if (to.meta.requiresAuth && auth.status === 'anonymous') {
-      return { name: 'login' }
+      return loginRoute(auth.sessionExpired)
     }
     if (to.name === 'login' && auth.status === 'authenticated') {
       return { name: 'home' }

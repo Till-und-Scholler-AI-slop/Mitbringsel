@@ -12,18 +12,16 @@ import LoginLayout from '@/components/login/LoginLayout.vue'
 import LoginNotice from '@/components/login/LoginNotice.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
+import {
+  LOGIN_QUERY_ERROR,
+  LOGIN_QUERY_REASON,
+  LOGIN_REASON_SESSION_EXPIRED,
+} from '@/router/loginQuery'
 import { redirectTo } from '@/services/navigation'
 import { useAuthStore } from '@/stores/auth'
 
-// The backend redirects to Google from here; the endpoint follows with the
-// Google login step and answers 404 until then.
+// The backend redirects to Google from here (docs/auth.md).
 const GOOGLE_LOGIN_URL = '/api/v1/auth/google/login'
-
-// How the backend and the API client tell this page why someone is here
-// (docs/auth.md): /login?error=<code> and /login?reason=session_expired.
-const QUERY_ERROR = 'error'
-const QUERY_REASON = 'reason'
-const REASON_SESSION_EXPIRED = 'session_expired'
 
 type Notice = 'offline' | 'serverError' | 'loginFailed' | 'sessionExpired'
 
@@ -42,8 +40,8 @@ const notice = computed<Notice | null>(() => {
   if (!online.value) return 'offline'
   if (redirecting.value) return null
   if (auth.status === 'error') return 'serverError'
-  if (route.query[QUERY_ERROR] !== undefined) return 'loginFailed'
-  if (route.query[QUERY_REASON] === REASON_SESSION_EXPIRED) return 'sessionExpired'
+  if (route.query[LOGIN_QUERY_ERROR] !== undefined) return 'loginFailed'
+  if (route.query[LOGIN_QUERY_REASON] === LOGIN_REASON_SESSION_EXPIRED) return 'sessionExpired'
   return null
 })
 
