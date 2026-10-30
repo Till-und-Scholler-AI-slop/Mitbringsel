@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, apiGet, apiPost } from '../client'
+import { ApiError, apiGet, apiPost, setUnauthenticatedHandler } from '../client'
 
 function stubFetch(impl: () => Promise<Response>) {
   vi.stubGlobal('fetch', vi.fn(impl))
@@ -8,6 +8,7 @@ function stubFetch(impl: () => Promise<Response>) {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  setUnauthenticatedHandler(null)
 })
 
 describe('apiGet', () => {
@@ -81,5 +82,28 @@ describe('apiPost', () => {
       code: 'CROSS_ORIGIN_REQUEST',
       status: 403,
     })
+  })
+})
+
+describe('unauthenticated handler', () => {
+  it('runs on 401 before the request rejects', async () => {
+    stubFetch(() =>
+      Promise.resolve(Response.json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 })),
+    )
+    const handler = vi.fn()
+    setUnauthenticatedHandler(handler)
+
+    await expect(apiGet('/me')).rejects.toMatchObject({ code: 'UNAUTHENTICATED', status: 401 })
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([200, 403, 500])('does not run on status %i', async (status) => {
+    stubFetch(() => Promise.resolve(Response.json({ error: { code: 'X' } }, { status })))
+    const handler = vi.fn()
+    setUnauthenticatedHandler(handler)
+
+    await apiGet('/me').catch(() => undefined)
+
+    expect(handler).not.toHaveBeenCalled()
   })
 })

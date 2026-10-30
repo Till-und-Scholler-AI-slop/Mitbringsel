@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { ApiError } from '@/services/api/client'
 import type { AuthService } from '@/services/api/auth'
+import type { SignedInMarker } from '@/services/signedInMarker'
 import type { DevLoginRequest, MeResponse } from '@/types/api'
 
 import { defineAuthStore } from '../auth'
@@ -38,6 +39,21 @@ function fakeService(loggedIn: string | null = null) {
     }),
   } satisfies AuthService
   return service
+}
+
+/** An in-memory marker, so tests neither touch nor depend on localStorage. */
+function fakeMarker(initiallySet = false): SignedInMarker & { value: boolean } {
+  const marker = {
+    value: initiallySet,
+    isSet: () => marker.value,
+    set: () => {
+      marker.value = true
+    },
+    clear: () => {
+      marker.value = false
+    },
+  }
+  return marker
 }
 
 beforeEach(() => {
@@ -151,5 +167,84 @@ describe('auth store', () => {
 
     expect(store.status).toBe('anonymous')
     expect(store.user).toBeNull()
+  })
+})
+
+describe('session expiry', () => {
+  it('remembers a successful sign-in', async () => {
+    const marker = fakeMarker()
+    const store = defineAuthStore(fakeService('anna@example.com'), null, marker)()
+
+    await store.load()
+
+    expect(marker.value).toBe(true)
+    expect(store.sessionExpired).toBe(false)
+  })
+
+  it('reports an expired session when someone was signed in on the last visit', async () => {
+    const marker = fakeMarker(true)
+    const store = defineAuthStore(fakeService(), null, marker)()
+
+    await store.load()
+
+    expect(store.status).toBe('anonymous')
+    expect(store.sessionExpired).toBe(true)
+    // Reported once: a reload afterwards is a plain "not signed in".
+    expect(marker.value).toBe(false)
+  })
+
+  it('reports nothing for a first visit', async () => {
+    const store = defineAuthStore(fakeService(), null, fakeMarker())()
+
+    await store.load()
+
+    expect(store.sessionExpired).toBe(false)
+  })
+
+  it('expires a session that ends while signed in', async () => {
+    const marker = fakeMarker()
+    const store = defineAuthStore(fakeService('anna@example.com'), null, marker)()
+    await store.load()
+
+    expect(store.expireSession()).toBe(true)
+
+    expect(store.status).toBe('anonymous')
+    expect(store.user).toBeNull()
+    expect(store.sessionExpired).toBe(true)
+    expect(marker.value).toBe(false)
+  })
+
+  it('ignores a 401 when nobody is signed in, and a second one', async () => {
+    const store = defineAuthStore(fakeService('anna@example.com'), null, fakeMarker())()
+
+    expect(store.expireSession()).toBe(false)
+    expect(store.sessionExpired).toBe(false)
+
+    await store.load()
+    store.expireSession()
+    expect(store.expireSession()).toBe(false)
+  })
+
+  it('does not report an expired session after logging out on purpose', async () => {
+    const marker = fakeMarker()
+    const store = defineAuthStore(fakeService('anna@example.com'), null, marker)()
+    await store.load()
+
+    await store.logout()
+
+    expect(store.sessionExpired).toBe(false)
+    expect(marker.value).toBe(false)
+  })
+
+  it('forgets the expiry after the next sign-in', async () => {
+    const service = fakeService('anna@example.com')
+    const store = defineAuthStore(service, null, fakeMarker())()
+    await store.load()
+    store.expireSession()
+
+    await store.load()
+
+    expect(store.status).toBe('authenticated')
+    expect(store.sessionExpired).toBe(false)
   })
 })
