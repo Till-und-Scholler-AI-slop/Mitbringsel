@@ -8,7 +8,8 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 - [ ] **Einladungslink-Zustand:** Login-Variante „Anmelden und beitreten“ mit Einladungskarte (Einladende Person, Gruppe, Mitglieder). Kommt mit Phase 3 (Gruppen und Einladungen).
 - [ ] **Rate Limiting für den Login:** `GET /api/v1/auth/google/login` und der Callback haben noch keine Begrenzung (vorgesehen in [Authentifizierung](auth.md)). Zusammen mit den Einladungs-Endpunkten in Phase 3 umsetzen.
 - [ ] **Google-App veröffentlichen:** Für den Status "In Produktion" im Google-Zustimmungsbildschirm braucht es einen Link zur Datenschutzerklärung (hängt am Punkt oben); bis dahin können sich nur eingetragene Testnutzer anmelden.
-- [ ] **Sitzung abgelaufen:** Bekommt das Frontend bei einem angemeldeten Nutzer ein `401`, leitet es auf `/login?reason=session_expired` um. Die Login-Seite zeigt den Hinweis schon an; die Umleitung im API-Client fehlt noch.
+- [ ] **Zurück zur vorherigen Seite nach erneutem Login:** Nach einer abgelaufenen Sitzung landet man nach dem Login immer auf `/`. Für den Rücksprung müsste das Ziel im Login-Versuch (Cookie) durch den Google-Ablauf mitreisen und gegen Open Redirects geprüft werden (nur relative Pfade der App). Sinnvoll, sobald es mehr als eine Seite gibt.
+- [ ] **Stores bei Logout und abgelaufener Sitzung leeren:** Sobald Gruppen- und Listen-Stores Daten halten, müssen `logout()` und `expireSession()` im Auth-Store sie zurücksetzen (z.B. über einen gemeinsamen Reset), damit nach einem Nutzerwechsel keine fremden Daten sichtbar bleiben.
 - [ ] **Sprache aus dem Nutzerprofil:** Der Sprachschalter merkt sich die Wahl vorerst nur in `localStorage`. Sobald das Profil die Sprache speichern kann, gewinnt nach dem Login das Profil (siehe [Konventionen](conventions.md), i18n).
 
 ## Komponenten

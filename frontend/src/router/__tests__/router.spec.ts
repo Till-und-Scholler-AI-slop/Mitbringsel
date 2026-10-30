@@ -12,9 +12,10 @@ beforeEach(() => {
 })
 
 /** A fake auth store whose load() ends in the given status. */
-function fakeAuth(statusAfterLoad: AuthStatus): AuthGuardStore {
+function fakeAuth(statusAfterLoad: AuthStatus, sessionExpired = false): AuthGuardStore {
   const auth: AuthGuardStore = {
     status: 'unknown',
+    sessionExpired,
     load: vi.fn(() => {
       auth.status = statusAfterLoad
       return Promise.resolve()
@@ -50,5 +51,22 @@ describe('auth guard', () => {
     await router.push('/login')
 
     expect(auth.load).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains an expired session on the login page', async () => {
+    const router = createAppRouter(() => fakeAuth('anonymous', true), createMemoryHistory())
+
+    await router.push('/')
+
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query).toEqual({ reason: 'session_expired' })
+  })
+
+  it('adds no reason for someone who was never signed in', async () => {
+    const router = createAppRouter(() => fakeAuth('anonymous'), createMemoryHistory())
+
+    await router.push('/')
+
+    expect(router.currentRoute.value.query).toEqual({})
   })
 })
