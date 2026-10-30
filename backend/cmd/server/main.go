@@ -76,6 +76,17 @@ func run() error {
 	sessions := auth.NewSessionService(auth.NewPostgresSessionRepository(queries))
 	users := user.NewService(user.NewPostgresRepository(queries))
 
+	// Declared with the interface type and only assigned when configured:
+	// an interface holding a nil *auth.GoogleProvider would not compare
+	// equal to nil, and the router would register routes that crash.
+	var google httpapi.GoogleLogin
+	if cfg.Google.Enabled() {
+		google = auth.NewGoogleProvider(cfg.Google.ClientID, cfg.Google.ClientSecret,
+			cfg.PublicBaseURL+httpapi.GoogleCallbackPath)
+	} else {
+		slog.Info("google login disabled: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are not set")
+	}
+
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
@@ -83,6 +94,7 @@ func run() error {
 			DB:       pool,
 			Sessions: sessions,
 			Users:    users,
+			Google:   google,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 	}

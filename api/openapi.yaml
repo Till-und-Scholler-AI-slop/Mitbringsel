@@ -73,6 +73,60 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /auth/google/login:
+    get:
+      operationId: googleLogin
+      summary: Start the Google login
+      description: |
+        Opened by navigation, not fetch. Remembers a login attempt (state,
+        nonce, PKCE verifier) in a short-lived cookie and redirects to
+        Google. Answers 404 if the Google login is not configured, which
+        only development allows.
+      tags: [auth]
+      responses:
+        "302":
+          description: Redirect to Google's sign-in page.
+          headers:
+            Location:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /auth/google/callback:
+    get:
+      operationId: googleCallback
+      summary: Finish the Google login
+      description: |
+        Google redirects the browser here. On success the response sets the
+        session cookie and redirects to `/`. On failure it redirects to
+        `/login?error=access_denied` (cancelled at Google) or
+        `/login?error=login_failed` (anything else).
+      tags: [auth]
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          description: Set by Google instead of code if the login did not happen.
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the app or back to the login page.
+          headers:
+            Location:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/Error"
+
   /auth/dev/login:
     post:
       operationId: devLogin

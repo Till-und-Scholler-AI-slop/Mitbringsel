@@ -53,6 +53,11 @@ services:
       APP_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${COMPOSE_PROJECT_NAME}-db:5432/${POSTGRES_DB}?sslmode=disable
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Derived from the domain Traefik routes, so the Google redirect URL
+      # cannot drift from it.
+      PUBLIC_BASE_URL: https://${APP_DOMAIN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required}
     # proxy: reachable by Traefik and able to call external APIs (Google).
     networks: [internal, proxy]
     # The server writes nothing to disk and needs no Linux capabilities.

@@ -77,7 +77,7 @@ Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im Git
 4. **GitHub Release veröffentlicht:** Die Images des Release-Commits zusätzlich mit der Version taggen und genauso in `mitbringsel-prod` deployen. Rollback heißt: die vorherige Version deployen.
 5. **E2E-Tests** laufen zunächst nur nightly oder manuell, um die Pipeline schnell zu halten.
 
-Secrets (SSH-Key, Google-Client-Secret je Umgebung) liegen ausschließlich in den GitHub Environments `staging` und `production` und auf dem Server.
+Secrets liegen ausschließlich in den GitHub Environments `staging` und `production` (SSH-Key) und in der `.env` auf dem Server (Datenbank-Passwort, Google-Client-ID und -Secret je Umgebung, siehe [Authentifizierung](auth.md#einrichtung)).
 
 ## Deployment-Ablauf
 
