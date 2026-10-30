@@ -10,11 +10,16 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: var(--font-size-md);
-  line-height: 1.5;
+  line-height: var(--line-height-body);
+}
+
+/* Buttons take the page font instead of the browser's system button font. */
+button {
+  font: inherit;
 }
 
 /* Visible keyboard focus everywhere (docs/conventions.md: accessibility). */
 :focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: var(--border-width-lg) solid var(--color-focus);
+  outline-offset: var(--border-width-lg);
 }

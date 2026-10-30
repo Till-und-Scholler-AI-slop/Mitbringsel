@@ -8,10 +8,39 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number]
 
 export const FALLBACK_LOCALE: Locale = 'de'
 
+/** Each language in its own words, so people find theirs whatever is active. */
+export const LOCALE_NAMES: Record<Locale, string> = { de: 'Deutsch', en: 'English' }
+
+/** Where the language picked on the language switch is remembered. */
+export const LOCALE_STORAGE_KEY = 'mitbringsel.locale'
+
 type MessageSchema = typeof de
 
-function isSupported(value: string): value is Locale {
+export function isSupported(value: string): value is Locale {
   return (SUPPORTED_LOCALES as readonly string[]).includes(value)
+}
+
+/**
+ * Reads the language the user picked earlier, or null if there is none.
+ * localStorage can throw (blocked site data, some private modes); the app
+ * then simply starts with the browser language.
+ */
+export function readStoredLocale(): Locale | null {
+  try {
+    const value = localStorage.getItem(LOCALE_STORAGE_KEY)
+    return value !== null && isSupported(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
+/** Remembers the picked language. Failing to store it only loses the convenience. */
+export function storeLocale(locale: Locale) {
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale)
+  } catch {
+    // Ignored on purpose: see readStoredLocale.
+  }
 }
 
 /**
@@ -28,10 +57,14 @@ export function detectLocale(languages: readonly string[]): Locale {
   return FALLBACK_LOCALE
 }
 
-export function createAppI18n(languages: readonly string[] = navigator.languages) {
+/** Starts with the language picked earlier, else the browser's. */
+export function createAppI18n(
+  languages: readonly string[] = navigator.languages,
+  storedLocale: Locale | null = readStoredLocale(),
+) {
   return createI18n<[MessageSchema], Locale, false>({
     legacy: false,
-    locale: detectLocale(languages),
+    locale: storedLocale ?? detectLocale(languages),
     fallbackLocale: FALLBACK_LOCALE,
     messages: { de, en },
   })

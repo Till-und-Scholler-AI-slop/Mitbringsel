@@ -1,19 +1,56 @@
 <script setup lang="ts">
-// Placeholder until the login design from Claude Design is implemented.
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
+import BaseButton from '@/components/base/BaseButton.vue'
+import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseSpinner from '@/components/base/BaseSpinner.vue'
+import LanguageSwitch from '@/components/LanguageSwitch.vue'
+import GoogleSignInButton from '@/components/login/GoogleSignInButton.vue'
+import LoginLayout from '@/components/login/LoginLayout.vue'
+import LoginNotice from '@/components/login/LoginNotice.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
+import { redirectTo } from '@/services/navigation'
 import { useAuthStore } from '@/stores/auth'
 
 // The backend redirects to Google from here; the endpoint follows with the
 // Google login step and answers 404 until then.
 const GOOGLE_LOGIN_URL = '/api/v1/auth/google/login'
 
+// How the backend and the API client tell this page why someone is here
+// (docs/auth.md): /login?error=<code> and /login?reason=session_expired.
+const QUERY_ERROR = 'error'
+const QUERY_REASON = 'reason'
+const REASON_SESSION_EXPIRED = 'session_expired'
+
+type Notice = 'offline' | 'serverError' | 'loginFailed' | 'sessionExpired'
+
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const errorMessage = useErrorMessage(() => auth.errorCode)
+const { online } = useOnlineStatus()
+
+const redirecting = ref(false)
+
+// At most one notice, the most pressing first. While redirecting, older
+// notices are out of date and disappear.
+const notice = computed<Notice | null>(() => {
+  if (!online.value) return 'offline'
+  if (redirecting.value) return null
+  if (auth.status === 'error') return 'serverError'
+  if (route.query[QUERY_ERROR] !== undefined) return 'loginFailed'
+  if (route.query[QUERY_REASON] === REASON_SESSION_EXPIRED) return 'sessionExpired'
+  return null
+})
+
+function signInWithGoogle() {
+  redirecting.value = true
+  redirectTo(GOOGLE_LOGIN_URL)
+}
 
 // Asks the backend again. In development load() also logs in as the dev
 // user, so the same function serves the retry and the dev login button.
@@ -23,52 +60,148 @@ async function loadAndContinue() {
     await router.push({ name: 'home' })
   }
 }
+
+// Coming back from Google with the back button can restore this page from
+// the browser's back/forward cache exactly as it was left: still redirecting.
+function onPageShow(event: PageTransitionEvent) {
+  if (event.persisted) {
+    redirecting.value = false
+  }
+}
+onMounted(() => window.addEventListener('pageshow', onPageShow))
+onBeforeUnmount(() => window.removeEventListener('pageshow', onPageShow))
 </script>
 
 <template>
-  <main class="login">
-    <h1>{{ t('app.name') }}</h1>
-    <p>{{ t('login.intro') }}</p>
-
-    <p v-if="auth.status === 'error'" role="alert">
-      {{ errorMessage }}
-      <button type="button" @click="loadAndContinue">{{ t('login.retry') }}</button>
-    </p>
-
-    <div class="actions">
-      <a class="google" :href="GOOGLE_LOGIN_URL">{{ t('login.google') }}</a>
-      <button v-if="auth.devUserEmail" type="button" class="dev" @click="loadAndContinue">
-        {{ t('login.devLogin', { email: auth.devUserEmail }) }}
-      </button>
+  <LoginLayout>
+    <div class="intro">
+      <h1>{{ t('login.title') }}</h1>
+      <!-- On the desktop the slogan sits in the brand header instead. -->
+      <p class="tagline">{{ t('login.tagline') }}</p>
+      <p class="lead">{{ t('login.lead') }}</p>
     </div>
-  </main>
+
+    <LoginNotice v-if="notice === 'offline'" kind="offline" :title="t('login.offline.title')">
+      {{ t('login.offline.body') }}
+    </LoginNotice>
+    <LoginNotice
+      v-else-if="notice === 'serverError'"
+      kind="error"
+      :title="t('login.serverError.title')"
+    >
+      {{ errorMessage }}
+      <template #actions>
+        <BaseButton class="retry" @click="loadAndContinue">
+          <BaseIcon name="retry" />{{ t('login.retry') }}
+        </BaseButton>
+      </template>
+    </LoginNotice>
+    <LoginNotice v-else-if="notice === 'loginFailed'" kind="error" :title="t('login.failed.title')">
+      {{ t('login.failed.body') }}
+      <template #actions>
+        <BaseButton class="retry" @click="signInWithGoogle">
+          <BaseIcon name="retry" />{{ t('login.retry') }}
+        </BaseButton>
+      </template>
+    </LoginNotice>
+    <LoginNotice
+      v-else-if="notice === 'sessionExpired'"
+      kind="session"
+      :title="t('login.sessionExpired.title')"
+    >
+      {{ t('login.sessionExpired.body') }}
+    </LoginNotice>
+
+    <GoogleSignInButton :disabled="!online" :busy="redirecting" @click="signInWithGoogle" />
+
+    <div v-if="redirecting" class="redirecting" role="status">
+      <span class="spinner"><BaseSpinner /></span>
+      {{ t('login.redirecting') }}
+    </div>
+
+    <BaseButton
+      v-if="auth.devUserEmail"
+      variant="secondary"
+      class="dev"
+      :loading="auth.status === 'loading'"
+      @click="loadAndContinue"
+    >
+      {{ t('login.devLogin', { email: auth.devUserEmail }) }}
+    </BaseButton>
+
+    <footer class="footer">
+      <LanguageSwitch />
+    </footer>
+  </LoginLayout>
 </template>
 
 <style scoped>
-.login {
-  max-width: 40rem;
-  margin: 0 auto;
-  padding: var(--space-6) var(--space-4);
-}
-
-.actions {
+.intro {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--space-2);
 }
 
-.google,
-button {
-  display: inline-flex;
+h1 {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-black);
+  line-height: var(--line-height-heading);
+  letter-spacing: -0.03em;
+  overflow-wrap: break-word;
+}
+
+.tagline,
+.lead {
+  max-width: 27.5rem;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.tagline {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.lead {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.retry,
+.dev {
+  align-self: flex-start;
+}
+
+.redirecting {
+  display: flex;
   align-items: center;
+  gap: var(--space-3);
+  max-width: 25rem;
   min-height: var(--size-touch);
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
-  font: inherit;
-  text-decoration: none;
-  cursor: pointer;
+  margin-top: calc(-1 * var(--space-2));
+  font-weight: var(--font-weight-bold);
+}
+
+.spinner {
+  display: flex;
+  color: var(--color-primary);
+}
+
+/* Pushed to the bottom of the screen (phone) or the card (desktop). */
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-3);
+  margin-top: auto;
+}
+
+/* On the desktop the slogan sits in the brand header instead. */
+@media (min-width: 48rem) {
+  .tagline {
+    display: none;
+  }
 }
 </style>

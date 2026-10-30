@@ -24,7 +24,7 @@ Go im Backend, Vue 3 mit TypeScript im Frontend, PostgreSQL als Datenbank. Fest 
 | Tests Frontend | Vitest + Vue Test Utils, Playwright für E2E | Unit-, Komponenten-, Sync-Tests | Vorschlag |
 | Tests Backend | `testing` + `testcontainers-go` | Unit- und Integrationstests gegen echtes Postgres | Vorschlag |
 | Code-Stil | ESLint, Prettier, `gofmt`, `golangci-lint` | Einheitlicher Stil | Vorschlag |
-| Styling | Design-Tokens als CSS Custom Properties, Rest nach Claude-Design-Entscheidung | Theming hell/dunkel | Offen |
+| Styling | Design-Tokens als CSS Custom Properties, Scoped Styles, kein CSS-Framework | Theming hell/dunkel ([ADR 0003](adr/0003-eigenes-css-mit-tokens.md)) | Ja |
 | Infrastruktur | Docker Compose, Traefik (bereits auf dem VPS), GitHub Actions | Deployment, TLS, CI/CD | Ja |
 
 ## Grundsatz für Dependencies

@@ -9,6 +9,7 @@ Projektdokumentation (Ziele, Architektur, Konventionen): `docs/README.md`. Bei W
 - Das Warum erklären, besonders bei Go (Nutzer hat wenig Go-Erfahrung); Go-Idiome beim ersten Auftreten kurz erläutern.
 - Bei Unklarheit konkret nachfragen, mit Empfehlung.
 - Code-Ausgabe pro Datei mit vollständigem Pfad.
+- `docs/todo.md` sammelt bewusst aufgeschobene Punkte. Claude schaut zu Beginn jedes Schritts hinein, weist auf passende Punkte hin, ergänzt neu Verschobenes und streicht Erledigtes; die Datei darf Claude ohne Rückfrage bearbeiten.
 
 **Vorher fragen**, bevor Claude: eine Dependency hinzufügt, Architektur/Ordnerstruktur/DB-Schema grundlegend ändert, bestehende Schnittstellen inkompatibel ändert, mehrere Dateien gleichzeitig umbaut oder Code löscht, von `docs/` abweicht.
 

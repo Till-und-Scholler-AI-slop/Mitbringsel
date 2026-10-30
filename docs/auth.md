@@ -11,6 +11,8 @@ Das Backend wickelt den Google-Login selbst ab (OpenID Connect, Authorization Co
 5. Backend erstellt eine Session in der Datenbank und setzt ein Cookie: `HttpOnly`, `Secure`, `SameSite=Lax`.
 6. Frontend lädt den aktuellen Nutzer über `GET /api/v1/me`.
 
+Bricht der Nutzer bei Google ab oder schlägt ein Schritt fehl, leitet das Backend auf `/login?error=<code>` um; die Login-Seite zeigt dann einen Fehlerhinweis mit "Nochmal versuchen". Stellt das Frontend fest, dass eine Sitzung abgelaufen ist (`401` bei einem angemeldeten Nutzer), leitet es auf `/login?reason=session_expired` um, damit die Seite erklärt, warum man sich neu anmelden muss.
+
 ## Sessions und Sicherheit
 
 - Sessions liegen in PostgreSQL (Tabelle `sessions`), im Cookie steht nur eine zufällige Session-ID. Gespeichert wird ein Hash der ID.

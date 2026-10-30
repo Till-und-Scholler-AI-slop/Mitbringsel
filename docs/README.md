@@ -13,4 +13,5 @@
 | [deployment.md](deployment.md) | Container, lokale Entwicklung, CI/CD |
 | [design.md](design.md) | Vorgehen mit Claude Design, Screens, Anforderungen |
 | [roadmap.md](roadmap.md) | Offene Entscheidungen und Phasen |
+| [todo.md](todo.md) | Bewusst aufgeschobene Punkte |
 | [adr/](adr/README.md) | Architecture Decision Records |

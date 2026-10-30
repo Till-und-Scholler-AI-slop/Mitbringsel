@@ -15,10 +15,36 @@
     }
   },
   "login": {
-    "intro": "Shared shopping lists for your flat, synced live.",
+    "title": "Sign in",
+    "tagline": "Shared shopping lists for your flat – synced live, even offline.",
+    "lead": "Your first sign-in creates your account – there’s no separate sign-up.",
     "google": "Sign in with Google",
     "devLogin": "Sign in as {email} (dev)",
-    "retry": "Try again"
+    "redirecting": "Redirecting to Google …",
+    "retry": "Try again",
+    "shops": {
+      "supermarket": "Supermarket",
+      "drugstore": "Drugstore",
+      "hardware": "Hardware"
+    },
+    "failed": {
+      "title": "Sign-in didn’t work",
+      "body": "It was cancelled or failed. Just give it another try."
+    },
+    "serverError": {
+      "title": "Signing in isn’t possible right now"
+    },
+    "sessionExpired": {
+      "title": "You’ve been signed out. Please sign in again.",
+      "body": "Your lists and groups are still there."
+    },
+    "offline": {
+      "title": "Offline",
+      "body": "Signing in isn’t possible without internet. As soon as you’re back online, you can sign in."
+    }
+  },
+  "language": {
+    "label": "Language"
   },
   "errors": {
     "CROSS_ORIGIN_REQUEST": "The request was blocked for security reasons.",
