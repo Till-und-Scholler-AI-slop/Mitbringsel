@@ -36,6 +36,9 @@ type Deps struct {
 	DB       Pinger
 	Sessions SessionManager
 	Users    UserService
+	// Google is nil if the Google login is not configured, which only
+	// development allows; its routes then answer 404.
+	Google GoogleLogin
 }
 
 // router wraps http.ServeMux and remembers which methods each path allows.
@@ -62,6 +65,11 @@ func NewRouter(deps Deps) http.Handler {
 	// Not behind requireUser: logging out must work with an expired
 	// session, too.
 	r.handle(http.MethodPost, logoutPath, logoutHandler(deps.Sessions, deps.Env))
+
+	if deps.Google != nil {
+		r.handle(http.MethodGet, googleLoginPath, googleLoginHandler(deps.Google, deps.Env))
+		r.handle(http.MethodGet, GoogleCallbackPath, googleCallbackHandler(deps.Google, deps.Users, deps.Sessions, deps.Env))
+	}
 
 	// Outside development the route does not exist at all and answers 404
 	// like any unknown path, instead of being registered and then refused.

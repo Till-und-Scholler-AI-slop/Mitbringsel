@@ -59,6 +59,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/google/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Start the Google login
+         * @description Opened by navigation, not fetch. Remembers a login attempt (state,
+         *     nonce, PKCE verifier) in a short-lived cookie and redirects to
+         *     Google. Answers 404 if the Google login is not configured, which
+         *     only development allows.
+         */
+        get: operations["googleLogin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Finish the Google login
+         * @description Google redirects the browser here. On success the response sets the
+         *     session cookie and redirects to `/`. On failure it redirects to
+         *     `/login?error=access_denied` (cancelled at Google) or
+         *     `/login?error=login_failed` (anything else).
+         */
+        get: operations["googleCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/dev/login": {
         parameters: {
             query?: never;
@@ -198,6 +244,51 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             500: components["responses"]["Error"];
+        };
+    };
+    googleLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to Google's sign-in page. */
+            302: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    googleCallback: {
+        parameters: {
+            query?: {
+                state?: string;
+                code?: string;
+                /** @description Set by Google instead of code if the login did not happen. */
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the app or back to the login page. */
+            302: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
         };
     };
     devLogin: {

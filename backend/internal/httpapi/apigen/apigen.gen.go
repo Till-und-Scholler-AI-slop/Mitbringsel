@@ -144,5 +144,14 @@ type Me struct {
 // Theme defines model for Theme.
 type Theme string
 
+// GoogleCallbackParams defines parameters for GoogleCallback.
+type GoogleCallbackParams struct {
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+	Code  *string `form:"code,omitempty" json:"code,omitempty"`
+
+	// Error Set by Google instead of code if the login did not happen.
+	Error *string `form:"error,omitempty" json:"error,omitempty"`
+}
+
 // DevLoginJSONRequestBody defines body for DevLogin for application/json ContentType.
 type DevLoginJSONRequestBody = DevLoginRequest
