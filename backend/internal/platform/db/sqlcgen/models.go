@@ -10,6 +10,21 @@ import (
 	"github.com/google/uuid"
 )
 
+type Group struct {
+	ID        uuid.UUID
+	Name      string
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type GroupMember struct {
+	GroupID  uuid.UUID
+	UserID   uuid.UUID
+	Role     string
+	JoinedAt time.Time
+}
+
 type Session struct {
 	IDHash     []byte
 	UserID     uuid.UUID
