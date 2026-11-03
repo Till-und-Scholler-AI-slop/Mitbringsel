@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -32,7 +33,10 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{db: pool, q: sqlcgen.New(pool)}
 }
 
-var _ Repository = (*PostgresRepository)(nil)
+var (
+	_ Repository       = (*PostgresRepository)(nil)
+	_ InviteRepository = (*PostgresRepository)(nil)
+)
 
 func (r *PostgresRepository) InTx(ctx context.Context, fn func(tx Repository) error) error {
 	if r.db == nil {
@@ -159,4 +163,89 @@ func notFoundIfNone(rowsAffected int64, err error) error {
 		return fmt.Errorf("%w: no row affected", ErrNotFound)
 	}
 	return nil
+}
+
+func (r *PostgresRepository) CreateInvite(ctx context.Context, groupID, createdBy uuid.UUID, tokenHash []byte, expiresAt time.Time) (Invite, error) {
+	row, err := r.q.CreateGroupInvite(ctx, sqlcgen.CreateGroupInviteParams{
+		GroupID:   groupID,
+		TokenHash: tokenHash,
+		CreatedBy: &createdBy,
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		return Invite{}, err
+	}
+	return Invite{
+		ID:            row.ID,
+		GroupID:       row.GroupID,
+		CreatedAt:     row.CreatedAt,
+		ExpiresAt:     row.ExpiresAt,
+		CreatedByName: deref(row.CreatedByName),
+	}, nil
+}
+
+func (r *PostgresRepository) ListActiveInvites(ctx context.Context, groupID uuid.UUID, now time.Time) ([]Invite, error) {
+	rows, err := r.q.ListActiveGroupInvites(ctx, sqlcgen.ListActiveGroupInvitesParams{GroupID: groupID, Now: now})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Invite, len(rows))
+	for i, row := range rows {
+		out[i] = Invite{
+			ID:            row.ID,
+			GroupID:       row.GroupID,
+			CreatedAt:     row.CreatedAt,
+			ExpiresAt:     row.ExpiresAt,
+			CreatedByName: deref(row.CreatedByName),
+		}
+	}
+	return out, nil
+}
+
+func (r *PostgresRepository) CountActiveInvites(ctx context.Context, groupID uuid.UUID, now time.Time) (int, error) {
+	n, err := r.q.CountActiveGroupInvites(ctx, sqlcgen.CountActiveGroupInvitesParams{GroupID: groupID, Now: now})
+	return int(n), err
+}
+
+func (r *PostgresRepository) RevokeInvite(ctx context.Context, groupID, inviteID uuid.UUID, now time.Time) error {
+	n, err := r.q.RevokeGroupInvite(ctx, sqlcgen.RevokeGroupInviteParams{ID: inviteID, GroupID: groupID, Now: &now})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrInviteNotFound
+	}
+	return nil
+}
+
+func (r *PostgresRepository) FindInvite(ctx context.Context, tokenHash []byte) (InviteTarget, error) {
+	row, err := r.q.GetGroupInviteByTokenHash(ctx, tokenHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return InviteTarget{}, ErrInviteNotFound
+	}
+	if err != nil {
+		return InviteTarget{}, err
+	}
+	return InviteTarget{
+		Group:     fromRow(row.Group),
+		InvitedBy: deref(row.InvitedBy),
+		ExpiresAt: row.ExpiresAt,
+		Revoked:   row.RevokedAt != nil,
+	}, nil
+}
+
+func (r *PostgresRepository) AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) error {
+	return r.q.AddGroupMemberIfAbsent(ctx, sqlcgen.AddGroupMemberIfAbsentParams{
+		GroupID: groupID,
+		UserID:  userID,
+		Role:    string(role),
+	})
+}
+
+// deref turns a nullable text column into "" for NULL.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
