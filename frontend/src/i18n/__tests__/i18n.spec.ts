@@ -48,6 +48,7 @@ const API_ERROR_CODES: Record<ApiErrorCode, true> = {
   INVITE_NOT_FOUND: true,
   INVITE_EXPIRED: true,
   TOO_MANY_INVITES: true,
+  RATE_LIMITED: true,
 }
 
 describe('error messages', () => {

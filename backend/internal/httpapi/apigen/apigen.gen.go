@@ -25,6 +25,7 @@ const (
 	ErrorCodeMethodNotAllowed ErrorCode = "METHOD_NOT_ALLOWED"
 	ErrorCodeNotFound         ErrorCode = "NOT_FOUND"
 	ErrorCodeOwnerImmutable   ErrorCode = "OWNER_IMMUTABLE"
+	ErrorCodeRateLimited      ErrorCode = "RATE_LIMITED"
 	ErrorCodeTooManyInvites   ErrorCode = "TOO_MANY_INVITES"
 	ErrorCodeUnauthenticated  ErrorCode = "UNAUTHENTICATED"
 )
@@ -59,6 +60,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeNotFound:
 		return true
 	case ErrorCodeOwnerImmutable:
+		return true
+	case ErrorCodeRateLimited:
 		return true
 	case ErrorCodeTooManyInvites:
 		return true
@@ -306,6 +309,9 @@ type InviteToken = string
 
 // UserID defines model for UserId.
 type UserID = uuid.UUID
+
+// RateLimited defines model for RateLimited.
+type RateLimited = Error
 
 // GoogleCallbackParams defines parameters for GoogleCallback.
 type GoogleCallbackParams struct {

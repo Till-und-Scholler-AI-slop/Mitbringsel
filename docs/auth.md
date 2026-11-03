@@ -35,7 +35,15 @@ Die Google-Endpunkte sind fest im Code hinterlegt statt beim Start aus Googles D
 - Die Middleware `requireUser` in `httpapi` prüft die Session pro Route und legt die User-ID in den Request-Context. Unbekannte oder abgelaufene Sessions ergeben `401 UNAUTHENTICATED`, Datenbankfehler `500 INTERNAL_ERROR`, damit ein kurzer Ausfall niemanden abmeldet. Die Middleware liegt in `httpapi` und nicht in `auth`, weil sie HTTP übersetzt und `auth` sonst `httpapi` importieren müsste, das selbst `auth` nutzt.
 - Schreibende REST-Requests werden zusätzlich zu `SameSite` gegen CSRF geprüft: `http.CrossOriginProtection` aus der Standardbibliothek liegt um den ganzen Router und lehnt POST, PUT, PATCH und DELETE ab, die laut `Sec-Fetch-Site` (ältere Browser: `Origin` gegen `Host`) von einer anderen Seite kommen. Antwort: `403 CROSS_ORIGIN_REQUEST`. GET verändert deshalb nie etwas.
 - Jede Service-Methode prüft die Gruppenmitgliedschaft. Der Zugriff auf fremde Gruppen liefert `404`, um keine Existenz zu verraten.
-- Rate Limiting für Login und Einladungs-Endpunkte.
+- Rate Limiting (Token-Bucket im Speicher, `httpapi/ratelimit.go`, bei Überschreitung `429 RATE_LIMITED` mit `Retry-After`):
+
+  | Route | Schlüssel | Grenze pro Minute |
+  |---|---|---|
+  | `GET /auth/google/login` und `/callback` (gemeinsam) | Client-IP | 10 |
+  | `GET /invites/{token}` | Client-IP | 30 |
+  | `POST /invites/{token}/accept` | Nutzer | 10 |
+
+  Die Client-IP ist der **letzte** Eintrag von `X-Forwarded-For`: Traefik hängt dort die Adresse an, die er gesehen hat, alles davor schreibt der Client. In Entwicklung (ohne Proxy) gilt `RemoteAddr`. Der Zähler liegt im Speicher und passt zu einer Backend-Instanz pro Umgebung; bei mehreren müsste er in eine geteilte Ablage.
 
 ## Einladungen
 
