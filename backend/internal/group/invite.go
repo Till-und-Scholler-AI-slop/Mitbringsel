@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,10 @@ const (
 	// MaxActiveInvites caps the links a group can have open at once, so
 	// nobody can fill the table by creating links in a loop.
 	MaxActiveInvites = 10
+	// PreviewMemberLimit is how many members the public invite preview
+	// names. The full list stays behind the login, so a leaked link does
+	// not give away everybody in the group.
+	PreviewMemberLimit = 4
 	// inviteTokenBytes is the size of the secret in a link: 256 bits, far
 	// above the 128 bits that docs/auth.md asks for.
 	inviteTokenBytes = 32
@@ -51,11 +56,34 @@ type Invite struct {
 type InviteTarget struct {
 	Group Group
 	// InvitedBy is the display name of whoever created the invite, empty if
-	// they deleted their account.
-	InvitedBy string
-	ExpiresAt time.Time
+	// they deleted their account. InvitedByAvatarURL is empty if they have
+	// no avatar.
+	InvitedBy          string
+	InvitedByAvatarURL string
+	ExpiresAt          time.Time
 	// Revoked is true once a manager withdrew the invite.
 	Revoked bool
+}
+
+// PreviewMember is a member as the public invite preview shows them: first
+// name and avatar, nothing that identifies the account.
+type PreviewMember struct {
+	FirstName string
+	// AvatarURL is empty if the member has no avatar.
+	AvatarURL string
+}
+
+// InvitePreview is what someone sees who holds a valid token but has not
+// joined yet.
+type InvitePreview struct {
+	GroupName          string
+	InvitedBy          string
+	InvitedByAvatarURL string
+	ExpiresAt          time.Time
+	// MemberCount counts all members; Members names only the first
+	// PreviewMemberLimit of them.
+	MemberCount int
+	Members     []PreviewMember
 }
 
 // InviteRepository stores invites. Like Repository it lives here, at the
@@ -74,6 +102,9 @@ type InviteRepository interface {
 	RevokeInvite(ctx context.Context, groupID, inviteID uuid.UUID, now time.Time) error
 	// FindInvite returns ErrInviteNotFound if no invite has this hash.
 	FindInvite(ctx context.Context, tokenHash []byte) (InviteTarget, error)
+	// PreviewMembers returns the number of members and the first max of
+	// them, oldest membership first.
+	PreviewMembers(ctx context.Context, groupID uuid.UUID, max int) (count int, members []PreviewMember, err error)
 	// AddMemberIfAbsent makes the user a member, or does nothing if they
 	// already are one (their role stays).
 	AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) error
@@ -146,7 +177,41 @@ func (s *InviteService) Revoke(ctx context.Context, actor, groupID, inviteID uui
 
 // Preview tells what a token points to, for the page that asks whether to
 // join. It needs no login: whoever holds the token may see this much.
-func (s *InviteService) Preview(ctx context.Context, token string) (InviteTarget, error) {
+func (s *InviteService) Preview(ctx context.Context, token string) (InvitePreview, error) {
+	target, err := s.resolve(ctx, token)
+	if err != nil {
+		return InvitePreview{}, err
+	}
+	count, members, err := s.repo.PreviewMembers(ctx, target.Group.ID, PreviewMemberLimit)
+	if err != nil {
+		return InvitePreview{}, fmt.Errorf("preview members: %w", err)
+	}
+	return InvitePreview{
+		GroupName:          target.Group.Name,
+		InvitedBy:          target.InvitedBy,
+		InvitedByAvatarURL: target.InvitedByAvatarURL,
+		ExpiresAt:          target.ExpiresAt,
+		MemberCount:        count,
+		Members:            members,
+	}, nil
+}
+
+// Accept makes the actor a member of the invite's group and returns the
+// group. Someone who is a member already stays what they are, so opening a
+// link twice, or as an admin, changes nothing.
+func (s *InviteService) Accept(ctx context.Context, actor uuid.UUID, token string) (Group, error) {
+	target, err := s.resolve(ctx, token)
+	if err != nil {
+		return Group{}, err
+	}
+	if err := s.repo.AddMemberIfAbsent(ctx, target.Group.ID, actor, RoleMember); err != nil {
+		return Group{}, fmt.Errorf("join group: %w", err)
+	}
+	return target.Group, nil
+}
+
+// resolve finds the invite behind a token and checks that it still works.
+func (s *InviteService) resolve(ctx context.Context, token string) (InviteTarget, error) {
 	if token == "" {
 		return InviteTarget{}, ErrInviteNotFound
 	}
@@ -159,20 +224,6 @@ func (s *InviteService) Preview(ctx context.Context, token string) (InviteTarget
 		return InviteTarget{}, ErrInviteExpired
 	}
 	return target, nil
-}
-
-// Accept makes the actor a member of the invite's group and returns the
-// group. Someone who is a member already stays what they are, so opening a
-// link twice, or as an admin, changes nothing.
-func (s *InviteService) Accept(ctx context.Context, actor uuid.UUID, token string) (Group, error) {
-	target, err := s.Preview(ctx, token)
-	if err != nil {
-		return Group{}, err
-	}
-	if err := s.repo.AddMemberIfAbsent(ctx, target.Group.ID, actor, RoleMember); err != nil {
-		return Group{}, fmt.Errorf("join group: %w", err)
-	}
-	return target.Group, nil
 }
 
 // newInviteToken returns a random, URL-safe secret for an invite link.
@@ -193,4 +244,13 @@ func newInviteToken() (string, error) {
 func hashInviteToken(token string) []byte {
 	sum := sha256.Sum256([]byte(token))
 	return sum[:]
+}
+
+// firstName returns the first word of a display name: "Anna Müller" becomes
+// "Anna". A name without a space is returned whole.
+func firstName(displayName string) string {
+	if first, _, found := strings.Cut(strings.TrimSpace(displayName), " "); found {
+		return first
+	}
+	return strings.TrimSpace(displayName)
 }

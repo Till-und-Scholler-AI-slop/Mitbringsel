@@ -227,11 +227,28 @@ func (r *PostgresRepository) FindInvite(ctx context.Context, tokenHash []byte) (
 		return InviteTarget{}, err
 	}
 	return InviteTarget{
-		Group:     fromRow(row.Group),
-		InvitedBy: deref(row.InvitedBy),
-		ExpiresAt: row.ExpiresAt,
-		Revoked:   row.RevokedAt != nil,
+		Group:              fromRow(row.Group),
+		InvitedBy:          deref(row.InvitedBy),
+		InvitedByAvatarURL: deref(row.InvitedByAvatarUrl),
+		ExpiresAt:          row.ExpiresAt,
+		Revoked:            row.RevokedAt != nil,
 	}, nil
+}
+
+func (r *PostgresRepository) PreviewMembers(ctx context.Context, groupID uuid.UUID, max int) (int, []PreviewMember, error) {
+	count, err := r.q.CountGroupMembers(ctx, groupID)
+	if err != nil {
+		return 0, nil, err
+	}
+	rows, err := r.q.ListGroupMembersPreview(ctx, sqlcgen.ListGroupMembersPreviewParams{GroupID: groupID, MaxRows: int32(max)})
+	if err != nil {
+		return 0, nil, err
+	}
+	members := make([]PreviewMember, len(rows))
+	for i, row := range rows {
+		members[i] = PreviewMember{FirstName: firstName(row.DisplayName), AvatarURL: deref(row.AvatarURL)}
+	}
+	return int(count), members, nil
 }
 
 func (r *PostgresRepository) AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) error {

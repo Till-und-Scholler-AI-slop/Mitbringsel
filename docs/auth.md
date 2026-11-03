@@ -39,9 +39,12 @@ Die Google-Endpunkte sind fest im Code hinterlegt statt beim Start aus Googles D
 
 ## Einladungen
 
-- Owner und Admins erzeugen einen Einladungslink mit zufälligem Token (mindestens 128 Bit).
-- Einladungen laufen nach 7 Tagen ab und können widerrufen werden.
-- Wer den Link öffnet, meldet sich bei Bedarf mit Google an und tritt der Gruppe bei.
+- Owner und Admins erzeugen einen Einladungslink mit zufälligem Token (256 Bit, base64url). In der Datenbank liegt nur der SHA-256-Hash; den Token zeigt nur die Antwort auf `POST /groups/{id}/invites`, einmalig. Das Frontend baut daraus den Link `/invite/<token>`.
+- Der Link gilt 7 Tage für beliebig viele Personen und kann widerrufen werden. Pro Gruppe sind höchstens 10 Links gleichzeitig offen.
+- `GET /invites/{token}` braucht keine Anmeldung, damit die Seite hinter dem Link die Einladung zeigen kann. Wer den Token hat, sieht Gruppenname, die einladende Person, die Mitgliederzahl und die ersten vier Mitglieder mit Vornamen und Avatar; die vollständige Liste bleibt hinter dem Login. Die Antwort trägt `Cache-Control: no-store`.
+- Wer den Link öffnet, meldet sich bei Bedarf mit Google an und tritt mit `POST /invites/{token}/accept` als Member bei. Wer schon Mitglied ist, behält seine Rolle.
+- Unbekannte Token antworten `404 INVITE_NOT_FOUND`, abgelaufene oder widerrufene `410 INVITE_EXPIRED`. Das verrät nichts, weil sich 256-Bit-Token nicht erraten lassen.
+- Der Token steht im Pfad und damit in Zugriffslogs eines Reverse Proxys. Der Go-Server loggt keine Pfade; ein Traefik-Access-Log sollte die Pfade unter `/api/v1/invites/` nicht aufzeichnen.
 
 ## Lokale Entwicklung
 

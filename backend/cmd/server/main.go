@@ -78,7 +78,9 @@ func run() error {
 	users := user.NewService(user.NewPostgresRepository(queries))
 	// Unlike the other repositories, this one takes the pool: it starts the
 	// transactions that keep a group and its owner together.
-	groups := group.NewService(group.NewPostgresRepository(pool))
+	groupRepo := group.NewPostgresRepository(pool)
+	groups := group.NewService(groupRepo)
+	invites := group.NewInviteService(groupRepo)
 
 	// Declared with the interface type and only assigned when configured:
 	// an interface holding a nil *auth.GoogleProvider would not compare
@@ -99,6 +101,7 @@ func run() error {
 			Sessions: sessions,
 			Users:    users,
 			Groups:   groups,
+			Invites:  invites,
 			Google:   google,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,

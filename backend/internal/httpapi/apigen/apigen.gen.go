@@ -20,9 +20,12 @@ const (
 	ErrorCodeInvalidIdentity  ErrorCode = "INVALID_IDENTITY"
 	ErrorCodeInvalidRequest   ErrorCode = "INVALID_REQUEST"
 	ErrorCodeInvalidRole      ErrorCode = "INVALID_ROLE"
+	ErrorCodeInviteExpired    ErrorCode = "INVITE_EXPIRED"
+	ErrorCodeInviteNotFound   ErrorCode = "INVITE_NOT_FOUND"
 	ErrorCodeMethodNotAllowed ErrorCode = "METHOD_NOT_ALLOWED"
 	ErrorCodeNotFound         ErrorCode = "NOT_FOUND"
 	ErrorCodeOwnerImmutable   ErrorCode = "OWNER_IMMUTABLE"
+	ErrorCodeTooManyInvites   ErrorCode = "TOO_MANY_INVITES"
 	ErrorCodeUnauthenticated  ErrorCode = "UNAUTHENTICATED"
 )
 
@@ -47,11 +50,17 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeInvalidRole:
 		return true
+	case ErrorCodeInviteExpired:
+		return true
+	case ErrorCodeInviteNotFound:
+		return true
 	case ErrorCodeMethodNotAllowed:
 		return true
 	case ErrorCodeNotFound:
 		return true
 	case ErrorCodeOwnerImmutable:
+		return true
+	case ErrorCodeTooManyInvites:
 		return true
 	case ErrorCodeUnauthenticated:
 		return true
@@ -202,6 +211,65 @@ type Health struct {
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
 
+// Invite defines model for Invite.
+type Invite struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedByName null if the creator deleted their account.
+	CreatedByName *string   `json:"createdByName"`
+	ExpiresAt     time.Time `json:"expiresAt"`
+	ID            uuid.UUID `json:"id"`
+}
+
+// InviteAccepted defines model for InviteAccepted.
+type InviteAccepted struct {
+	GroupID   uuid.UUID `json:"groupId"`
+	GroupName string    `json:"groupName"`
+}
+
+// InviteCreated defines model for InviteCreated.
+type InviteCreated struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedByName null if the creator deleted their account.
+	CreatedByName *string   `json:"createdByName"`
+	ExpiresAt     time.Time `json:"expiresAt"`
+	ID            uuid.UUID `json:"id"`
+
+	// Token Secret part of the link. Shown only in this response, the
+	// server keeps just a hash.
+	Token string `json:"token"`
+}
+
+// InviteList defines model for InviteList.
+type InviteList struct {
+	Invites []Invite `json:"invites"`
+}
+
+// InviteMember defines model for InviteMember.
+type InviteMember struct {
+	// AvatarURL null if the member has no avatar.
+	AvatarURL *string `json:"avatarUrl"`
+	FirstName string  `json:"firstName"`
+}
+
+// InvitePreview defines model for InvitePreview.
+type InvitePreview struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+	GroupName string    `json:"groupName"`
+
+	// InvitedByAvatarURL null if they have no avatar or deleted their account.
+	InvitedByAvatarURL *string `json:"invitedByAvatarUrl"`
+
+	// InvitedByName null if the inviting person deleted their account.
+	InvitedByName *string `json:"invitedByName"`
+	MemberCount   int     `json:"memberCount"`
+
+	// Members The first few members, at most 4. `memberCount` says how many
+	// there are in total.
+	Members []InviteMember `json:"members"`
+}
+
 // Locale defines model for Locale.
 type Locale string
 
@@ -232,6 +300,9 @@ type Theme string
 
 // GroupID defines model for GroupId.
 type GroupID = uuid.UUID
+
+// InviteToken defines model for InviteToken.
+type InviteToken = string
 
 // UserID defines model for UserId.
 type UserID = uuid.UUID

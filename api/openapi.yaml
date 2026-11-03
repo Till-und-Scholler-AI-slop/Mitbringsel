@@ -341,6 +341,172 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /groups/{groupId}/invites:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      operationId: listInvites
+      summary: List the open invite links of a group
+      description: |
+        Owner and admins only. Links that are expired or revoked are left
+        out, and so are the tokens: they are shown once, when the link is
+        created.
+      tags: [invites]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The open invites, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteList"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createInvite
+      summary: Create an invite link
+      description: |
+        Owner and admins only. The link works for several people for 7 days
+        or until it is revoked. A group can have 10 open links at once
+        (`TOO_MANY_INVITES`). The response is the only time the token is
+        shown; the frontend builds the link `/invite/<token>` from it.
+      tags: [invites]
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: The new invite with its token.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteCreated"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /groups/{groupId}/invites/{inviteId}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - name: inviteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+    delete:
+      operationId: revokeInvite
+      summary: Revoke an invite link
+      description: |
+        Owner and admins only. People who joined through the link stay in
+        the group.
+      tags: [invites]
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The invite is revoked.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          description: |
+            No such group, or the group has no such open invite
+            (`GROUP_NOT_FOUND` or `INVITE_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /invites/{token}:
+    parameters:
+      - $ref: "#/components/parameters/InviteToken"
+    get:
+      operationId: previewInvite
+      summary: See what an invite link leads to
+      description: |
+        Needs no login, so the page behind the link can show who invites to
+        which group before asking to sign in. Whoever holds the token sees
+        the group name, the inviting person, the member count and the first
+        few members by first name; nothing more.
+      tags: [invites]
+      responses:
+        "200":
+          description: The invite is valid.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitePreview"
+        "404":
+          $ref: "#/components/responses/Error"
+        "410":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /invites/{token}/accept:
+    parameters:
+      - $ref: "#/components/parameters/InviteToken"
+    post:
+      operationId: acceptInvite
+      summary: Join the group behind an invite link
+      description: |
+        The user becomes a plain member. Someone who is a member already
+        keeps their role, so opening the link twice changes nothing.
+      tags: [invites]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The user is a member now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteAccepted"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "410":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -370,6 +536,14 @@ components:
         x-go-type: uuid.UUID
         x-go-type-import:
           path: github.com/google/uuid
+
+    InviteToken:
+      name: token
+      in: path
+      required: true
+      description: The secret from the invite link.
+      schema:
+        type: string
 
   responses:
     Error:
@@ -495,6 +669,107 @@ components:
         it; members use it.
       enum: [owner, admin, member]
 
+    Invite:
+      type: object
+      required: [id, createdAt, expiresAt, createdByName]
+      properties:
+        id:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        createdByName:
+          type: string
+          nullable: true
+          description: null if the creator deleted their account.
+
+    InviteList:
+      type: object
+      required: [invites]
+      properties:
+        invites:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invite"
+
+    InviteCreated:
+      allOf:
+        - $ref: "#/components/schemas/Invite"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: |
+                Secret part of the link. Shown only in this response, the
+                server keeps just a hash.
+
+    InvitePreview:
+      type: object
+      required:
+        [
+          groupName,
+          invitedByName,
+          invitedByAvatarUrl,
+          expiresAt,
+          memberCount,
+          members,
+        ]
+      properties:
+        groupName:
+          type: string
+        invitedByName:
+          type: string
+          nullable: true
+          description: null if the inviting person deleted their account.
+        invitedByAvatarUrl:
+          type: string
+          nullable: true
+          description: null if they have no avatar or deleted their account.
+        expiresAt:
+          type: string
+          format: date-time
+        memberCount:
+          type: integer
+        members:
+          type: array
+          description: |
+            The first few members, at most 4. `memberCount` says how many
+            there are in total.
+          items:
+            $ref: "#/components/schemas/InviteMember"
+
+    InviteMember:
+      type: object
+      required: [firstName, avatarUrl]
+      properties:
+        firstName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          description: null if the member has no avatar.
+
+    InviteAccepted:
+      type: object
+      required: [groupId, groupName]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        groupName:
+          type: string
+
     Locale:
       type: string
       enum: [de, en]
@@ -547,6 +822,9 @@ components:
         - GROUP_NAME_INVALID
         - INVALID_ROLE
         - OWNER_IMMUTABLE
+        - INVITE_NOT_FOUND
+        - INVITE_EXPIRED
+        - TOO_MANY_INVITES
       # Go constant names; without them oapi-codegen would turn NOT_FOUND
       # into NOTFOUND.
       x-enum-varnames:
@@ -563,3 +841,6 @@ components:
         - GroupNameInvalid
         - InvalidRole
         - OwnerImmutable
+        - InviteNotFound
+        - InviteExpired
+        - TooManyInvites

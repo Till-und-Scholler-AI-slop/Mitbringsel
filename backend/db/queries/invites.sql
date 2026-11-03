@@ -39,7 +39,8 @@ WHERE id = $1
 -- name: GetGroupInviteByTokenHash :one
 -- Returns revoked and expired invites too; the service decides what to
 -- tell the caller.
-SELECT sqlc.embed(g), i.expires_at, i.revoked_at, u.display_name AS invited_by
+SELECT sqlc.embed(g), i.expires_at, i.revoked_at,
+       u.display_name AS invited_by, u.avatar_url AS invited_by_avatar_url
 FROM group_invites i
 JOIN groups g ON g.id = i.group_id
 LEFT JOIN users u ON u.id = i.created_by
@@ -51,3 +52,17 @@ WHERE i.token_hash = $1;
 INSERT INTO group_members (group_id, user_id, role)
 VALUES ($1, $2, $3)
 ON CONFLICT (group_id, user_id) DO NOTHING;
+
+-- name: CountGroupMembers :one
+SELECT count(*) FROM group_members
+WHERE group_id = $1;
+
+-- name: ListGroupMembersPreview :many
+-- The first few members, oldest membership first, for the invite preview
+-- that anyone holding the token can open.
+SELECT u.display_name, u.avatar_url
+FROM group_members m
+JOIN users u ON u.id = m.user_id
+WHERE m.group_id = $1
+ORDER BY m.joined_at, m.user_id
+LIMIT sqlc.arg(max_rows);
