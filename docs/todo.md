@@ -20,6 +20,7 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 - [ ] **Owner-Übergabe:** Der Owner kann die Gruppe nur löschen, nicht übergeben (siehe [Überblick](overview.md)). Nachrüsten, falls sich das im Alltag als Lücke zeigt.
 - [ ] **Account löschen:** Ist der Owner der Einzige mit Zugriff, bleibt nach dem Löschen seines Accounts eine Gruppe ohne Owner zurück. Beim Umsetzen von „Account löschen“ klären: Gruppe löschen oder Owner automatisch bestimmen.
+- [ ] **Abgelaufene Einladungen aufräumen:** Abgelaufene und widerrufene Zeilen in `group_invites` werden nur ignoriert, nie gelöscht. Zusammen mit dem Aufräum-Job für Sessions und `processed_ops` (Phase 5) umsetzen.
 - [ ] **Lange Gruppennamen:** Im Frontend mit „…“ abschneiden, wenn der Name nicht in die Zeile passt (bis 30 Zeichen erlaubt).
 
 ## Komponenten

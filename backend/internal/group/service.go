@@ -191,9 +191,15 @@ func (s *Service) SetRole(ctx context.Context, actor, groupID, userID uuid.UUID,
 	})
 }
 
+// roleLookup is the one repository method the permission checks need, so
+// the invite service can use them with its own, smaller repository.
+type roleLookup interface {
+	MemberRole(ctx context.Context, groupID, userID uuid.UUID) (Role, error)
+}
+
 // roleOf returns the user's role in the group, or ErrNotFound if they are
 // not a member (or the group does not exist).
-func roleOf(ctx context.Context, repo Repository, groupID, userID uuid.UUID) (Role, error) {
+func roleOf(ctx context.Context, repo roleLookup, groupID, userID uuid.UUID) (Role, error) {
 	role, err := repo.MemberRole(ctx, groupID, userID)
 	if errors.Is(err, ErrNotFound) {
 		return "", ErrNotFound
@@ -204,7 +210,7 @@ func roleOf(ctx context.Context, repo Repository, groupID, userID uuid.UUID) (Ro
 	return role, nil
 }
 
-func requireOwner(ctx context.Context, repo Repository, groupID, actor uuid.UUID) error {
+func requireOwner(ctx context.Context, repo roleLookup, groupID, actor uuid.UUID) error {
 	role, err := roleOf(ctx, repo, groupID, actor)
 	if err != nil {
 		return err
@@ -216,7 +222,7 @@ func requireOwner(ctx context.Context, repo Repository, groupID, actor uuid.UUID
 }
 
 // requireManager lets owner and admins through; they run the group together.
-func requireManager(ctx context.Context, repo Repository, groupID, actor uuid.UUID) error {
+func requireManager(ctx context.Context, repo roleLookup, groupID, actor uuid.UUID) error {
 	role, err := roleOf(ctx, repo, groupID, actor)
 	if err != nil {
 		return err
