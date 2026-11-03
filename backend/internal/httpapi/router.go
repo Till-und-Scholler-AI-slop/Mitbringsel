@@ -37,6 +37,7 @@ type Deps struct {
 	Sessions SessionManager
 	Users    UserService
 	Groups   GroupService
+	Invites  InviteService
 	// Google is nil if the Google login is not configured, which only
 	// development allows; its routes then answer 404.
 	Google GoogleLogin
@@ -71,6 +72,13 @@ func NewRouter(deps Deps) http.Handler {
 	r.handle(http.MethodDelete, groupPath, protect(deleteGroupHandler(deps.Groups)))
 	r.handle(http.MethodDelete, memberPath, protect(removeMemberHandler(deps.Groups)))
 	r.handle(http.MethodPut, memberRolePath, protect(setMemberRoleHandler(deps.Groups)))
+	r.handle(http.MethodGet, groupInvitesPath, protect(listInvitesHandler(deps.Invites)))
+	r.handle(http.MethodPost, groupInvitesPath, protect(createInviteHandler(deps.Invites)))
+	r.handle(http.MethodDelete, groupInvitePath, protect(revokeInviteHandler(deps.Invites)))
+	r.handle(http.MethodPost, inviteAcceptPath, protect(acceptInviteHandler(deps.Invites)))
+	// Not behind requireUser: the page behind an invite link shows the
+	// invitation before the visitor has signed in. The token is the secret.
+	r.handle(http.MethodGet, invitePath, previewInviteHandler(deps.Invites))
 	// Not behind requireUser: logging out must work with an expired
 	// session, too.
 	r.handle(http.MethodPost, logoutPath, logoutHandler(deps.Sessions, deps.Env))

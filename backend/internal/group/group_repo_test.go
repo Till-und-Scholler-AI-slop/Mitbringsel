@@ -320,9 +320,12 @@ func TestPostgresRepository(t *testing.T) {
 			t.Fatalf("List() = %+v, %v; want the new invite", listed, err)
 		}
 
-		target, err := invites.Preview(ctx, token)
-		if err != nil || target.Group.ID != created.ID || target.InvitedBy != "inv-anna" {
-			t.Fatalf("Preview() = %+v, %v", target, err)
+		preview, err := invites.Preview(ctx, token)
+		if err != nil || preview.GroupName != "Invites" || preview.InvitedBy != "inv-anna" {
+			t.Fatalf("Preview() = %+v, %v", preview, err)
+		}
+		if preview.MemberCount != 1 || len(preview.Members) != 1 || preview.Members[0].FirstName != "inv-anna" {
+			t.Errorf("Preview() members = %d counted, %+v; want only the owner", preview.MemberCount, preview.Members)
 		}
 
 		// Joining twice, and as the owner, leaves exactly one membership.
@@ -336,6 +339,10 @@ func TestPostgresRepository(t *testing.T) {
 		}
 		if role, _ := repo.MemberRole(ctx, created.ID, anna); role != RoleOwner {
 			t.Errorf("owner role after accepting = %q, want %q", role, RoleOwner)
+		}
+
+		if preview, _ := invites.Preview(ctx, token); preview.MemberCount != 2 {
+			t.Errorf("Preview() MemberCount after Ben joined = %d, want 2", preview.MemberCount)
 		}
 
 		// Ben is in another group as owner and here as member: he cannot

@@ -226,6 +226,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/groups/{groupId}/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the open invite links of a group
+         * @description Owner and admins only. Links that are expired or revoked are left
+         *     out, and so are the tokens: they are shown once, when the link is
+         *     created.
+         */
+        get: operations["listInvites"];
+        put?: never;
+        /**
+         * Create an invite link
+         * @description Owner and admins only. The link works for several people for 7 days
+         *     or until it is revoked. A group can have 10 open links at once
+         *     (`TOO_MANY_INVITES`). The response is the only time the token is
+         *     shown; the frontend builds the link `/invite/<token>` from it.
+         */
+        post: operations["createInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/{groupId}/invites/{inviteId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+                inviteId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an invite link
+         * @description Owner and admins only. People who joined through the link stay in
+         *     the group.
+         */
+        delete: operations["revokeInvite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret from the invite link. */
+                token: components["parameters"]["InviteToken"];
+            };
+            cookie?: never;
+        };
+        /**
+         * See what an invite link leads to
+         * @description Needs no login, so the page behind the link can show who invites to
+         *     which group before asking to sign in. Whoever holds the token sees
+         *     the group name, the inviting person, the member count and the first
+         *     few members by first name; nothing more.
+         */
+        get: operations["previewInvite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret from the invite link. */
+                token: components["parameters"]["InviteToken"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join the group behind an invite link
+         * @description The user becomes a plain member. Someone who is a member already
+         *     keeps their role, so opening the link twice changes nothing.
+         */
+        post: operations["acceptInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -285,6 +390,51 @@ export interface components {
          * @enum {string}
          */
         Role: "owner" | "admin" | "member";
+        Invite: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description null if the creator deleted their account. */
+            createdByName: string | null;
+        };
+        InviteList: {
+            invites: components["schemas"]["Invite"][];
+        };
+        InviteCreated: components["schemas"]["Invite"] & {
+            /**
+             * @description Secret part of the link. Shown only in this response, the
+             *     server keeps just a hash.
+             */
+            token: string;
+        };
+        InvitePreview: {
+            groupName: string;
+            /** @description null if the inviting person deleted their account. */
+            invitedByName: string | null;
+            /** @description null if they have no avatar or deleted their account. */
+            invitedByAvatarUrl: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            memberCount: number;
+            /**
+             * @description The first few members, at most 4. `memberCount` says how many
+             *     there are in total.
+             */
+            members: components["schemas"]["InviteMember"][];
+        };
+        InviteMember: {
+            firstName: string;
+            /** @description null if the member has no avatar. */
+            avatarUrl: string | null;
+        };
+        InviteAccepted: {
+            /** Format: uuid */
+            groupId: string;
+            groupName: string;
+        };
         /** @enum {string} */
         Locale: "de" | "en";
         /** @enum {string} */
@@ -304,7 +454,7 @@ export interface components {
          * @description Machine-readable error; the frontend translates it.
          * @enum {string}
          */
-        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE";
+        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES";
     };
     responses: {
         /** @description The request failed; `error.code` says why. */
@@ -320,6 +470,8 @@ export interface components {
     parameters: {
         GroupId: string;
         UserId: string;
+        /** @description The secret from the invite link. */
+        InviteToken: string;
     };
     requestBodies: never;
     headers: never;
@@ -647,6 +799,153 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    listInvites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The open invites, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteList"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    createInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The new invite with its token. */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteCreated"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    revokeInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+                inviteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invite is revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            /**
+             * @description No such group, or the group has no such open invite
+             *     (`GROUP_NOT_FOUND` or `INVITE_NOT_FOUND`).
+             */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["Error"];
+        };
+    };
+    previewInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret from the invite link. */
+                token: components["parameters"]["InviteToken"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invite is valid. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitePreview"];
+                };
+            };
+            404: components["responses"]["Error"];
+            410: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    acceptInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The secret from the invite link. */
+                token: components["parameters"]["InviteToken"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user is a member now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteAccepted"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            410: components["responses"]["Error"];
             500: components["responses"]["Error"];
         };
     };

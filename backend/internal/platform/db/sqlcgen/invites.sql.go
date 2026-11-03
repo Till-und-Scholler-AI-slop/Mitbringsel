@@ -50,6 +50,18 @@ func (q *Queries) CountActiveGroupInvites(ctx context.Context, arg CountActiveGr
 	return count, err
 }
 
+const countGroupMembers = `-- name: CountGroupMembers :one
+SELECT count(*) FROM group_members
+WHERE group_id = $1
+`
+
+func (q *Queries) CountGroupMembers(ctx context.Context, groupID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countGroupMembers, groupID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createGroupInvite = `-- name: CreateGroupInvite :one
 WITH i AS (
     INSERT INTO group_invites (group_id, token_hash, created_by, expires_at)
@@ -96,7 +108,8 @@ func (q *Queries) CreateGroupInvite(ctx context.Context, arg CreateGroupInvitePa
 }
 
 const getGroupInviteByTokenHash = `-- name: GetGroupInviteByTokenHash :one
-SELECT g.id, g.name, g.created_by, g.created_at, g.updated_at, i.expires_at, i.revoked_at, u.display_name AS invited_by
+SELECT g.id, g.name, g.created_by, g.created_at, g.updated_at, i.expires_at, i.revoked_at,
+       u.display_name AS invited_by, u.avatar_url AS invited_by_avatar_url
 FROM group_invites i
 JOIN groups g ON g.id = i.group_id
 LEFT JOIN users u ON u.id = i.created_by
@@ -104,10 +117,11 @@ WHERE i.token_hash = $1
 `
 
 type GetGroupInviteByTokenHashRow struct {
-	Group     Group
-	ExpiresAt time.Time
-	RevokedAt *time.Time
-	InvitedBy *string
+	Group              Group
+	ExpiresAt          time.Time
+	RevokedAt          *time.Time
+	InvitedBy          *string
+	InvitedByAvatarUrl *string
 }
 
 // Returns revoked and expired invites too; the service decides what to
@@ -124,6 +138,7 @@ func (q *Queries) GetGroupInviteByTokenHash(ctx context.Context, tokenHash []byt
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.InvitedBy,
+		&i.InvitedByAvatarUrl,
 	)
 	return i, err
 }
@@ -170,6 +185,47 @@ func (q *Queries) ListActiveGroupInvites(ctx context.Context, arg ListActiveGrou
 			&i.ExpiresAt,
 			&i.CreatedByName,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGroupMembersPreview = `-- name: ListGroupMembersPreview :many
+SELECT u.display_name, u.avatar_url
+FROM group_members m
+JOIN users u ON u.id = m.user_id
+WHERE m.group_id = $1
+ORDER BY m.joined_at, m.user_id
+LIMIT $2
+`
+
+type ListGroupMembersPreviewParams struct {
+	GroupID uuid.UUID
+	MaxRows int32
+}
+
+type ListGroupMembersPreviewRow struct {
+	DisplayName string
+	AvatarURL   *string
+}
+
+// The first few members, oldest membership first, for the invite preview
+// that anyone holding the token can open.
+func (q *Queries) ListGroupMembersPreview(ctx context.Context, arg ListGroupMembersPreviewParams) ([]ListGroupMembersPreviewRow, error) {
+	rows, err := q.db.Query(ctx, listGroupMembersPreview, arg.GroupID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGroupMembersPreviewRow
+	for rows.Next() {
+		var i ListGroupMembersPreviewRow
+		if err := rows.Scan(&i.DisplayName, &i.AvatarURL); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

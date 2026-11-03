@@ -77,6 +77,16 @@ func (r *fakeInviteRepo) FindInvite(_ context.Context, tokenHash []byte) (Invite
 	return InviteTarget{}, ErrInviteNotFound
 }
 
+// PreviewMembers invents anonymous members: the tests only look at counts.
+func (r *fakeInviteRepo) PreviewMembers(_ context.Context, groupID uuid.UUID, max int) (int, []PreviewMember, error) {
+	count := len(r.roles[groupID])
+	members := make([]PreviewMember, min(count, max))
+	for i := range members {
+		members[i] = PreviewMember{FirstName: "Member"}
+	}
+	return count, members, nil
+}
+
 func (r *fakeInviteRepo) AddMemberIfAbsent(_ context.Context, groupID, userID uuid.UUID, role Role) error {
 	if _, ok := r.roles[groupID][userID]; !ok {
 		r.roles[groupID][userID] = role
@@ -286,8 +296,28 @@ func TestInviteService_PreviewAndAccept(t *testing.T) {
 		token, _ := newToken(t, f)
 
 		got, err := f.svc.Preview(ctx, token)
-		if err != nil || got.Group.ID != f.group || got.Group.Name != "WG Kaiserstraße" {
+		if err != nil || got.GroupName != "WG Kaiserstraße" {
 			t.Errorf("Preview() = %+v, %v", got, err)
+		}
+		if got.MemberCount != 3 || len(got.Members) != 3 {
+			t.Errorf("members = %d counted, %d named; want 3 and 3", got.MemberCount, len(got.Members))
+		}
+	})
+
+	t.Run("preview names only the first few members", func(t *testing.T) {
+		f := newInviteFixture(t)
+		token, _ := newToken(t, f)
+		for range 3 {
+			if _, err := f.svc.Accept(ctx, uuid.New(), token); err != nil {
+				t.Fatalf("Accept() error = %v", err)
+			}
+		}
+
+		got, err := f.svc.Preview(ctx, token)
+
+		if err != nil || got.MemberCount != 6 || len(got.Members) != PreviewMemberLimit {
+			t.Errorf("Preview() counted %d, named %d (error %v); want 6 and %d",
+				got.MemberCount, len(got.Members), err, PreviewMemberLimit)
 		}
 	})
 
@@ -388,4 +418,20 @@ func TestInviteService_PreviewAndAccept(t *testing.T) {
 			t.Error("guest joined with a wrong token")
 		}
 	})
+}
+
+func TestFirstName(t *testing.T) {
+	tests := map[string]string{
+		"Anna Müller":      "Anna",
+		"Anna":             "Anna",
+		"  Anna  Müller ":  "Anna",
+		"Anna-Lena Meyer":  "Anna-Lena",
+		"":                 "",
+		"anna@example.com": "anna@example.com",
+	}
+	for in, want := range tests {
+		if got := firstName(in); got != want {
+			t.Errorf("firstName(%q) = %q, want %q", in, got, want)
+		}
+	}
 }

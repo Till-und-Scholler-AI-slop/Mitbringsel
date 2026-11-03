@@ -45,6 +45,9 @@ const API_ERROR_CODES: Record<ApiErrorCode, true> = {
   GROUP_NAME_INVALID: true,
   INVALID_ROLE: true,
   OWNER_IMMUTABLE: true,
+  INVITE_NOT_FOUND: true,
+  INVITE_EXPIRED: true,
+  TOO_MANY_INVITES: true,
 }
 
 describe('error messages', () => {
