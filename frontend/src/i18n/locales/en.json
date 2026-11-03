@@ -49,12 +49,17 @@
   "errors": {
     "CROSS_ORIGIN_REQUEST": "The request was blocked for security reasons.",
     "DB_UNAVAILABLE": "The database is currently unavailable.",
+    "FORBIDDEN": "You are not allowed to do this.",
+    "GROUP_NAME_INVALID": "The group name must be 1 to 30 characters long.",
+    "GROUP_NOT_FOUND": "This group does not exist, or you are not a member.",
     "INTERNAL_ERROR": "Something went wrong on the server.",
     "INVALID_IDENTITY": "The sign-in data is incomplete.",
     "INVALID_REQUEST": "The request was invalid.",
+    "INVALID_ROLE": "This role is not possible.",
     "METHOD_NOT_ALLOWED": "This action is not possible here.",
     "NETWORK": "The server cannot be reached.",
     "NOT_FOUND": "This does not exist (anymore).",
+    "OWNER_IMMUTABLE": "The owner cannot leave or change role. Delete the group instead.",
     "UNAUTHENTICATED": "You are not signed in.",
     "UNKNOWN": "Something went wrong."
   }

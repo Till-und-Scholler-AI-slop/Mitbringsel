@@ -153,6 +153,194 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /groups:
+    get:
+      operationId: listGroups
+      summary: List the groups of the logged-in user
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The groups the user is a member of, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupList"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createGroup
+      summary: Create a group
+      description: The logged-in user becomes its owner.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupNameRequest"
+      responses:
+        "201":
+          description: The new group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /groups/{groupId}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      operationId: getGroup
+      summary: Get a group with its members
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updateGroup
+      summary: Rename a group
+      description: Owner and admins only.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupNameRequest"
+      responses:
+        "200":
+          description: The renamed group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteGroup
+      summary: Delete a group with everything in it
+      description: Owner only.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The group is deleted.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /groups/{groupId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/UserId"
+    delete:
+      operationId: removeGroupMember
+      summary: Remove a member from a group, or leave it
+      description: |
+        With the logged-in user's own ID this leaves the group, which every
+        role but the owner may do. Removing someone else needs a higher
+        role: the owner removes admins and members, an admin only members.
+        A user who is not in the group is answered with `GROUP_NOT_FOUND`,
+        like an unknown group, so the answer does not reveal who is a
+        member.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The user is no longer a member.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /groups/{groupId}/members/{userId}/role:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/UserId"
+    put:
+      operationId: setGroupMemberRole
+      summary: Make a member admin or plain member
+      description: |
+        Owner only. Only `admin` and `member` can be given (`INVALID_ROLE`
+        otherwise); the owner's own role never changes (`OWNER_IMMUTABLE`).
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetRoleRequest"
+      responses:
+        "204":
+          description: The member has the role now.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -160,6 +348,28 @@ components:
       in: cookie
       # Staging and production; local development uses "session".
       name: __Host-session
+
+  parameters:
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        x-go-type: uuid.UUID
+        x-go-type-import:
+          path: github.com/google/uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        x-go-type: uuid.UUID
+        x-go-type-import:
+          path: github.com/google/uuid
 
   responses:
     Error:
@@ -202,6 +412,88 @@ components:
           $ref: "#/components/schemas/Locale"
         theme:
           $ref: "#/components/schemas/Theme"
+
+    Group:
+      type: object
+      required: [id, name, role, members, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        name:
+          type: string
+        role:
+          allOf:
+            - $ref: "#/components/schemas/Role"
+          description: The role of the logged-in user in this group.
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupMember"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    GroupList:
+      type: object
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Group"
+
+    GroupMember:
+      type: object
+      required: [userId, displayName, avatarUrl, role, joinedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          description: null if the member has no avatar.
+        role:
+          $ref: "#/components/schemas/Role"
+        joinedAt:
+          type: string
+          format: date-time
+
+    GroupNameRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: |
+            1 to 30 characters after trimming whitespace, otherwise
+            `GROUP_NAME_INVALID`.
+
+    SetRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+
+    Role:
+      type: string
+      description: |
+        The owner created the group and is the only one. Admins help run
+        it; members use it.
+      enum: [owner, admin, member]
 
     Locale:
       type: string
@@ -250,6 +542,11 @@ components:
         - CROSS_ORIGIN_REQUEST
         - INVALID_REQUEST
         - INVALID_IDENTITY
+        - GROUP_NOT_FOUND
+        - FORBIDDEN
+        - GROUP_NAME_INVALID
+        - INVALID_ROLE
+        - OWNER_IMMUTABLE
       # Go constant names; without them oapi-codegen would turn NOT_FOUND
       # into NOTFOUND.
       x-enum-varnames:
@@ -261,3 +558,8 @@ components:
         - CrossOrigin
         - InvalidRequest
         - InvalidIdentity
+        - GroupNotFound
+        - Forbidden
+        - GroupNameInvalid
+        - InvalidRole
+        - OwnerImmutable
