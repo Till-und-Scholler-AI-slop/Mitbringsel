@@ -49,12 +49,17 @@
   "errors": {
     "CROSS_ORIGIN_REQUEST": "Die Anfrage wurde aus Sicherheitsgründen abgelehnt.",
     "DB_UNAVAILABLE": "Die Datenbank ist gerade nicht erreichbar.",
+    "FORBIDDEN": "Dafür fehlt dir die Berechtigung.",
+    "GROUP_NAME_INVALID": "Der Gruppenname muss 1 bis 30 Zeichen lang sein.",
+    "GROUP_NOT_FOUND": "Diese Gruppe gibt es nicht, oder du bist kein Mitglied.",
     "INTERNAL_ERROR": "Auf dem Server ist ein Fehler aufgetreten.",
     "INVALID_IDENTITY": "Die Anmeldedaten sind unvollständig.",
     "INVALID_REQUEST": "Die Anfrage war ungültig.",
+    "INVALID_ROLE": "Diese Rolle ist nicht möglich.",
     "METHOD_NOT_ALLOWED": "Diese Aktion ist hier nicht möglich.",
     "NETWORK": "Der Server ist nicht erreichbar.",
     "NOT_FOUND": "Das gibt es nicht (mehr).",
+    "OWNER_IMMUTABLE": "Der Owner kann nicht austreten oder die Rolle wechseln. Lösche stattdessen die Gruppe.",
     "UNAUTHENTICATED": "Du bist nicht angemeldet.",
     "UNKNOWN": "Etwas ist schiefgelaufen."
   }

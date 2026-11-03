@@ -36,12 +36,14 @@ type Deps struct {
 	DB       Pinger
 	Sessions SessionManager
 	Users    UserService
+	Groups   GroupService
 	// Google is nil if the Google login is not configured, which only
 	// development allows; its routes then answer 404.
 	Google GoogleLogin
 }
 
-// router wraps http.ServeMux and remembers which methods each path allows.
+// router wraps http.ServeMux and remembers which methods each path pattern
+// allows.
 // The mux answers unknown paths and wrong methods with plain text; knowing
 // the allowed methods lets us answer both in our JSON error format instead.
 type router struct {
@@ -62,6 +64,13 @@ func NewRouter(deps Deps) http.Handler {
 
 	r.handle(http.MethodGet, HealthPath, healthHandler(deps.DB))
 	r.handle(http.MethodGet, mePath, protect(meHandler(deps.Users)))
+	r.handle(http.MethodGet, groupsPath, protect(listGroupsHandler(deps.Groups)))
+	r.handle(http.MethodPost, groupsPath, protect(createGroupHandler(deps.Groups)))
+	r.handle(http.MethodGet, groupPath, protect(getGroupHandler(deps.Groups)))
+	r.handle(http.MethodPatch, groupPath, protect(updateGroupHandler(deps.Groups)))
+	r.handle(http.MethodDelete, groupPath, protect(deleteGroupHandler(deps.Groups)))
+	r.handle(http.MethodDelete, memberPath, protect(removeMemberHandler(deps.Groups)))
+	r.handle(http.MethodPut, memberRolePath, protect(setMemberRoleHandler(deps.Groups)))
 	// Not behind requireUser: logging out must work with an expired
 	// session, too.
 	r.handle(http.MethodPost, logoutPath, logoutHandler(deps.Sessions, deps.Env))
@@ -96,10 +105,34 @@ func (r *router) handle(method, path string, h http.HandlerFunc) {
 }
 
 func (r *router) fallback(w http.ResponseWriter, req *http.Request) {
-	if allowed, ok := r.methods[req.URL.Path]; ok {
-		w.Header().Set("Allow", strings.Join(allowed, ", "))
-		writeError(w, http.StatusMethodNotAllowed, apigen.ErrorCodeMethodNotAllowed)
-		return
+	for pattern, allowed := range r.methods {
+		if matchesPattern(pattern, req.URL.Path) {
+			w.Header().Set("Allow", strings.Join(allowed, ", "))
+			writeError(w, http.StatusMethodNotAllowed, apigen.ErrorCodeMethodNotAllowed)
+			return
+		}
 	}
 	writeError(w, http.StatusNotFound, apigen.ErrorCodeNotFound)
+}
+
+// matchesPattern reports whether path fits a route pattern whose wildcards
+// look like {groupId}. A wildcard matches exactly one non-empty segment, as
+// in http.ServeMux; the mux itself cannot tell us this, because our "/"
+// fallback matches every method.
+func matchesPattern(pattern, path string) bool {
+	patternParts := strings.Split(pattern, "/")
+	pathParts := strings.Split(path, "/")
+	if len(patternParts) != len(pathParts) {
+		return false
+	}
+	for i, part := range patternParts {
+		isWildcard := strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}")
+		if isWildcard && pathParts[i] != "" {
+			continue
+		}
+		if part != pathParts[i] {
+			return false
+		}
+	}
+	return true
 }

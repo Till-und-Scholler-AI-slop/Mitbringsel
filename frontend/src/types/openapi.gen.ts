@@ -126,6 +126,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the groups of the logged-in user */
+        get: operations["listGroups"];
+        put?: never;
+        /**
+         * Create a group
+         * @description The logged-in user becomes its owner.
+         */
+        post: operations["createGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/{groupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        /** Get a group with its members */
+        get: operations["getGroup"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a group with everything in it
+         * @description Owner only.
+         */
+        delete: operations["deleteGroup"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename a group
+         * @description Owner and admins only.
+         */
+        patch: operations["updateGroup"];
+        trace?: never;
+    };
+    "/groups/{groupId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a member from a group, or leave it
+         * @description With the logged-in user's own ID this leaves the group, which every
+         *     role but the owner may do. Removing someone else needs a higher
+         *     role: the owner removes admins and members, an admin only members.
+         *     A user who is not in the group is answered with `GROUP_NOT_FOUND`,
+         *     like an unknown group, so the answer does not reveal who is a
+         *     member.
+         */
+        delete: operations["removeGroupMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/{groupId}/members/{userId}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Make a member admin or plain member
+         * @description Owner only. Only `admin` and `member` can be given (`INVALID_ROLE`
+         *     otherwise); the owner's own role never changes (`OWNER_IMMUTABLE`).
+         */
+        put: operations["setGroupMemberRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -144,6 +244,47 @@ export interface components {
             locale: components["schemas"]["Locale"];
             theme: components["schemas"]["Theme"];
         };
+        Group: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description The role of the logged-in user in this group. */
+            role: components["schemas"]["Role"];
+            members: components["schemas"]["GroupMember"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        GroupList: {
+            groups: components["schemas"]["Group"][];
+        };
+        GroupMember: {
+            /** Format: uuid */
+            userId: string;
+            displayName: string;
+            /** @description null if the member has no avatar. */
+            avatarUrl: string | null;
+            role: components["schemas"]["Role"];
+            /** Format: date-time */
+            joinedAt: string;
+        };
+        GroupNameRequest: {
+            /**
+             * @description 1 to 30 characters after trimming whitespace, otherwise
+             *     `GROUP_NAME_INVALID`.
+             */
+            name: string;
+        };
+        SetRoleRequest: {
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * @description The owner created the group and is the only one. Admins help run
+         *     it; members use it.
+         * @enum {string}
+         */
+        Role: "owner" | "admin" | "member";
         /** @enum {string} */
         Locale: "de" | "en";
         /** @enum {string} */
@@ -163,7 +304,7 @@ export interface components {
          * @description Machine-readable error; the frontend translates it.
          * @enum {string}
          */
-        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY";
+        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE";
     };
     responses: {
         /** @description The request failed; `error.code` says why. */
@@ -176,7 +317,10 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        GroupId: string;
+        UserId: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -314,6 +458,195 @@ export interface operations {
             400: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    listGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The groups the user is a member of, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    createGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupNameRequest"];
+            };
+        };
+        responses: {
+            /** @description The new group. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    getGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    deleteGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group is deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    updateGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupNameRequest"];
+            };
+        };
+        responses: {
+            /** @description The renamed group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Group"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    removeGroupMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user is no longer a member. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    setGroupMemberRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description The member has the role now. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             500: components["responses"]["Error"];
         };
     };

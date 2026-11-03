@@ -40,6 +40,11 @@ const API_ERROR_CODES: Record<ApiErrorCode, true> = {
   CROSS_ORIGIN_REQUEST: true,
   INVALID_REQUEST: true,
   INVALID_IDENTITY: true,
+  GROUP_NOT_FOUND: true,
+  FORBIDDEN: true,
+  GROUP_NAME_INVALID: true,
+  INVALID_ROLE: true,
+  OWNER_IMMUTABLE: true,
 }
 
 describe('error messages', () => {

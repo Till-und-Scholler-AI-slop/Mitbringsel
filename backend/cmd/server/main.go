@@ -14,6 +14,7 @@ import (
 
 	"mitbringsel/internal/auth"
 	"mitbringsel/internal/config"
+	"mitbringsel/internal/group"
 	"mitbringsel/internal/httpapi"
 	"mitbringsel/internal/platform/db"
 	"mitbringsel/internal/platform/db/sqlcgen"
@@ -75,6 +76,9 @@ func run() error {
 	queries := sqlcgen.New(pool)
 	sessions := auth.NewSessionService(auth.NewPostgresSessionRepository(queries))
 	users := user.NewService(user.NewPostgresRepository(queries))
+	// Unlike the other repositories, this one takes the pool: it starts the
+	// transactions that keep a group and its owner together.
+	groups := group.NewService(group.NewPostgresRepository(pool))
 
 	// Declared with the interface type and only assigned when configured:
 	// an interface holding a nil *auth.GoogleProvider would not compare
@@ -94,6 +98,7 @@ func run() error {
 			DB:       pool,
 			Sessions: sessions,
 			Users:    users,
+			Groups:   groups,
 			Google:   google,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,

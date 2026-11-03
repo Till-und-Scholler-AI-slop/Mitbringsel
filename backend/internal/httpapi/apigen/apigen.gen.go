@@ -4,6 +4,8 @@
 package apigen
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -11,11 +13,16 @@ import (
 const (
 	ErrorCodeCrossOrigin      ErrorCode = "CROSS_ORIGIN_REQUEST"
 	ErrorCodeDBUnavailable    ErrorCode = "DB_UNAVAILABLE"
+	ErrorCodeForbidden        ErrorCode = "FORBIDDEN"
+	ErrorCodeGroupNameInvalid ErrorCode = "GROUP_NAME_INVALID"
+	ErrorCodeGroupNotFound    ErrorCode = "GROUP_NOT_FOUND"
 	ErrorCodeInternal         ErrorCode = "INTERNAL_ERROR"
 	ErrorCodeInvalidIdentity  ErrorCode = "INVALID_IDENTITY"
 	ErrorCodeInvalidRequest   ErrorCode = "INVALID_REQUEST"
+	ErrorCodeInvalidRole      ErrorCode = "INVALID_ROLE"
 	ErrorCodeMethodNotAllowed ErrorCode = "METHOD_NOT_ALLOWED"
 	ErrorCodeNotFound         ErrorCode = "NOT_FOUND"
+	ErrorCodeOwnerImmutable   ErrorCode = "OWNER_IMMUTABLE"
 	ErrorCodeUnauthenticated  ErrorCode = "UNAUTHENTICATED"
 )
 
@@ -26,15 +33,25 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeDBUnavailable:
 		return true
+	case ErrorCodeForbidden:
+		return true
+	case ErrorCodeGroupNameInvalid:
+		return true
+	case ErrorCodeGroupNotFound:
+		return true
 	case ErrorCodeInternal:
 		return true
 	case ErrorCodeInvalidIdentity:
 		return true
 	case ErrorCodeInvalidRequest:
 		return true
+	case ErrorCodeInvalidRole:
+		return true
 	case ErrorCodeMethodNotAllowed:
 		return true
 	case ErrorCodeNotFound:
+		return true
+	case ErrorCodeOwnerImmutable:
 		return true
 	case ErrorCodeUnauthenticated:
 		return true
@@ -70,6 +87,27 @@ func (e Locale) Valid() bool {
 	case LocaleDe:
 		return true
 	case LocaleEn:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Role.
+const (
+	RoleAdmin  Role = "admin"
+	RoleMember Role = "member"
+	RoleOwner  Role = "owner"
+)
+
+// Valid indicates whether the value is a known member of the Role enum.
+func (e Role) Valid() bool {
+	switch e {
+	case RoleAdmin:
+		return true
+	case RoleMember:
+		return true
+	case RoleOwner:
 		return true
 	default:
 		return false
@@ -119,6 +157,43 @@ type ErrorBody struct {
 // ErrorCode Machine-readable error; the frontend translates it.
 type ErrorCode string
 
+// Group defines model for Group.
+type Group struct {
+	CreatedAt time.Time     `json:"createdAt"`
+	ID        uuid.UUID     `json:"id"`
+	Members   []GroupMember `json:"members"`
+	Name      string        `json:"name"`
+
+	// Role The role of the logged-in user in this group.
+	Role      Role      `json:"role"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// GroupList defines model for GroupList.
+type GroupList struct {
+	Groups []Group `json:"groups"`
+}
+
+// GroupMember defines model for GroupMember.
+type GroupMember struct {
+	// AvatarURL null if the member has no avatar.
+	AvatarURL   *string   `json:"avatarUrl"`
+	DisplayName string    `json:"displayName"`
+	JoinedAt    time.Time `json:"joinedAt"`
+
+	// Role The owner created the group and is the only one. Admins help run
+	// it; members use it.
+	Role   Role      `json:"role"`
+	UserID uuid.UUID `json:"userId"`
+}
+
+// GroupNameRequest defines model for GroupNameRequest.
+type GroupNameRequest struct {
+	// Name 1 to 30 characters after trimming whitespace, otherwise
+	// `GROUP_NAME_INVALID`.
+	Name string `json:"name"`
+}
+
 // Health defines model for Health.
 type Health struct {
 	Status HealthStatus `json:"status"`
@@ -141,8 +216,25 @@ type Me struct {
 	Theme       Theme     `json:"theme"`
 }
 
+// Role The owner created the group and is the only one. Admins help run
+// it; members use it.
+type Role string
+
+// SetRoleRequest defines model for SetRoleRequest.
+type SetRoleRequest struct {
+	// Role The owner created the group and is the only one. Admins help run
+	// it; members use it.
+	Role Role `json:"role"`
+}
+
 // Theme defines model for Theme.
 type Theme string
+
+// GroupID defines model for GroupId.
+type GroupID = uuid.UUID
+
+// UserID defines model for UserId.
+type UserID = uuid.UUID
 
 // GoogleCallbackParams defines parameters for GoogleCallback.
 type GoogleCallbackParams struct {
@@ -155,3 +247,12 @@ type GoogleCallbackParams struct {
 
 // DevLoginJSONRequestBody defines body for DevLogin for application/json ContentType.
 type DevLoginJSONRequestBody = DevLoginRequest
+
+// CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
+type CreateGroupJSONRequestBody = GroupNameRequest
+
+// UpdateGroupJSONRequestBody defines body for UpdateGroup for application/json ContentType.
+type UpdateGroupJSONRequestBody = GroupNameRequest
+
+// SetGroupMemberRoleJSONRequestBody defines body for SetGroupMemberRole for application/json ContentType.
+type SetGroupMemberRoleJSONRequestBody = SetRoleRequest
