@@ -7,7 +7,7 @@ Getestet wird, was kaputtgehen darf, ohne dass man es sofort merkt: Sync- und Ko
 | Bereich | Testart | Beispiele |
 | --- | --- | --- |
 | LWW-Merge und HLC (Go und TypeScript) | Unit, tabellengetrieben | Gleichzeitige Änderungen an verschiedenen und gleichen Feldern, Gleichstand, Löschen gewinnt, Uhr in der Zukunft |
-| Services | Unit mit Fake-Repositories | Nicht-Mitglied darf nicht lesen oder schreiben, Owner-Rechte, abgelaufene Einladung |
+| Services | Unit mit Fake-Repositories | Nicht-Mitglied darf nicht lesen oder schreiben, Rechte von Owner, Admin und Member, abgelaufene Einladung |
 | Repositories und Migrationen | Integration gegen echtes Postgres (`testcontainers-go`) | Queries, Constraints, `server_seq`, Idempotenz über `processed_ops` |
 | WebSocket-Hub | Integration | Zwei Clients, Änderung von A kommt bei B an; Wiederverbinden mit `sync` |
 | HTTP-Handler | `httptest` | Statuscodes, Fehlerformat, Validierung |

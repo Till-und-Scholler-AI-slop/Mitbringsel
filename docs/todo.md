@@ -16,6 +16,12 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 - [ ] **Account löschen und letzter Owner:** Löscht der letzte Owner einer Gruppe seinen Account, fällt seine Mitgliedschaft per `ON DELETE CASCADE` weg und die Gruppe hat keinen Owner mehr. Beim Bau der Account-Löschung festlegen: vorher einen Owner bestimmen lassen, das älteste Mitglied automatisch befördern oder leere Gruppen löschen.
 
+## Gruppen
+
+- [ ] **Owner-Übergabe:** Der Owner kann die Gruppe nur löschen, nicht übergeben (siehe [Überblick](overview.md)). Nachrüsten, falls sich das im Alltag als Lücke zeigt.
+- [ ] **Account löschen:** Ist der Owner der Einzige mit Zugriff, bleibt nach dem Löschen seines Accounts eine Gruppe ohne Owner zurück. Beim Umsetzen von „Account löschen“ klären: Gruppe löschen oder Owner automatisch bestimmen.
+- [ ] **Lange Gruppennamen:** Im Frontend mit „…“ abschneiden, wenn der Name nicht in die Zeile passt (bis 30 Zeichen erlaubt).
+
 ## Komponenten
 
 - [ ] **`BaseButton`:** Varianten `danger` und Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen, im Login-Design noch nicht vorhanden).

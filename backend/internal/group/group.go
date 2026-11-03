@@ -14,34 +14,44 @@ import (
 type Role string
 
 const (
-	// RoleOwner manages the group: rename, delete, members and roles.
+	// RoleOwner is the one person who created the group. Only the owner
+	// deletes the group and hands out the admin role. The owner cannot
+	// leave or change role; to give up the group, delete it.
 	RoleOwner Role = "owner"
+	// RoleAdmin helps the owner: rename the group, invite people and remove
+	// plain members.
+	RoleAdmin Role = "admin"
 	// RoleMember uses the group's lists.
 	RoleMember Role = "member"
 )
 
-func (r Role) valid() bool {
-	return r == RoleOwner || r == RoleMember
+// assignable reports whether SetRole may give this role to someone. The
+// owner role is not assignable: the owner is set once, when the group is
+// created.
+func (r Role) assignable() bool {
+	return r == RoleAdmin || r == RoleMember
 }
 
 // MaxNameLength is the longest group name in characters (not bytes, so
 // "Kaiserstraße" counts 12). The database checks the same limit.
-const MaxNameLength = 100
+const MaxNameLength = 30
 
 var (
 	// ErrNotFound means the group does not exist or the user is not a
 	// member. Both look the same to the caller, so nobody can find out
 	// which groups exist by trying IDs (docs/auth.md).
 	ErrNotFound = errors.New("group not found")
-	// ErrForbidden means the user is a member but needs to be an owner.
-	ErrForbidden = errors.New("only owners may do this")
+	// ErrForbidden means the user is a member, but their role does not
+	// allow this.
+	ErrForbidden = errors.New("not allowed for this role")
 	// ErrInvalidName means the name is empty or too long after trimming.
 	ErrInvalidName = errors.New("invalid group name")
-	// ErrInvalidRole means a role other than owner or member was requested.
+	// ErrInvalidRole means a role other than admin or member was requested.
 	ErrInvalidRole = errors.New("invalid role")
-	// ErrLastOwner means the change would leave the group without an
-	// owner. Someone else must become owner first, or the group is deleted.
-	ErrLastOwner = errors.New("a group needs at least one owner")
+	// ErrOwnerImmutable means the change would take the owner out of their
+	// role: the owner can neither leave nor be demoted. Deleting the group
+	// is the way out.
+	ErrOwnerImmutable = errors.New("the owner cannot leave or change role")
 )
 
 // Group is a stored group.
@@ -98,7 +108,6 @@ type Repository interface {
 	// Members returns the members of the given groups, keyed by group ID.
 	Members(ctx context.Context, groupIDs []uuid.UUID) (map[uuid.UUID][]Member, error)
 	MemberRole(ctx context.Context, groupID, userID uuid.UUID) (Role, error)
-	CountOwners(ctx context.Context, groupID uuid.UUID) (int, error)
 
 	AddMember(ctx context.Context, groupID, userID uuid.UUID, role Role) error
 	RemoveMember(ctx context.Context, groupID, userID uuid.UUID) error

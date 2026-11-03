@@ -130,7 +130,7 @@ func TestPostgresRepository(t *testing.T) {
 		if err := repo.RemoveMember(ctx, unknown, unknown); !errors.Is(err, ErrNotFound) {
 			t.Errorf("RemoveMember() error = %v", err)
 		}
-		if err := repo.SetRole(ctx, unknown, unknown, RoleOwner); !errors.Is(err, ErrNotFound) {
+		if err := repo.SetRole(ctx, unknown, unknown, RoleAdmin); !errors.Is(err, ErrNotFound) {
 			t.Errorf("SetRole() error = %v", err)
 		}
 	})
@@ -167,7 +167,7 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
-	// The mechanism behind the last-owner rule: while one transaction holds
+	// The mechanism behind the membership rules: while one transaction holds
 	// the lock, a second one locking the same group must wait.
 	t.Run("lock makes a second transaction wait", func(t *testing.T) {
 		anna := newTestUser(t, pool, "lock-anna")
@@ -221,48 +221,73 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
-	// The rule end to end. Without the lock this would only fail when both
-	// transactions happen to overlap, so the test above checks the lock
-	// itself; this one checks the outcome.
-	t.Run("two owners leaving at once keep one owner", func(t *testing.T) {
-		anna := newTestUser(t, pool, "race-anna")
-		ben := newTestUser(t, pool, "race-ben")
-		created, err := svc.Create(ctx, anna, "Race")
+	t.Run("the database allows only one owner per group", func(t *testing.T) {
+		anna := newTestUser(t, pool, "owner-anna")
+		ben := newTestUser(t, pool, "owner-ben")
+		created, err := svc.Create(ctx, anna, "Owned")
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
-		if err := repo.AddMember(ctx, created.ID, ben, RoleOwner); err != nil {
-			t.Fatalf("AddMember() error = %v", err)
+
+		if err := repo.AddMember(ctx, created.ID, ben, RoleOwner); err == nil {
+			t.Error("AddMember() made a second owner")
+		}
+		if err := repo.AddMember(ctx, created.ID, ben, RoleAdmin); err != nil {
+			t.Fatalf("AddMember() as admin error = %v", err)
+		}
+		if err := repo.SetRole(ctx, created.ID, ben, RoleOwner); err == nil {
+			t.Error("SetRole() made a second owner")
+		}
+		if err := repo.AddMember(ctx, created.ID, newTestUser(t, pool, "owner-cem"), Role("boss")); err == nil {
+			t.Error("AddMember() accepted an unknown role")
 		}
 
-		var wg sync.WaitGroup
-		errs := make([]error, 2)
-		for i, user := range []uuid.UUID{anna, ben} {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				errs[i] = svc.RemoveMember(ctx, user, created.ID, user)
-			}()
+		// A second group has its own owner.
+		if _, err := svc.Create(ctx, ben, "Also owned"); err != nil {
+			t.Errorf("Create() for another group error = %v", err)
 		}
-		wg.Wait()
+	})
 
-		succeeded, lastOwner := 0, 0
-		for _, err := range errs {
-			switch {
-			case err == nil:
-				succeeded++
-			case errors.Is(err, ErrLastOwner):
-				lastOwner++
-			default:
-				t.Errorf("RemoveMember() error = %v", err)
-			}
+	t.Run("invites go with their group, not with their creator", func(t *testing.T) {
+		anna := newTestUser(t, pool, "invite-anna")
+		created, err := svc.Create(ctx, anna, "Invited")
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
 		}
-		if succeeded != 1 || lastOwner != 1 {
-			t.Errorf("succeeded = %d, last owner errors = %d; want 1 and 1", succeeded, lastOwner)
+		hash := make([]byte, 32)
+		hash[0] = 1
+		insert := `INSERT INTO group_invites (group_id, token_hash, created_by, expires_at)
+			VALUES ($1, $2, $3, now() + interval '7 days')`
+
+		if _, err := pool.Exec(ctx, insert, created.ID, hash, anna); err != nil {
+			t.Fatalf("insert invite: %v", err)
 		}
-		owners, err := repo.CountOwners(ctx, created.ID)
-		if err != nil || owners != 1 {
-			t.Errorf("CountOwners() = %d, %v; want 1", owners, err)
+		if _, err := pool.Exec(ctx, insert, created.ID, hash, anna); err == nil {
+			t.Error("two invites with the same token hash were stored")
+		}
+		if _, err := pool.Exec(ctx, insert, created.ID, []byte("short"), anna); err == nil {
+			t.Error("a token hash with the wrong length was stored")
+		}
+
+		// Deleting the creator's account keeps the invite, without a creator.
+		if _, err := pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, anna); err != nil {
+			t.Fatalf("delete user: %v", err)
+		}
+		var creatorIsNull bool
+		err = pool.QueryRow(ctx, `SELECT created_by IS NULL FROM group_invites WHERE group_id = $1`, created.ID).Scan(&creatorIsNull)
+		if err != nil || !creatorIsNull {
+			t.Errorf("created_by IS NULL = %v, %v; want true", creatorIsNull, err)
+		}
+
+		if _, err := pool.Exec(ctx, `DELETE FROM groups WHERE id = $1`, created.ID); err != nil {
+			t.Fatalf("delete group: %v", err)
+		}
+		var invites int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM group_invites WHERE group_id = $1`, created.ID).Scan(&invites); err != nil {
+			t.Fatalf("count invites: %v", err)
+		}
+		if invites != 0 {
+			t.Errorf("%d invites left after the group was deleted", invites)
 		}
 	})
 }

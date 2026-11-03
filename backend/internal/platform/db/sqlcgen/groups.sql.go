@@ -28,18 +28,6 @@ func (q *Queries) AddGroupMember(ctx context.Context, arg AddGroupMemberParams) 
 	return err
 }
 
-const countGroupOwners = `-- name: CountGroupOwners :one
-SELECT count(*) FROM group_members
-WHERE group_id = $1 AND role = 'owner'
-`
-
-func (q *Queries) CountGroupOwners(ctx context.Context, groupID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countGroupOwners, groupID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createGroup = `-- name: CreateGroup :one
 INSERT INTO groups (name, created_by)
 VALUES ($1, $2)
@@ -208,7 +196,8 @@ FOR UPDATE
 
 // Locks the group row until the transaction ends. Membership changes take
 // this lock first, so two of them on the same group run one after the
-// other: two owners leaving at once cannot both see "another owner is left".
+// other: an admin cannot remove a member on the strength of a role that
+// the owner takes away at the same moment.
 func (q *Queries) LockGroup(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, lockGroup, id)
 	var id_2 uuid.UUID

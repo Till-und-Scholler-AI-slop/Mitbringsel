@@ -120,11 +120,6 @@ func (r *PostgresRepository) MemberRole(ctx context.Context, groupID, userID uui
 	return Role(role), nil
 }
 
-func (r *PostgresRepository) CountOwners(ctx context.Context, groupID uuid.UUID) (int, error) {
-	n, err := r.q.CountGroupOwners(ctx, groupID)
-	return int(n), err
-}
-
 func (r *PostgresRepository) AddMember(ctx context.Context, groupID, userID uuid.UUID, role Role) error {
 	return r.q.AddGroupMember(ctx, sqlcgen.AddGroupMemberParams{GroupID: groupID, UserID: userID, Role: string(role)})
 }

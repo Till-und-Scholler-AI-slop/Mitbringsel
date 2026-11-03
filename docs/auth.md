@@ -39,7 +39,7 @@ Die Google-Endpunkte sind fest im Code hinterlegt statt beim Start aus Googles D
 
 ## Einladungen
 
-- Owner erzeugen einen Einladungslink mit zufälligem Token (mindestens 128 Bit).
+- Owner und Admins erzeugen einen Einladungslink mit zufälligem Token (mindestens 128 Bit).
 - Einladungen laufen nach 7 Tagen ab und können widerrufen werden.
 - Wer den Link öffnet, meldet sich bei Bedarf mit Google an und tritt der Gruppe bei.
 
