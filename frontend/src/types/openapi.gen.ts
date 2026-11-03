@@ -454,12 +454,22 @@ export interface components {
          * @description Machine-readable error; the frontend translates it.
          * @enum {string}
          */
-        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES";
+        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED";
     };
     responses: {
         /** @description The request failed; `error.code` says why. */
         Error: {
             headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Too many requests; `Retry-After` says in seconds when to try again. */
+        RateLimited: {
+            headers: {
+                "Retry-After"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -560,6 +570,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+            429: components["responses"]["RateLimited"];
         };
     };
     googleCallback: {
@@ -585,6 +596,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+            429: components["responses"]["RateLimited"];
         };
     };
     devLogin: {
@@ -919,6 +931,7 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             410: components["responses"]["Error"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Error"];
         };
     };
@@ -946,6 +959,7 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             410: components["responses"]["Error"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["Error"];
         };
     };

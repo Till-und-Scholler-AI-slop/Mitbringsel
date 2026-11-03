@@ -92,6 +92,8 @@ paths:
                 type: string
         "404":
           $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 
   /auth/google/callback:
     get:
@@ -126,6 +128,8 @@ paths:
                 type: string
         "404":
           $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 
   /auth/dev/login:
     post:
@@ -476,6 +480,8 @@ paths:
           $ref: "#/components/responses/Error"
         "410":
           $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/Error"
 
@@ -504,6 +510,8 @@ paths:
           $ref: "#/components/responses/Error"
         "410":
           $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/Error"
 
@@ -548,6 +556,16 @@ components:
   responses:
     Error:
       description: The request failed; `error.code` says why.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Too many requests; `Retry-After` says in seconds when to try again.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
       content:
         application/json:
           schema:
@@ -825,6 +843,7 @@ components:
         - INVITE_NOT_FOUND
         - INVITE_EXPIRED
         - TOO_MANY_INVITES
+        - RATE_LIMITED
       # Go constant names; without them oapi-codegen would turn NOT_FOUND
       # into NOTFOUND.
       x-enum-varnames:
@@ -844,3 +863,4 @@ components:
         - InviteNotFound
         - InviteExpired
         - TooManyInvites
+        - RateLimited

@@ -5,12 +5,21 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/httpapi/apigen"
 	"mitbringsel/internal/user"
+)
+
+// Requests per minute and key (see newLimiter). Generous for real people:
+// a visitor opens an invite link a few times, not dozens.
+const (
+	loginRateLimit   = 10
+	previewRateLimit = 30
+	acceptRateLimit  = 10
 )
 
 // UserGetter loads a user by ID. *user.Service satisfies it; tests use a
@@ -63,6 +72,14 @@ func NewRouter(deps Deps) http.Handler {
 	// valid session reach it.
 	protect := requireUser(deps.Sessions, deps.Env)
 
+	// One limiter per kind of route. The state lives in memory, which is
+	// enough for one backend instance per environment. The routes below that
+	// are open to everyone are limited by address; accepting an invite by
+	// user, because it needs a login anyway.
+	loginLimit := rateLimit(newLimiter(loginRateLimit, time.Minute, time.Now), ipKey(deps.Env))
+	previewLimit := rateLimit(newLimiter(previewRateLimit, time.Minute, time.Now), ipKey(deps.Env))
+	acceptLimit := rateLimit(newLimiter(acceptRateLimit, time.Minute, time.Now), userKey(deps.Env))
+
 	r.handle(http.MethodGet, HealthPath, healthHandler(deps.DB))
 	r.handle(http.MethodGet, mePath, protect(meHandler(deps.Users)))
 	r.handle(http.MethodGet, groupsPath, protect(listGroupsHandler(deps.Groups)))
@@ -75,17 +92,17 @@ func NewRouter(deps Deps) http.Handler {
 	r.handle(http.MethodGet, groupInvitesPath, protect(listInvitesHandler(deps.Invites)))
 	r.handle(http.MethodPost, groupInvitesPath, protect(createInviteHandler(deps.Invites)))
 	r.handle(http.MethodDelete, groupInvitePath, protect(revokeInviteHandler(deps.Invites)))
-	r.handle(http.MethodPost, inviteAcceptPath, protect(acceptInviteHandler(deps.Invites)))
+	r.handle(http.MethodPost, inviteAcceptPath, protect(acceptLimit(acceptInviteHandler(deps.Invites))))
 	// Not behind requireUser: the page behind an invite link shows the
 	// invitation before the visitor has signed in. The token is the secret.
-	r.handle(http.MethodGet, invitePath, previewInviteHandler(deps.Invites))
+	r.handle(http.MethodGet, invitePath, previewLimit(previewInviteHandler(deps.Invites)))
 	// Not behind requireUser: logging out must work with an expired
 	// session, too.
 	r.handle(http.MethodPost, logoutPath, logoutHandler(deps.Sessions, deps.Env))
 
 	if deps.Google != nil {
-		r.handle(http.MethodGet, googleLoginPath, googleLoginHandler(deps.Google, deps.Env))
-		r.handle(http.MethodGet, GoogleCallbackPath, googleCallbackHandler(deps.Google, deps.Users, deps.Sessions, deps.Env))
+		r.handle(http.MethodGet, googleLoginPath, loginLimit(googleLoginHandler(deps.Google, deps.Env)))
+		r.handle(http.MethodGet, GoogleCallbackPath, loginLimit(googleCallbackHandler(deps.Google, deps.Users, deps.Sessions, deps.Env)))
 	}
 
 	// Outside development the route does not exist at all and answers 404

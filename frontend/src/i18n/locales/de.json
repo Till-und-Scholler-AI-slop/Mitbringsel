@@ -62,6 +62,7 @@
     "NETWORK": "Der Server ist nicht erreichbar.",
     "NOT_FOUND": "Das gibt es nicht (mehr).",
     "OWNER_IMMUTABLE": "Der Owner kann nicht austreten oder die Rolle wechseln. Lösche stattdessen die Gruppe.",
+    "RATE_LIMITED": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
     "TOO_MANY_INVITES": "Es sind schon zu viele Einladungslinks offen. Ziehe einen zurück, um einen neuen zu erstellen.",
     "UNAUTHENTICATED": "Du bist nicht angemeldet.",
     "UNKNOWN": "Etwas ist schiefgelaufen."
