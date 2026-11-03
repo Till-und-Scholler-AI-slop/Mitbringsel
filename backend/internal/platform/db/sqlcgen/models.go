@@ -18,6 +18,16 @@ type Group struct {
 	UpdatedAt time.Time
 }
 
+type GroupInvite struct {
+	ID        uuid.UUID
+	GroupID   uuid.UUID
+	TokenHash []byte
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	RevokedAt *time.Time
+}
+
 type GroupMember struct {
 	GroupID  uuid.UUID
 	UserID   uuid.UUID

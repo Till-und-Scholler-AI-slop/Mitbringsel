@@ -6,9 +6,9 @@ Acht Tabellen tragen das erste Release. Alle Primärschlüssel sind UUIDs, alle 
 | --- | --- | --- |
 | `users` | `id`, `google_sub` (unique), `email`, `display_name`, `avatar_url`, `locale`, `theme`, `created_at` | Identität über `google_sub` |
 | `sessions` | `id_hash`, `user_id`, `expires_at`, `created_at`, `last_seen_at` | Nur SHA-256-Hash der Session-ID (`bytea`, 32 Bytes); Sessions fallen beim Löschen des Nutzers weg |
-| `groups` | `id`, `name`, `created_by`, `created_at`, `updated_at` | Name 1 bis 100 Zeichen (Service und `CHECK`); `created_by` wird `NULL`, wenn der Account gelöscht wird |
-| `group_members` | `group_id`, `user_id`, `role` (`owner`, `member`), `joined_at` | Primärschlüssel aus `group_id` + `user_id`; fällt mit Gruppe oder Nutzer weg (`ON DELETE CASCADE`) |
-| `group_invites` | `id`, `group_id`, `token_hash`, `created_by`, `expires_at`, `revoked_at` | Ablauf nach 7 Tagen |
+| `groups` | `id`, `name`, `created_by`, `created_at`, `updated_at` | Name 1 bis 30 Zeichen (Service und `CHECK`); `created_by` wird `NULL`, wenn der Account gelöscht wird |
+| `group_members` | `group_id`, `user_id`, `role` (`owner`, `admin`, `member`), `joined_at` | Primärschlüssel aus `group_id` + `user_id`; fällt mit Gruppe oder Nutzer weg (`ON DELETE CASCADE`); ein partieller Unique-Index erlaubt pro Gruppe genau einen Owner |
+| `group_invites` | `id`, `group_id`, `token_hash` (`bytea`, 32 Bytes, unique), `created_by`, `created_at`, `expires_at`, `revoked_at` | Ablauf nach 7 Tagen; nur der SHA-256-Hash des Tokens wird gespeichert; fällt mit der Gruppe weg, `created_by` wird `NULL` beim Löschen des Accounts |
 | `lists` | `id`, `group_id`, `name`, `archived_at`, `created_at`, `updated_at`, `server_seq` | |
 | `items` | `id`, `list_id`, `name`, `quantity` (numeric, nullable), `unit` (nullable), `note` (nullable), `checked`, `checked_by`, `checked_at`, `created_by`, `created_at`, `deleted_at`, `field_clocks` (jsonb), `server_seq` | `field_clocks` hält den HLC-Zeitstempel pro Feld für LWW |
 | `processed_ops` | `op_id`, `user_id`, `processed_at` | Idempotenz; Einträge nach 30 Tagen löschen |

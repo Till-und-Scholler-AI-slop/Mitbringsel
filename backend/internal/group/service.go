@@ -90,13 +90,13 @@ func (s *Service) Get(ctx context.Context, actor, groupID uuid.UUID) (Details, e
 	return Details{Group: g, Role: role, Members: members[groupID]}, nil
 }
 
-// Rename changes the group's name. Owners only.
+// Rename changes the group's name. Owner and admins.
 func (s *Service) Rename(ctx context.Context, actor, groupID uuid.UUID, name string) (Group, error) {
 	name, err := normalizeName(name)
 	if err != nil {
 		return Group{}, err
 	}
-	if err := requireOwner(ctx, s.repo, groupID, actor); err != nil {
+	if err := requireManager(ctx, s.repo, groupID, actor); err != nil {
 		return Group{}, err
 	}
 	g, err := s.repo.Rename(ctx, groupID, name)
@@ -106,7 +106,7 @@ func (s *Service) Rename(ctx context.Context, actor, groupID uuid.UUID, name str
 	return g, nil
 }
 
-// Delete removes the group with all its members. Owners only.
+// Delete removes the group with all its members. Owner only.
 func (s *Service) Delete(ctx context.Context, actor, groupID uuid.UUID) error {
 	if err := requireOwner(ctx, s.repo, groupID, actor); err != nil {
 		return err
@@ -117,12 +117,12 @@ func (s *Service) Delete(ctx context.Context, actor, groupID uuid.UUID) error {
 	return nil
 }
 
-// RemoveMember takes userID out of the group. Everyone may remove
-// themselves (leave); removing someone else needs an owner. The last owner
-// can do neither for themselves: see ErrLastOwner.
+// RemoveMember takes userID out of the group. Everyone but the owner may
+// remove themselves (leave). Removing someone else needs a higher role: the
+// owner removes admins and members, an admin only plain members.
 func (s *Service) RemoveMember(ctx context.Context, actor, groupID, userID uuid.UUID) error {
 	return s.repo.InTx(ctx, func(tx Repository) error {
-		// Locked first, so the owner count below cannot change before the
+		// Locked first, so the roles checked below cannot change before the
 		// removal is committed.
 		if err := tx.Lock(ctx, groupID); err != nil {
 			return fmt.Errorf("lock group: %w", err)
@@ -131,17 +131,23 @@ func (s *Service) RemoveMember(ctx context.Context, actor, groupID, userID uuid.
 		if err != nil {
 			return err
 		}
-		if userID != actor && actorRole != RoleOwner {
-			return ErrForbidden
-		}
 
-		targetRole, err := roleOf(ctx, tx, groupID, userID)
-		if err != nil {
-			return err
-		}
-		if targetRole == RoleOwner {
-			if err := ensureAnotherOwner(ctx, tx, groupID); err != nil {
+		if userID == actor {
+			if actorRole == RoleOwner {
+				return ErrOwnerImmutable
+			}
+		} else {
+			// A plain member is stopped before we look at the target, so
+			// they cannot probe who is in the group.
+			if actorRole == RoleMember {
+				return ErrForbidden
+			}
+			targetRole, err := roleOf(ctx, tx, groupID, userID)
+			if err != nil {
 				return err
+			}
+			if !mayRemove(actorRole, targetRole) {
+				return ErrForbidden
 			}
 		}
 
@@ -152,10 +158,11 @@ func (s *Service) RemoveMember(ctx context.Context, actor, groupID, userID uuid.
 	})
 }
 
-// SetRole makes userID an owner or a plain member. Owners only; the last
-// owner cannot step down (ErrLastOwner).
+// SetRole makes userID an admin or a plain member. Owner only. The owner's
+// own role never changes (ErrOwnerImmutable), and nobody else can become
+// owner (ErrInvalidRole).
 func (s *Service) SetRole(ctx context.Context, actor, groupID, userID uuid.UUID, role Role) error {
-	if !role.valid() {
+	if !role.assignable() {
 		return ErrInvalidRole
 	}
 	return s.repo.InTx(ctx, func(tx Repository) error {
@@ -170,13 +177,11 @@ func (s *Service) SetRole(ctx context.Context, actor, groupID, userID uuid.UUID,
 		if err != nil {
 			return err
 		}
+		if current == RoleOwner {
+			return ErrOwnerImmutable
+		}
 		if current == role {
 			return nil
-		}
-		if current == RoleOwner {
-			if err := ensureAnotherOwner(ctx, tx, groupID); err != nil {
-				return err
-			}
 		}
 
 		if err := tx.SetRole(ctx, groupID, userID, role); err != nil {
@@ -210,17 +215,29 @@ func requireOwner(ctx context.Context, repo Repository, groupID, actor uuid.UUID
 	return nil
 }
 
-// ensureAnotherOwner fails with ErrLastOwner unless the group has more than
-// one owner, i.e. one owner can go and another one stays.
-func ensureAnotherOwner(ctx context.Context, repo Repository, groupID uuid.UUID) error {
-	owners, err := repo.CountOwners(ctx, groupID)
+// requireManager lets owner and admins through; they run the group together.
+func requireManager(ctx context.Context, repo Repository, groupID, actor uuid.UUID) error {
+	role, err := roleOf(ctx, repo, groupID, actor)
 	if err != nil {
-		return fmt.Errorf("count owners: %w", err)
+		return err
 	}
-	if owners <= 1 {
-		return ErrLastOwner
+	if role != RoleOwner && role != RoleAdmin {
+		return ErrForbidden
 	}
 	return nil
+}
+
+// mayRemove reports whether someone with the actor role may remove someone
+// else with the target role from the group.
+func mayRemove(actor, target Role) bool {
+	switch actor {
+	case RoleOwner:
+		return target != RoleOwner
+	case RoleAdmin:
+		return target == RoleMember
+	default:
+		return false
+	}
 }
 
 // normalizeName trims the name and checks its length in characters.

@@ -113,16 +113,6 @@ func (r *fakeRepo) MemberRole(_ context.Context, groupID, userID uuid.UUID) (Rol
 	return role, nil
 }
 
-func (r *fakeRepo) CountOwners(_ context.Context, groupID uuid.UUID) (int, error) {
-	n := 0
-	for _, role := range r.roles[groupID] {
-		if role == RoleOwner {
-			n++
-		}
-	}
-	return n, nil
-}
-
 func (r *fakeRepo) AddMember(_ context.Context, groupID, userID uuid.UUID, role Role) error {
 	if r.failAddMember {
 		return errRepo
@@ -147,27 +137,43 @@ func (r *fakeRepo) SetRole(_ context.Context, groupID, userID uuid.UUID, role Ro
 	return nil
 }
 
-// fixture is one group with an owner, a member and an outsider who is in
-// no group at all.
+// fixture is one group with an owner, an admin and a member, plus an
+// outsider who is in no group at all.
 type fixture struct {
-	repo                    *fakeRepo
-	svc                     *Service
-	group                   uuid.UUID
-	owner, member, outsider uuid.UUID
+	repo                           *fakeRepo
+	svc                            *Service
+	group                          uuid.UUID
+	owner, admin, member, outsider uuid.UUID
 }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
-	f := fixture{repo: newFakeRepo(), owner: uuid.New(), member: uuid.New(), outsider: uuid.New()}
+	f := fixture{
+		repo:     newFakeRepo(),
+		owner:    uuid.New(),
+		admin:    uuid.New(),
+		member:   uuid.New(),
+		outsider: uuid.New(),
+	}
 	f.svc = NewService(f.repo)
 	d, err := f.svc.Create(context.Background(), f.owner, "WG Kaiserstraße")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
 	f.group = d.ID
+	f.repo.roles[f.group][f.admin] = RoleAdmin
 	f.repo.roles[f.group][f.member] = RoleMember
 	return f
 }
+
+// who picks one user of the fixture, so table tests can name actors and
+// targets before the fixture exists.
+type who func(f fixture) uuid.UUID
+
+func owner(f fixture) uuid.UUID    { return f.owner }
+func admin(f fixture) uuid.UUID    { return f.admin }
+func member(f fixture) uuid.UUID   { return f.member }
+func outsider(f fixture) uuid.UUID { return f.outsider }
 
 func TestService_Create(t *testing.T) {
 	tests := []struct {
@@ -178,7 +184,7 @@ func TestService_Create(t *testing.T) {
 	}{
 		{name: "plain name", input: "WG Kaiserstraße", wantName: "WG Kaiserstraße"},
 		{name: "surrounding whitespace is trimmed", input: "  Zuhause \n", wantName: "Zuhause"},
-		// 100 characters but 200 bytes: the limit counts characters.
+		// 30 characters but 60 bytes: the limit counts characters.
 		{name: "longest name", input: strings.Repeat("ß", MaxNameLength), wantName: strings.Repeat("ß", MaxNameLength)},
 		{name: "empty name", input: "", wantErr: ErrInvalidName},
 		{name: "only whitespace", input: "   ", wantErr: ErrInvalidName},
@@ -269,8 +275,8 @@ func TestService_Get(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
-	if got.Role != RoleMember || len(got.Members) != 2 {
-		t.Errorf("Get() = %+v, want role member and 2 members", got)
+	if got.Role != RoleMember || len(got.Members) != 3 {
+		t.Errorf("Get() = %+v, want role member and 3 members", got)
 	}
 
 	// An outsider and an unknown ID get the same answer.
@@ -284,13 +290,15 @@ func TestService_Get(t *testing.T) {
 
 func TestService_RenameAndDelete(t *testing.T) {
 	tests := []struct {
-		name    string
-		actor   func(f fixture) uuid.UUID
-		wantErr error
+		name          string
+		actor         who
+		wantRenameErr error
+		wantDeleteErr error
 	}{
-		{name: "owner", actor: func(f fixture) uuid.UUID { return f.owner }},
-		{name: "member", actor: func(f fixture) uuid.UUID { return f.member }, wantErr: ErrForbidden},
-		{name: "outsider", actor: func(f fixture) uuid.UUID { return f.outsider }, wantErr: ErrNotFound},
+		{name: "owner", actor: owner},
+		{name: "admin", actor: admin, wantDeleteErr: ErrForbidden},
+		{name: "member", actor: member, wantRenameErr: ErrForbidden, wantDeleteErr: ErrForbidden},
+		{name: "outsider", actor: outsider, wantRenameErr: ErrNotFound, wantDeleteErr: ErrNotFound},
 	}
 
 	for _, tt := range tests {
@@ -299,10 +307,10 @@ func TestService_RenameAndDelete(t *testing.T) {
 
 			got, err := f.svc.Rename(context.Background(), tt.actor(f), f.group, " WG Kaiserstr. 5 ")
 
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("Rename() error = %v, want %v", err, tt.wantErr)
+			if !errors.Is(err, tt.wantRenameErr) {
+				t.Fatalf("Rename() error = %v, want %v", err, tt.wantRenameErr)
 			}
-			if tt.wantErr == nil && got.Name != "WG Kaiserstr. 5" {
+			if tt.wantRenameErr == nil && got.Name != "WG Kaiserstr. 5" {
 				t.Errorf("Name = %q, want trimmed new name", got.Name)
 			}
 		})
@@ -311,11 +319,11 @@ func TestService_RenameAndDelete(t *testing.T) {
 
 			err := f.svc.Delete(context.Background(), tt.actor(f), f.group)
 
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("Delete() error = %v, want %v", err, tt.wantErr)
+			if !errors.Is(err, tt.wantDeleteErr) {
+				t.Fatalf("Delete() error = %v, want %v", err, tt.wantDeleteErr)
 			}
 			_, stillThere := f.repo.groups[f.group]
-			if stillThere != (tt.wantErr != nil) {
+			if stillThere != (tt.wantDeleteErr != nil) {
 				t.Errorf("group still stored = %v", stillThere)
 			}
 		})
@@ -331,67 +339,27 @@ func TestService_RenameAndDelete(t *testing.T) {
 
 func TestService_RemoveMember(t *testing.T) {
 	tests := []struct {
-		name string
-		// secondOwner makes the member an owner as well.
-		secondOwner bool
-		actor       func(f fixture) uuid.UUID
-		target      func(f fixture) uuid.UUID
-		wantErr     error
+		name    string
+		actor   who
+		target  who
+		wantErr error
 	}{
-		{
-			name:   "member leaves",
-			actor:  func(f fixture) uuid.UUID { return f.member },
-			target: func(f fixture) uuid.UUID { return f.member },
-		},
-		{
-			name:   "owner removes a member",
-			actor:  func(f fixture) uuid.UUID { return f.owner },
-			target: func(f fixture) uuid.UUID { return f.member },
-		},
-		{
-			name:    "member cannot remove someone else",
-			actor:   func(f fixture) uuid.UUID { return f.member },
-			target:  func(f fixture) uuid.UUID { return f.owner },
-			wantErr: ErrForbidden,
-		},
-		{
-			name:    "last owner cannot leave",
-			actor:   func(f fixture) uuid.UUID { return f.owner },
-			target:  func(f fixture) uuid.UUID { return f.owner },
-			wantErr: ErrLastOwner,
-		},
-		{
-			name:        "owner leaves while another owner stays",
-			secondOwner: true,
-			actor:       func(f fixture) uuid.UUID { return f.owner },
-			target:      func(f fixture) uuid.UUID { return f.owner },
-		},
-		{
-			name:        "owner removes another owner",
-			secondOwner: true,
-			actor:       func(f fixture) uuid.UUID { return f.owner },
-			target:      func(f fixture) uuid.UUID { return f.member },
-		},
-		{
-			name:    "target is not a member",
-			actor:   func(f fixture) uuid.UUID { return f.owner },
-			target:  func(f fixture) uuid.UUID { return f.outsider },
-			wantErr: ErrNotFound,
-		},
-		{
-			name:    "outsider",
-			actor:   func(f fixture) uuid.UUID { return f.outsider },
-			target:  func(f fixture) uuid.UUID { return f.member },
-			wantErr: ErrNotFound,
-		},
+		{name: "member leaves", actor: member, target: member},
+		{name: "admin leaves", actor: admin, target: admin},
+		{name: "owner cannot leave", actor: owner, target: owner, wantErr: ErrOwnerImmutable},
+		{name: "owner removes a member", actor: owner, target: member},
+		{name: "owner removes an admin", actor: owner, target: admin},
+		{name: "admin removes a member", actor: admin, target: member},
+		{name: "admin cannot remove the owner", actor: admin, target: owner, wantErr: ErrForbidden},
+		{name: "member cannot remove an admin", actor: member, target: admin, wantErr: ErrForbidden},
+		{name: "member cannot remove the owner", actor: member, target: owner, wantErr: ErrForbidden},
+		{name: "target is not a member", actor: owner, target: outsider, wantErr: ErrNotFound},
+		{name: "outsider", actor: outsider, target: member, wantErr: ErrNotFound},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFixture(t)
-			if tt.secondOwner {
-				f.repo.roles[f.group][f.member] = RoleOwner
-			}
 			target := tt.target(f)
 
 			err := f.svc.RemoveMember(context.Background(), tt.actor(f), f.group, target)
@@ -403,6 +371,9 @@ func TestService_RemoveMember(t *testing.T) {
 			if tt.wantErr == nil && stillMember {
 				t.Error("target is still a member")
 			}
+			if tt.wantErr != nil && target != f.outsider && !stillMember {
+				t.Error("target was removed despite the error")
+			}
 			if len(f.repo.locked) != 1 || f.repo.locked[0] != f.group {
 				t.Errorf("locked = %v, want the group once", f.repo.locked)
 			}
@@ -411,7 +382,7 @@ func TestService_RemoveMember(t *testing.T) {
 
 	t.Run("unknown group", func(t *testing.T) {
 		f := newFixture(t)
-		if err := f.svc.RemoveMember(context.Background(), f.owner, uuid.New(), f.owner); !errors.Is(err, ErrNotFound) {
+		if err := f.svc.RemoveMember(context.Background(), f.owner, uuid.New(), f.member); !errors.Is(err, ErrNotFound) {
 			t.Errorf("RemoveMember() error = %v, want %v", err, ErrNotFound)
 		}
 	})
@@ -419,75 +390,28 @@ func TestService_RemoveMember(t *testing.T) {
 
 func TestService_SetRole(t *testing.T) {
 	tests := []struct {
-		name        string
-		secondOwner bool
-		actor       func(f fixture) uuid.UUID
-		target      func(f fixture) uuid.UUID
-		role        Role
-		wantErr     error
-		wantRole    Role
+		name     string
+		actor    who
+		target   who
+		role     Role
+		wantErr  error
+		wantRole Role
 	}{
-		{
-			name:     "owner promotes a member",
-			actor:    func(f fixture) uuid.UUID { return f.owner },
-			target:   func(f fixture) uuid.UUID { return f.member },
-			role:     RoleOwner,
-			wantRole: RoleOwner,
-		},
-		{
-			name:     "member cannot promote themselves",
-			actor:    func(f fixture) uuid.UUID { return f.member },
-			target:   func(f fixture) uuid.UUID { return f.member },
-			role:     RoleOwner,
-			wantErr:  ErrForbidden,
-			wantRole: RoleMember,
-		},
-		{
-			name:     "last owner cannot step down",
-			actor:    func(f fixture) uuid.UUID { return f.owner },
-			target:   func(f fixture) uuid.UUID { return f.owner },
-			role:     RoleMember,
-			wantErr:  ErrLastOwner,
-			wantRole: RoleOwner,
-		},
-		{
-			name:        "owner steps down while another owner stays",
-			secondOwner: true,
-			actor:       func(f fixture) uuid.UUID { return f.owner },
-			target:      func(f fixture) uuid.UUID { return f.owner },
-			role:        RoleMember,
-			wantRole:    RoleMember,
-		},
-		{
-			name:     "same role changes nothing",
-			actor:    func(f fixture) uuid.UUID { return f.owner },
-			target:   func(f fixture) uuid.UUID { return f.owner },
-			role:     RoleOwner,
-			wantRole: RoleOwner,
-		},
-		{
-			name:     "unknown role",
-			actor:    func(f fixture) uuid.UUID { return f.owner },
-			target:   func(f fixture) uuid.UUID { return f.member },
-			role:     Role("admin"),
-			wantErr:  ErrInvalidRole,
-			wantRole: RoleMember,
-		},
-		{
-			name:    "target is not a member",
-			actor:   func(f fixture) uuid.UUID { return f.owner },
-			target:  func(f fixture) uuid.UUID { return f.outsider },
-			role:    RoleOwner,
-			wantErr: ErrNotFound,
-		},
+		{name: "owner makes a member admin", actor: owner, target: member, role: RoleAdmin, wantRole: RoleAdmin},
+		{name: "owner makes an admin member", actor: owner, target: admin, role: RoleMember, wantRole: RoleMember},
+		{name: "same role changes nothing", actor: owner, target: admin, role: RoleAdmin, wantRole: RoleAdmin},
+		{name: "admin cannot hand out admin", actor: admin, target: member, role: RoleAdmin, wantErr: ErrForbidden, wantRole: RoleMember},
+		{name: "member cannot promote themselves", actor: member, target: member, role: RoleAdmin, wantErr: ErrForbidden, wantRole: RoleMember},
+		{name: "owner cannot step down", actor: owner, target: owner, role: RoleMember, wantErr: ErrOwnerImmutable, wantRole: RoleOwner},
+		{name: "nobody becomes owner", actor: owner, target: member, role: RoleOwner, wantErr: ErrInvalidRole, wantRole: RoleMember},
+		{name: "unknown role", actor: owner, target: member, role: Role("superuser"), wantErr: ErrInvalidRole, wantRole: RoleMember},
+		{name: "target is not a member", actor: owner, target: outsider, role: RoleAdmin, wantErr: ErrNotFound},
+		{name: "outsider", actor: outsider, target: member, role: RoleAdmin, wantErr: ErrNotFound, wantRole: RoleMember},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFixture(t)
-			if tt.secondOwner {
-				f.repo.roles[f.group][f.member] = RoleOwner
-			}
 			target := tt.target(f)
 
 			err := f.svc.SetRole(context.Background(), tt.actor(f), f.group, target, tt.role)

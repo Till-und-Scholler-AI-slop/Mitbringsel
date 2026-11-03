@@ -14,7 +14,8 @@ WHERE id = $1;
 -- name: LockGroup :one
 -- Locks the group row until the transaction ends. Membership changes take
 -- this lock first, so two of them on the same group run one after the
--- other: two owners leaving at once cannot both see "another owner is left".
+-- other: an admin cannot remove a member on the strength of a role that
+-- the owner takes away at the same moment.
 SELECT id FROM groups
 WHERE id = $1
 FOR UPDATE;
@@ -60,7 +61,3 @@ WHERE group_id = $1 AND user_id = $2;
 UPDATE group_members
 SET role = $3
 WHERE group_id = $1 AND user_id = $2;
-
--- name: CountGroupOwners :one
-SELECT count(*) FROM group_members
-WHERE group_id = $1 AND role = 'owner';

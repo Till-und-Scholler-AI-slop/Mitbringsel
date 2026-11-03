@@ -27,8 +27,9 @@ Die Hierarchie ist: Nutzer gehören zu Gruppen, Gruppen haben mehrere Listen, Li
 
 - Nutzer können Gruppen erstellen (z.B. "WG Kaiserstraße")
 - Andere per Einladungslink beitreten lassen
-- Rollen: Owner (verwaltet Gruppe und Mitglieder) und Member. Eine Gruppe kann mehrere Owner haben; Owner können Mitglieder zu Ownern machen.
-- Gruppe verlassen, Mitglieder entfernen, Gruppe umbenennen und löschen. Der letzte Owner kann weder austreten noch sich zum Member machen: Erst muss jemand anderes Owner werden, oder die Gruppe wird gelöscht. So bleibt keine Gruppe ohne Verwaltung zurück.
+- Rollen: Eine Gruppe hat genau einen Owner (wer sie anlegt), beliebig viele Admins und Members. Der Owner löscht die Gruppe und ernennt oder entlässt Admins; Admins laden per Einladungslink ein, benennen die Gruppe um und entfernen Members. Members nutzen die Listen und können austreten.
+- Der Owner kann weder austreten noch die Rolle wechseln; er löscht die Gruppe, wenn er sie loswerden will. Eine Übergabe der Gruppe an jemand anderen ist nicht vorgesehen.
+- Gruppennamen haben höchstens 30 Zeichen; längere Anzeigen werden in der Oberfläche mit „…“ abgeschnitten.
 
 **Listen**
 
