@@ -20,7 +20,8 @@
       "title": "Your households",
       "loading": "Loading households …",
       "loadFailed": "Your households could not be loaded.",
-      "members": "{count} member | {count} members"
+      "members": "{count} member | {count} members",
+      "settings": "Manage {name}"
     },
     "empty": {
       "title": "No household yet",
@@ -144,5 +145,26 @@
     "TOO_MANY_INVITES": "Too many invite links are open already. Withdraw one to create a new one.",
     "UNAUTHENTICATED": "You are not signed in.",
     "UNKNOWN": "Something went wrong."
+  },
+  "settings": {
+    "title": "Manage household",
+    "back": "Back to the start page",
+    "loading": "Loading household …",
+    "loadFailed": "The household could not be loaded.",
+    "missing": {
+      "title": "Household not found",
+      "description": "It no longer exists, or you are not a member.",
+      "home": "To the start page"
+    },
+    "name": {
+      "title": "Household name",
+      "rename": "Rename"
+    },
+    "rename": {
+      "title": "Rename household",
+      "nameLabel": "New name",
+      "cancel": "Cancel",
+      "submit": "Save"
+    }
   }
 }

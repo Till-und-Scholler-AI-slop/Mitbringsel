@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import BaseSpinner from './BaseSpinner.vue'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost'
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 
 const SPINNER_SIZE = 18
 
@@ -53,7 +53,8 @@ withDefaults(
 
 /* Sticker buttons sink onto their shadow when pressed. */
 .base-button--primary,
-.base-button--secondary {
+.base-button--secondary,
+.base-button--danger {
   box-shadow: var(--shadow-sticker);
   transition:
     transform var(--duration-press) var(--easing-bounce),
@@ -61,7 +62,8 @@ withDefaults(
 }
 
 .base-button--primary:active:not(:disabled),
-.base-button--secondary:active:not(:disabled) {
+.base-button--secondary:active:not(:disabled),
+.base-button--danger:active:not(:disabled) {
   transform: translateY(3px);
   box-shadow: none;
 }
@@ -76,6 +78,12 @@ withDefaults(
   border-color: var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
+}
+
+.base-button--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger-surface);
+  color: var(--color-danger-text);
 }
 
 .base-button--ghost {

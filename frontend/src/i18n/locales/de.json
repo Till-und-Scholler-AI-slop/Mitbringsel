@@ -20,7 +20,8 @@
       "title": "Deine Haushalte",
       "loading": "Haushalte werden geladen …",
       "loadFailed": "Deine Haushalte konnten nicht geladen werden.",
-      "members": "{count} Mitglied | {count} Mitglieder"
+      "members": "{count} Mitglied | {count} Mitglieder",
+      "settings": "{name} verwalten"
     },
     "empty": {
       "title": "Noch kein Haushalt",
@@ -144,5 +145,26 @@
     "TOO_MANY_INVITES": "Es sind schon zu viele Einladungslinks offen. Ziehe einen zurück, um einen neuen zu erstellen.",
     "UNAUTHENTICATED": "Du bist nicht angemeldet.",
     "UNKNOWN": "Etwas ist schiefgelaufen."
+  },
+  "settings": {
+    "title": "Haushalt verwalten",
+    "back": "Zurück zur Startseite",
+    "loading": "Haushalt wird geladen …",
+    "loadFailed": "Der Haushalt konnte nicht geladen werden.",
+    "missing": {
+      "title": "Haushalt nicht gefunden",
+      "description": "Er existiert nicht mehr, oder du bist kein Mitglied.",
+      "home": "Zur Startseite"
+    },
+    "name": {
+      "title": "Name des Haushalts",
+      "rename": "Umbenennen"
+    },
+    "rename": {
+      "title": "Haushalt umbenennen",
+      "nameLabel": "Neuer Name",
+      "cancel": "Abbrechen",
+      "submit": "Speichern"
+    }
   }
 }

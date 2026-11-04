@@ -34,6 +34,8 @@ describe('auth guard', () => {
   it.each([
     { status: 'authenticated', path: '/', want: 'home' },
     { status: 'anonymous', path: '/', want: 'login' },
+    { status: 'authenticated', path: '/groups/g1/settings', want: 'group-settings' },
+    { status: 'anonymous', path: '/groups/g1/settings', want: 'login' },
     { status: 'authenticated', path: '/invite/abc', want: 'invite' },
     // The invite page is open to everyone; it asks anonymous visitors to sign in.
     { status: 'anonymous', path: '/invite/abc', want: 'invite' },

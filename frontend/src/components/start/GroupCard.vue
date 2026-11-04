@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
 import BaseAvatar from '@/components/base/BaseAvatar.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
@@ -34,6 +35,13 @@ const avatars = computed(() => props.group.members.slice(0, MAX_AVATARS))
         :size="AVATAR_SIZE"
       />
     </span>
+    <RouterLink
+      class="settings"
+      :to="{ name: 'group-settings', params: { groupId: group.id } }"
+      :aria-label="t('start.groups.settings', { name: group.name })"
+    >
+      <BaseIcon name="settings" :size="22" />
+    </RouterLink>
   </article>
 </template>
 
@@ -87,6 +95,19 @@ const avatars = computed(() => props.group.members.slice(0, MAX_AVATARS))
 .avatars {
   flex: none;
   display: flex;
+}
+
+/* Looks like BaseIconButton, but it is a link: it leads to another page. */
+.settings {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--size-touch);
+  height: var(--size-touch);
+  border: var(--border-width-md) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 /* Overlapping, each with a ring in the card color to tell them apart. */

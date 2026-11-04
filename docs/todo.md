@@ -23,6 +23,12 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 - [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
+## Verwalten
+
+- [ ] **Desktop-Variante des Verwalten-Screens:** Das Design (`verwalten-desktop-*`) setzt Name und Mitglieder neben Einladung und Austreten. `GroupSettingsView` ist vorerst einspaltig.
+- [ ] **Zurück zum Haushalt:** Der Pfeil im Kopf führt vorerst zur Startseite. Mit dem Haushalt-Screen (Phase 4) dorthin zurückführen, und die `GroupCard` zum Haushalt verlinken statt nur zu den Einstellungen.
+- [ ] **Namensformular teilen:** `RenameGroupDialog` und `CreateGroupDialog` sind fast gleich (Validierung, Fehleranzeige, Buttons). Bei einer dritten Verwendung ein gemeinsames Formular herausziehen.
+
 ## Einladung
 
 - [ ] **Desktop-Variante der Einladungsseite:** Das Design (`markt2-einladung-desktop-*`) setzt Kopf und Karte nebeneinander. `InviteView` ist vorerst einspaltig und zentriert, wie auf dem Handy.
@@ -30,4 +36,4 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 ## Komponenten
 
-- [ ] **`BaseButton`:** Varianten `danger` und Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen, im Login-Design noch nicht vorhanden).
+- [ ] **`BaseButton`-Größen:** Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen). Die Variante `danger` gibt es seit dem Verwalten-Screen.

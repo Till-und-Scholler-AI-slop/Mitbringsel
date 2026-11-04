@@ -74,7 +74,14 @@ vi.mock('@/stores/groups', async (importOriginal) => {
 async function mountView() {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/login', name: 'login', component: { template: '<p />' } }],
+    routes: [
+      { path: '/login', name: 'login', component: { template: '<p />' } },
+      {
+        path: '/groups/:groupId/settings',
+        name: 'group-settings',
+        component: { template: '<p />' },
+      },
+    ],
   })
   await useAuthStore().load()
   const wrapper = mount(StartView, {
