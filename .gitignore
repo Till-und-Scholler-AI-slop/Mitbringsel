@@ -11,3 +11,11 @@ dist/
 
 # OS / editor
 .DS_Store
+
+
+# Bug Screenshots
+docs/bug-screenshots
+
+
+# Screenshots attached to bug reports
+/docs/bug-screenshots/
