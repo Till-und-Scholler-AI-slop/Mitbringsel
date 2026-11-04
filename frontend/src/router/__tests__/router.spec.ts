@@ -35,7 +35,8 @@ describe('auth guard', () => {
     { status: 'authenticated', path: '/', want: 'home' },
     { status: 'anonymous', path: '/', want: 'login' },
     { status: 'authenticated', path: '/invite/abc', want: 'invite' },
-    { status: 'anonymous', path: '/invite/abc', want: 'login' },
+    // The invite page is open to everyone; it asks anonymous visitors to sign in.
+    { status: 'anonymous', path: '/invite/abc', want: 'invite' },
     // A server error must not look like a logout.
     { status: 'error', path: '/', want: 'home' },
     { status: 'anonymous', path: '/login', want: 'login' },
@@ -62,6 +63,37 @@ describe('auth guard', () => {
 
     expect(router.currentRoute.value.name).toBe('login')
     expect(router.currentRoute.value.query).toEqual({ reason: 'session_expired' })
+  })
+
+  it('remembers the page that needs the login', async () => {
+    const router = createAppRouter(() => fakeAuth('anonymous'), createMemoryHistory())
+    router.addRoute({
+      path: '/lists/:id',
+      name: 'list',
+      component: { template: '<p />' },
+      meta: { requiresAuth: true },
+    })
+
+    await router.push('/lists/7?sort=name')
+
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query).toEqual({ next: '/lists/7?sort=name' })
+  })
+
+  it('sends a signed-in user from the login page to where the login was meant to lead', async () => {
+    const router = createAppRouter(() => fakeAuth('authenticated'), createMemoryHistory())
+
+    await router.push('/login?next=/invite/abc')
+
+    expect(router.currentRoute.value.fullPath).toBe('/invite/abc')
+  })
+
+  it('ignores a next path that leads to another site', async () => {
+    const router = createAppRouter(() => fakeAuth('authenticated'), createMemoryHistory())
+
+    await router.push('/login?next=//evil.example')
+
+    expect(router.currentRoute.value.name).toBe('home')
   })
 
   it('adds no reason for someone who was never signed in', async () => {

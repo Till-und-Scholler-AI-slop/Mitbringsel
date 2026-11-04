@@ -14,15 +14,16 @@ function unauthorizedFetch() {
   )
 }
 
-async function setup(expireResults: boolean[]) {
+async function setup(expireResults: boolean[], startPath = '/') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<p>home</p>' } },
+      { path: '/groups/:id', name: 'group', component: { template: '<p>group</p>' } },
       { path: '/login', name: 'login', component: { template: '<p>login</p>' } },
     ],
   })
-  await router.push('/')
+  await router.push(startPath)
   const auth: SessionExpiryStore = { expireSession: vi.fn(() => expireResults.shift() ?? false) }
   installSessionExpiry(router, auth)
   return { router, auth }
@@ -42,6 +43,19 @@ describe('installSessionExpiry', () => {
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
 
     expect(router.currentRoute.value.query).toEqual({ reason: 'session_expired' })
+  })
+
+  it('remembers the page to come back to after signing in again', async () => {
+    unauthorizedFetch()
+    const { router } = await setup([true], '/groups/1?tab=members')
+
+    await apiGet('/groups').catch(() => undefined)
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('login'))
+
+    expect(router.currentRoute.value.query).toEqual({
+      reason: 'session_expired',
+      next: '/groups/1?tab=members',
+    })
   })
 
   it('stays put when the store says nobody was signed in', async () => {

@@ -67,6 +67,8 @@
     "someMembers": "Some members",
     "more": "+ {count} more",
     "join": "Join",
+    "joinWithGoogle": "Join with Google",
+    "signInNote": "After signing in you come back here and can join.",
     "invalid": {
       "title": "Oops, no match",
       "card": "This link is no longer valid",
@@ -102,6 +104,10 @@
     "failed": {
       "title": "Sign-in didn’t work",
       "body": "It was cancelled or failed. Just give it another try."
+    },
+    "rateLimited": {
+      "title": "Too many sign-in attempts",
+      "body": "Too many sign-ins came from your address in a short time. Wait a moment, then try again."
     },
     "serverError": {
       "title": "Signing in isn’t possible right now"

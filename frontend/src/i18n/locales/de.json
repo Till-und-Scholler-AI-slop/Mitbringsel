@@ -67,6 +67,8 @@
     "someMembers": "Einige Mitglieder",
     "more": "+ {count} weitere",
     "join": "Beitreten",
+    "joinWithGoogle": "Mit Google beitreten",
+    "signInNote": "Nach der Anmeldung kommst du hierher zurück und kannst beitreten.",
     "invalid": {
       "title": "Hoppla, kein Treffer",
       "card": "Dieser Link gilt nicht mehr",
@@ -102,6 +104,10 @@
     "failed": {
       "title": "Anmeldung hat nicht geklappt",
       "body": "Sie wurde abgebrochen oder ist fehlgeschlagen. Versuch es einfach noch einmal."
+    },
+    "rateLimited": {
+      "title": "Zu viele Anmeldeversuche",
+      "body": "Von deiner Adresse kamen in kurzer Zeit zu viele Anmeldungen. Warte einen Moment und versuche es dann noch einmal."
     },
     "serverError": {
       "title": "Anmeldung gerade nicht möglich"

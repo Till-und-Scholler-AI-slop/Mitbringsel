@@ -7,6 +7,8 @@ import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
 import type { GroupsService } from '@/services/api/groups'
 import type { InvitesService } from '@/services/api/invites'
+import { redirectTo } from '@/services/navigation'
+import { useAuthStore, type AuthStatus } from '@/stores/auth'
 import type { InvitePreview } from '@/types/api'
 
 import InviteView from '../InviteView.vue'
@@ -37,6 +39,9 @@ const { invitesService, groupsService } = vi.hoisted(() => ({
   },
 }))
 
+// jsdom cannot leave the page; the test only checks where it would go.
+vi.mock('@/services/navigation', () => ({ redirectTo: vi.fn() }))
+
 vi.mock('@/stores/invites', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/invites')>()
   return { ...original, useInvitesStore: original.defineInvitesStore(invitesService) }
@@ -46,7 +51,8 @@ vi.mock('@/stores/groups', async (importOriginal) => {
   return { ...original, useGroupsStore: original.defineGroupsStore(groupsService, () => 'user-1') }
 })
 
-async function mountView() {
+async function mountView(status: AuthStatus = 'authenticated') {
+  useAuthStore().status = status
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -83,6 +89,29 @@ describe('InviteView', () => {
     expect(wrapper.get('h1').text()).toBe('You are invited!')
     expect(wrapper.get('h2').text()).toBe('WG Kaiserstraße')
     expect(wrapper.get('.action').text()).toBe('Join')
+    wrapper.unmount()
+  })
+
+  it('asks someone who is not signed in to join with Google and come back here', async () => {
+    const { wrapper } = await mountView('anonymous')
+
+    expect(wrapper.get('h2').text()).toBe('WG Kaiserstraße')
+    expect(wrapper.get('.sign-in-note').text()).toContain('After signing in')
+    const button = wrapper.get('button.google-sign-in')
+    expect(button.text()).toBe('Join with Google')
+
+    await button.trigger('click')
+
+    expect(redirectTo).toHaveBeenCalledWith('/api/v1/auth/google/login?next=%2Finvite%2Ft1')
+    expect(button.attributes('aria-busy')).toBe('true')
+    expect(invitesService.accept).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('offers no Google button to someone who is signed in', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.find('button.google-sign-in').exists()).toBe(false)
     wrapper.unmount()
   })
 

@@ -13,17 +13,17 @@ import LoginNotice from '@/components/login/LoginNotice.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import {
+  LOGIN_ERROR_RATE_LIMITED,
   LOGIN_QUERY_ERROR,
   LOGIN_QUERY_REASON,
   LOGIN_REASON_SESSION_EXPIRED,
+  loginNext,
 } from '@/router/loginQuery'
+import { googleLoginUrl } from '@/services/googleLogin'
 import { redirectTo } from '@/services/navigation'
 import { useAuthStore } from '@/stores/auth'
 
-// The backend redirects to Google from here (docs/auth.md).
-const GOOGLE_LOGIN_URL = '/api/v1/auth/google/login'
-
-type Notice = 'offline' | 'serverError' | 'loginFailed' | 'sessionExpired'
+type Notice = 'offline' | 'serverError' | 'rateLimited' | 'loginFailed' | 'sessionExpired'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -33,6 +33,8 @@ const errorMessage = useErrorMessage(() => auth.errorCode)
 const { online } = useOnlineStatus()
 
 const redirecting = ref(false)
+// Where to continue after the sign-in (an invite page, say); null: the start page.
+const next = computed(() => loginNext(route.query))
 
 // At most one notice, the most pressing first. While redirecting, older
 // notices are out of date and disappear.
@@ -40,6 +42,7 @@ const notice = computed<Notice | null>(() => {
   if (!online.value) return 'offline'
   if (redirecting.value) return null
   if (auth.status === 'error') return 'serverError'
+  if (route.query[LOGIN_QUERY_ERROR] === LOGIN_ERROR_RATE_LIMITED) return 'rateLimited'
   if (route.query[LOGIN_QUERY_ERROR] !== undefined) return 'loginFailed'
   if (route.query[LOGIN_QUERY_REASON] === LOGIN_REASON_SESSION_EXPIRED) return 'sessionExpired'
   return null
@@ -47,7 +50,7 @@ const notice = computed<Notice | null>(() => {
 
 function signInWithGoogle() {
   redirecting.value = true
-  redirectTo(GOOGLE_LOGIN_URL)
+  redirectTo(googleLoginUrl(next.value))
 }
 
 // Asks the backend again. In development load() also logs in as the dev
@@ -55,7 +58,7 @@ function signInWithGoogle() {
 async function loadAndContinue() {
   await auth.load()
   if (auth.status === 'authenticated') {
-    await router.push({ name: 'home' })
+    await router.push(next.value ?? { name: 'home' })
   }
 }
 
@@ -93,6 +96,13 @@ onBeforeUnmount(() => window.removeEventListener('pageshow', onPageShow))
           <BaseIcon name="retry" />{{ t('login.retry') }}
         </BaseButton>
       </template>
+    </LoginNotice>
+    <LoginNotice
+      v-else-if="notice === 'rateLimited'"
+      kind="error"
+      :title="t('login.rateLimited.title')"
+    >
+      {{ t('login.rateLimited.body') }}
     </LoginNotice>
     <LoginNotice v-else-if="notice === 'loginFailed'" kind="error" :title="t('login.failed.title')">
       {{ t('login.failed.body') }}

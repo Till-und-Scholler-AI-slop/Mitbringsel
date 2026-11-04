@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -9,9 +9,14 @@ import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import InviteCard from '@/components/invite/InviteCard.vue'
 import InviteNotice from '@/components/invite/InviteNotice.vue'
+import GoogleSignInButton from '@/components/login/GoogleSignInButton.vue'
 import { useCountdown } from '@/composables/useCountdown'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { INVITE_PATH } from '@/services/inviteLink'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
+import { googleLoginUrl } from '@/services/googleLogin'
+import { redirectTo } from '@/services/navigation'
+import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import { useInvitesStore } from '@/stores/invites'
 
@@ -24,6 +29,7 @@ const props = defineProps<{ token: string }>()
 
 const { t } = useI18n()
 const router = useRouter()
+const auth = useAuthStore()
 const invites = useInvitesStore()
 const groups = useGroupsStore()
 const countdown = useCountdown()
@@ -31,6 +37,12 @@ const countdown = useCountdown()
 // The error of the last "Join" click. Errors of loading the invite are in the store.
 const acceptError = ref<{ code: string; retryAfter: number | null } | null>(null)
 const joining = ref(false)
+const redirecting = ref(false)
+
+// Anyone may open the invite page. Whoever is not signed in joins after the
+// Google login, which leads back here. 'error' (server unreachable) is not
+// treated as signed out; joining then fails with the error shown below.
+const anonymous = computed(() => auth.status === 'anonymous')
 
 const errorCode = computed(() => acceptError.value?.code ?? invites.errorCode)
 const errorMessage = useErrorMessage(errorCode)
@@ -94,6 +106,19 @@ async function join() {
   }
 }
 
+function signInToJoin() {
+  redirecting.value = true
+  redirectTo(googleLoginUrl(`${INVITE_PATH}${props.token}`))
+}
+
+// Coming back from Google with the back button can restore this page from
+// the browser's back/forward cache exactly as it was left: still redirecting.
+function onPageShow(event: PageTransitionEvent) {
+  if (event.persisted) redirecting.value = false
+}
+onMounted(() => window.addEventListener('pageshow', onPageShow))
+onBeforeUnmount(() => window.removeEventListener('pageshow', onPageShow))
+
 async function retry() {
   const loadFailed = invites.status === 'error'
   acceptError.value = null
@@ -119,7 +144,16 @@ async function retry() {
           <BaseIcon name="alert" /> {{ errorMessage }}
         </p>
         <div class="spacer" />
-        <BaseButton class="action" :loading="joining" @click="join">
+        <template v-if="anonymous">
+          <p class="sign-in-note">{{ t('invite.signInNote') }}</p>
+          <GoogleSignInButton
+            class="action"
+            :busy="redirecting"
+            :label="t('invite.joinWithGoogle')"
+            @click="signInToJoin"
+          />
+        </template>
+        <BaseButton v-else class="action" :loading="joining" @click="join">
           {{ t('invite.join') }}
         </BaseButton>
       </template>
@@ -243,6 +277,15 @@ async function retry() {
   background: var(--color-bg);
   font-weight: var(--font-weight-heavy);
   font-variant-numeric: tabular-nums;
+}
+
+.sign-in-note {
+  align-self: stretch;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
 }
 
 .stays-valid {

@@ -5,7 +5,7 @@ import { createAppI18n } from '@/i18n'
 
 import GoogleSignInButton from '../GoogleSignInButton.vue'
 
-function mountButton(props: { disabled?: boolean; busy?: boolean } = {}) {
+function mountButton(props: { disabled?: boolean; busy?: boolean; label?: string } = {}) {
   return mount(GoogleSignInButton, {
     props,
     global: { plugins: [createAppI18n(['en'], null)] },
@@ -20,6 +20,10 @@ describe('GoogleSignInButton', () => {
 
     expect(wrapper.get('button').text()).toBe('Sign in with Google')
     expect(wrapper.emitted('click')).toHaveLength(1)
+  })
+
+  it('shows another label when given one', () => {
+    expect(mountButton({ label: 'Join with Google' }).get('button').text()).toBe('Join with Google')
   })
 
   it('is disabled and busy while redirecting', () => {
