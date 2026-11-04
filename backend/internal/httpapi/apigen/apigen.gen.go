@@ -322,6 +322,15 @@ type GoogleCallbackParams struct {
 	Error *string `form:"error,omitempty" json:"error,omitempty"`
 }
 
+// GoogleLoginParams defines parameters for GoogleLogin.
+type GoogleLoginParams struct {
+	// Next Where to go after the login, e.g. `/invite/<token>`. Only a path
+	// inside the app is accepted (starts with a single `/`, no
+	// backslash or control characters, at most 512 bytes); anything
+	// else is ignored and the login ends on `/`.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+}
+
 // DevLoginJSONRequestBody defines body for DevLogin for application/json ContentType.
 type DevLoginJSONRequestBody = DevLoginRequest
 

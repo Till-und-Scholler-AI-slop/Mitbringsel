@@ -226,8 +226,38 @@ func TestGoogleLogin_rateLimitedPerAddress(t *testing.T) {
 			t.Fatalf("request %d: status = %d", i+1, rec.Code)
 		}
 	}
-	requireRateLimited(t, requestFrom(router, http.MethodGet, googleLoginPath, "192.0.2.1", nil))
+	requireLoginRateLimited(t, requestFrom(router, http.MethodGet, googleLoginPath, "192.0.2.1", nil), "/login?error=rate_limited")
 
 	// Login and callback share one budget: the callback is refused, too.
-	requireRateLimited(t, requestFrom(router, http.MethodGet, GoogleCallbackPath, "192.0.2.1", nil))
+	requireLoginRateLimited(t, requestFrom(router, http.MethodGet, GoogleCallbackPath, "192.0.2.1", nil), "/login?error=rate_limited")
+}
+
+func TestGoogleLogin_rateLimitKeepsNextPath(t *testing.T) {
+	router := newGoogleRouter(config.EnvDevelopment, &fakeGoogle{}, &fakeSessions{}, &fakeUsers{})
+	for range loginRateLimit {
+		requestFrom(router, http.MethodGet, googleLoginPath, "192.0.2.1", nil)
+	}
+
+	requireLoginRateLimited(t,
+		requestFrom(router, http.MethodGet, googleLoginPath+"?next=/invite/abc", "192.0.2.1", nil),
+		"/login?error=rate_limited&next=%2Finvite%2Fabc")
+	// A return path to another site is dropped here, too.
+	requireLoginRateLimited(t,
+		requestFrom(router, http.MethodGet, googleLoginPath+"?next=//evil.example", "192.0.2.1", nil),
+		"/login?error=rate_limited")
+}
+
+// requireLoginRateLimited checks the answer of the Google login routes to
+// too many requests: a redirect to the login page, with Retry-After.
+func requireLoginRateLimited(t *testing.T, rec *httptest.ResponseRecorder, wantLocation string) {
+	t.Helper()
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
+	}
+	if got := rec.Header().Get("Location"); got != wantLocation {
+		t.Errorf("Location = %q, want %q", got, wantLocation)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("no Retry-After header")
+	}
 }

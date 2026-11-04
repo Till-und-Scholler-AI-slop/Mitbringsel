@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -88,6 +89,45 @@ func TestGoogleLogin(t *testing.T) {
 	}
 }
 
+func TestGoogleLogin_remembersNextPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		wantNext string
+	}{
+		{name: "invite page", query: "?next=/invite/abc_DEF-123", wantNext: "/invite/abc_DEF-123"},
+		{name: "path with query", query: "?next=%2Finvite%2Fabc%3Fx%3D1", wantNext: "/invite/abc?x=1"},
+		{name: "none given", query: "", wantNext: ""},
+		{name: "other site", query: "?next=https://evil.example/", wantNext: ""},
+		{name: "protocol relative", query: "?next=//evil.example", wantNext: ""},
+		{name: "backslash", query: "?next=/%5Cevil.example", wantNext: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, googleLoginPath+tt.query, nil)
+
+			newGoogleRouter(config.EnvDevelopment, &fakeGoogle{}, &fakeSessions{}, &fakeUsers{}).ServeHTTP(rec, req)
+
+			cookie := findCookie(rec, loginAttemptCookieDev)
+			if cookie == nil {
+				t.Fatal("no login attempt cookie set")
+			}
+			// Read back through the same code the callback uses.
+			back := httptest.NewRequest(http.MethodGet, GoogleCallbackPath, nil)
+			back.AddCookie(cookie)
+			_, next, err := readLoginAttempt(back, config.EnvDevelopment)
+			if err != nil {
+				t.Fatalf("readLoginAttempt: %v", err)
+			}
+			if next != tt.wantNext {
+				t.Errorf("next = %q, want %q", next, tt.wantNext)
+			}
+		})
+	}
+}
+
 func TestGoogleCallback(t *testing.T) {
 	attempt := auth.LoginAttempt{State: "STATE", Nonce: "NONCE", Verifier: "VERIFIER"}
 	attemptCookie := &http.Cookie{
@@ -95,6 +135,15 @@ func TestGoogleCallback(t *testing.T) {
 		Value: strings.Join([]string{attempt.State, attempt.Nonce, attempt.Verifier}, loginAttemptSeparator),
 	}
 	okQuery := "?state=STATE&code=CODE"
+	// The same attempt, started on an invite page: the path travels as the
+	// fourth value of the cookie, base64url encoded.
+	withNext := func(next string) *http.Cookie {
+		return &http.Cookie{
+			Name: loginAttemptCookieDev,
+			Value: strings.Join([]string{attempt.State, attempt.Nonce, attempt.Verifier,
+				base64.RawURLEncoding.EncodeToString([]byte(next))}, loginAttemptSeparator),
+		}
+	}
 
 	tests := []struct {
 		name         string
@@ -105,6 +154,7 @@ func TestGoogleCallback(t *testing.T) {
 		createErr    error
 		wantLocation string
 		wantExchange bool
+		wantSession  bool
 	}{
 		{
 			name:         "success",
@@ -112,6 +162,43 @@ func TestGoogleCallback(t *testing.T) {
 			cookie:       attemptCookie,
 			wantLocation: "/",
 			wantExchange: true,
+			wantSession:  true,
+		},
+		{
+			name:         "success returns to the page the login started on",
+			query:        okQuery,
+			cookie:       withNext("/invite/abc_DEF-123"),
+			wantLocation: "/invite/abc_DEF-123",
+			wantExchange: true,
+			wantSession:  true,
+		},
+		{
+			name:         "a return path to another site is ignored",
+			query:        okQuery,
+			cookie:       withNext("//evil.example"),
+			wantLocation: "/",
+			wantExchange: true,
+			wantSession:  true,
+		},
+		{
+			name:         "a return path that is not base64 is ignored",
+			query:        okQuery,
+			cookie:       &http.Cookie{Name: loginAttemptCookieDev, Value: "STATE.NONCE.VERIFIER.***"},
+			wantLocation: "/",
+			wantExchange: true,
+			wantSession:  true,
+		},
+		{
+			name:         "failure keeps the return path for the login page",
+			query:        "?error=access_denied&state=STATE",
+			cookie:       withNext("/invite/abc"),
+			wantLocation: "/login?error=access_denied&next=%2Finvite%2Fabc",
+		},
+		{
+			name:         "a cookie with too many values is malformed",
+			query:        okQuery,
+			cookie:       &http.Cookie{Name: loginAttemptCookieDev, Value: "A.B.C.D.E"},
+			wantLocation: "/login?error=login_failed",
 		},
 		{
 			name:         "user cancelled at google",
@@ -215,7 +302,7 @@ func TestGoogleCallback(t *testing.T) {
 			}
 
 			session := findCookie(rec, sessionCookieName(config.EnvDevelopment))
-			if tt.wantLocation != appHomePath {
+			if !tt.wantSession {
 				if session != nil {
 					t.Errorf("failed login set a session cookie: %v", session)
 				}

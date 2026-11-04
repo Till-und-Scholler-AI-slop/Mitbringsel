@@ -69,9 +69,14 @@ export interface paths {
         /**
          * Start the Google login
          * @description Opened by navigation, not fetch. Remembers a login attempt (state,
-         *     nonce, PKCE verifier) in a short-lived cookie and redirects to
-         *     Google. Answers 404 if the Google login is not configured, which
-         *     only development allows.
+         *     nonce, PKCE verifier) and the optional `next` path in a short-lived
+         *     cookie and redirects to Google. Answers 404 if the Google login is
+         *     not configured, which only development allows.
+         *
+         *     Over the rate limit it redirects to
+         *     `/login?error=rate_limited` (with `next` passed on, and `Retry-After`
+         *     set) instead of answering 429: the browser shows the login page, not
+         *     raw JSON.
          */
         get: operations["googleLogin"];
         put?: never;
@@ -92,9 +97,12 @@ export interface paths {
         /**
          * Finish the Google login
          * @description Google redirects the browser here. On success the response sets the
-         *     session cookie and redirects to `/`. On failure it redirects to
+         *     session cookie and redirects to the `next` path of the login, or to
+         *     `/` if there was none. On failure it redirects to
          *     `/login?error=access_denied` (cancelled at Google) or
-         *     `/login?error=login_failed` (anything else).
+         *     `/login?error=login_failed` (anything else), with `&next=<path>`
+         *     appended if the login had one, so "Try again" leads back to it. Over
+         *     the rate limit it redirects to `/login?error=rate_limited`.
          */
         get: operations["googleCallback"];
         put?: never;
@@ -554,14 +562,25 @@ export interface operations {
     };
     googleLogin: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Where to go after the login, e.g. `/invite/<token>`. Only a path
+                 *     inside the app is accepted (starts with a single `/`, no
+                 *     backslash or control characters, at most 512 bytes); anything
+                 *     else is ignored and the login ends on `/`.
+                 */
+                next?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to Google's sign-in page. */
+            /**
+             * @description Redirect to Google's sign-in page, or to the login page if the
+             *     rate limit is exceeded.
+             */
             302: {
                 headers: {
                     Location?: string;
@@ -570,7 +589,6 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
-            429: components["responses"]["RateLimited"];
         };
     };
     googleCallback: {
@@ -596,7 +614,6 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
-            429: components["responses"]["RateLimited"];
         };
     };
     devLogin: {

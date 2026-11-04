@@ -94,9 +94,31 @@ func (l *limiter) sweep(now time.Time) {
 	}
 }
 
+// rejectFunc answers a request that is over the limit.
+type rejectFunc func(w http.ResponseWriter, r *http.Request)
+
+// rejectTooManyRequests answers with 429 in the JSON error format, which is
+// what API calls (fetch) expect.
+func rejectTooManyRequests(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusTooManyRequests, apigen.ErrorCodeRateLimited)
+}
+
+// rejectLoginRateLimited sends the browser to the login page with the reason.
+// The Google login routes are opened by navigation, not fetch: a JSON answer
+// would be shown to the user as raw text.
+func rejectLoginRateLimited(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, loginErrorURL(loginErrorRateLimited, safeNextPath(r.URL.Query().Get(nextParam))), http.StatusFound)
+}
+
 // rateLimit puts a limiter in front of a handler. key says who a request
 // belongs to; requests over the limit get 429 and are not passed on.
 func rateLimit(l *limiter, key func(*http.Request) string) func(http.HandlerFunc) http.HandlerFunc {
+	return rateLimitWith(l, key, rejectTooManyRequests)
+}
+
+// rateLimitWith is rateLimit with its own answer for requests over the limit.
+// Retry-After is set in every case.
+func rateLimitWith(l *limiter, key func(*http.Request) string, reject rejectFunc) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			ok, retryAfter := l.allow(key(r))
@@ -104,7 +126,7 @@ func rateLimit(l *limiter, key func(*http.Request) string) func(http.HandlerFunc
 				// Retry-After counts whole seconds; rounding up keeps the
 				// client from coming back a moment too early.
 				w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retryAfter.Seconds()))))
-				writeError(w, http.StatusTooManyRequests, apigen.ErrorCodeRateLimited)
+				reject(w, r)
 				return
 			}
 			next(w, r)

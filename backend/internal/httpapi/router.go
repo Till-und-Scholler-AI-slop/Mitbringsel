@@ -75,8 +75,10 @@ func NewRouter(deps Deps) http.Handler {
 	// One limiter per kind of route. The state lives in memory, which is
 	// enough for one backend instance per environment. The routes below that
 	// are open to everyone are limited by address; accepting an invite by
-	// user, because it needs a login anyway.
-	loginLimit := rateLimit(newLimiter(loginRateLimit, time.Minute, time.Now), ipKey(deps.Env))
+	// user, because it needs a login anyway. The Google login routes are
+	// opened by navigation, so they send the browser to the login page
+	// instead of answering 429 JSON.
+	loginLimit := rateLimitWith(newLimiter(loginRateLimit, time.Minute, time.Now), ipKey(deps.Env), rejectLoginRateLimited)
 	previewLimit := rateLimit(newLimiter(previewRateLimit, time.Minute, time.Now), ipKey(deps.Env))
 	acceptLimit := rateLimit(newLimiter(acceptRateLimit, time.Minute, time.Now), userKey(deps.Env))
 
