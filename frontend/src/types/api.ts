@@ -38,6 +38,15 @@ export type InvitePreview = Schemas['InvitePreview']
 
 export type InviteMember = Schemas['InviteMember']
 
+/** An open invite link of a group, without its token (GET /api/v1/groups/{groupId}/invites). */
+export type Invite = Schemas['Invite']
+
+/** Response of GET /api/v1/groups/{groupId}/invites. */
+export type InviteList = Schemas['InviteList']
+
+/** Response of POST /api/v1/groups/{groupId}/invites: the only time the token is sent. */
+export type InviteCreated = Schemas['InviteCreated']
+
 /** Response of POST /api/v1/invites/{token}/accept. */
 export type InviteAccepted = Schemas['InviteAccepted']
 

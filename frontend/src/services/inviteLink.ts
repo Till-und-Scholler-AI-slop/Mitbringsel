@@ -14,3 +14,11 @@ const INVITE_LINK_PATTERN = /\/invite\/([A-Za-z0-9_-]{20,})(?:[/?#]|$)/
 export function extractInviteToken(input: string): string | null {
   return INVITE_LINK_PATTERN.exec(input.trim())?.[1] ?? null
 }
+
+/**
+ * The link to hand out for a token: `<origin>/invite/<token>`. The origin is
+ * the one the app runs on, so the link opens the same app.
+ */
+export function buildInviteLink(origin: string, token: string): string {
+  return `${origin}${INVITE_PATH}${encodeURIComponent(token)}`
+}
