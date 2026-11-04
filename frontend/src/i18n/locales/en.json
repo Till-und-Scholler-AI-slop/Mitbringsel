@@ -1,17 +1,39 @@
 {
+  "common": {
+    "close": "Close",
+    "retry": "Try again"
+  },
   "app": {
     "name": "Mitbringsel"
   },
-  "home": {
-    "backend": {
-      "label": "Server",
-      "loading": "Checking connection …",
-      "ok": "Connected",
-      "retry": "Check again"
+  "start": {
+    "greeting": "Hello {name}",
+    "offline": {
+      "badge": "Offline",
+      "body": "Without internet you can’t create or change a household right now."
     },
-    "user": {
-      "signedInAs": "Signed in as {name}",
-      "logout": "Log out"
+    "profile": {
+      "label": "Profile of {name}",
+      "logout": "Sign out"
+    },
+    "groups": {
+      "title": "Your households",
+      "loading": "Loading households …",
+      "loadFailed": "Your households could not be loaded.",
+      "members": "{count} member | {count} members"
+    },
+    "empty": {
+      "title": "No household yet",
+      "description": "Create a household or join one where someone already shops."
+    },
+    "create": {
+      "open": "Create household",
+      "title": "Create household",
+      "nameLabel": "Household name",
+      "namePlaceholder": "e.g. Maple Street flat",
+      "hint": "You become the founder and can invite others afterwards.",
+      "cancel": "Cancel",
+      "submit": "Create"
     }
   },
   "login": {
@@ -50,8 +72,8 @@
     "CROSS_ORIGIN_REQUEST": "The request was blocked for security reasons.",
     "DB_UNAVAILABLE": "The database is currently unavailable.",
     "FORBIDDEN": "You are not allowed to do this.",
-    "GROUP_NAME_INVALID": "The group name must be 1 to 30 characters long.",
-    "GROUP_NOT_FOUND": "This group does not exist, or you are not a member.",
+    "GROUP_NAME_INVALID": "The household name must be 1 to 30 characters long.",
+    "GROUP_NOT_FOUND": "This household does not exist, or you are not a member.",
     "INTERNAL_ERROR": "Something went wrong on the server.",
     "INVITE_EXPIRED": "This invite link has expired or was withdrawn.",
     "INVITE_NOT_FOUND": "This invite link does not exist.",
@@ -61,7 +83,7 @@
     "METHOD_NOT_ALLOWED": "This action is not possible here.",
     "NETWORK": "The server cannot be reached.",
     "NOT_FOUND": "This does not exist (anymore).",
-    "OWNER_IMMUTABLE": "The owner cannot leave or change role. Delete the group instead.",
+    "OWNER_IMMUTABLE": "The founder can neither leave nor change role. Delete the household instead.",
     "RATE_LIMITED": "Too many requests. Please wait a moment and try again.",
     "TOO_MANY_INVITES": "Too many invite links are open already. Withdraw one to create a new one.",
     "UNAUTHENTICATED": "You are not signed in.",

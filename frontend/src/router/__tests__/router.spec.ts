@@ -6,7 +6,7 @@ import type { AuthStatus } from '@/stores/auth'
 
 import { createAppRouter, type AuthGuardStore } from '../index'
 
-// HomeView and LoginView are imported by the router but never rendered here.
+// StartView and LoginView are imported by the router but never rendered here.
 beforeEach(() => {
   setActivePinia(createPinia())
 })
