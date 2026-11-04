@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createAppI18n } from '@/i18n'
 import type { Group, GroupMember } from '@/types/api'
@@ -28,9 +29,13 @@ function group(name: string, memberCount: number): Group {
 }
 
 function mountCard(g: Group) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/groups/:groupId/settings', name: 'group-settings', component: {} }],
+  })
   return mount(GroupCard, {
     props: { group: g },
-    global: { plugins: [createAppI18n(['en'], null)] },
+    global: { plugins: [createAppI18n(['en'], null), router] },
   })
 }
 
@@ -48,6 +53,13 @@ describe('GroupCard', () => {
     [6, '6 members'],
   ])('says how many members there are (%i)', (count, text) => {
     expect(mountCard(group('WG', count)).get('.members').text()).toBe(text)
+  })
+
+  it('links to the settings of the household', () => {
+    const link = mountCard(group('WG Kaiserstraße', 2)).get('a.settings')
+
+    expect(link.attributes('href')).toBe('/groups/g1/settings')
+    expect(link.attributes('aria-label')).toBe('Manage WG Kaiserstraße')
   })
 
   it('shows at most four avatars', () => {

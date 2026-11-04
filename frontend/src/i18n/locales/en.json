@@ -20,7 +20,8 @@
       "title": "Your households",
       "loading": "Loading households …",
       "loadFailed": "Your households could not be loaded.",
-      "members": "{count} member | {count} members"
+      "members": "{count} member | {count} members",
+      "settings": "Manage {name}"
     },
     "empty": {
       "title": "No household yet",
@@ -144,5 +145,59 @@
     "TOO_MANY_INVITES": "Too many invite links are open already. Withdraw one to create a new one.",
     "UNAUTHENTICATED": "You are not signed in.",
     "UNKNOWN": "Something went wrong."
+  },
+  "settings": {
+    "title": "Manage household",
+    "back": "Back to the start page",
+    "loading": "Loading household …",
+    "loadFailed": "The household could not be loaded.",
+    "missing": {
+      "title": "Household not found",
+      "description": "It no longer exists, or you are not a member.",
+      "home": "To the start page"
+    },
+    "name": {
+      "title": "Household name",
+      "rename": "Rename"
+    },
+    "rename": {
+      "title": "Rename household",
+      "nameLabel": "New name",
+      "cancel": "Cancel",
+      "submit": "Save"
+    },
+    "roles": {
+      "owner": "Founder",
+      "admin": "Admin",
+      "member": "Member"
+    },
+    "members": {
+      "title": "Members",
+      "count": "{count} member | {count} members",
+      "you": "(You)",
+      "actionsFor": "Actions for {name}",
+      "explain": "The founder deletes the household and appoints admins. Admins invite, rename and remove members. Members use the lists and can leave."
+    },
+    "member": {
+      "title": "Manage member",
+      "question": "What should happen to {name}?",
+      "promote": {
+        "title": "Make admin",
+        "description": "May invite, rename and remove members."
+      },
+      "demote": {
+        "title": "Remove admin rights",
+        "description": "{name} becomes a plain member again."
+      },
+      "remove": {
+        "title": "Remove from household",
+        "description": "{name} loses access to all lists."
+      },
+      "confirm": {
+        "body": "{name} loses access to all lists of “{group}”. With a new invite link, {name} can join again later.",
+        "back": "Back",
+        "remove": "Remove"
+      }
+    }
   }
 }

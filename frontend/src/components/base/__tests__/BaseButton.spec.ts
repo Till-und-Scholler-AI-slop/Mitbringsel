@@ -30,9 +30,9 @@ describe('BaseButton', () => {
     expect(wrapper.find('.spinner').exists()).toBe(true)
   })
 
-  it('applies the variant', () => {
-    const wrapper = mount(BaseButton, { props: { variant: 'ghost' } })
+  it.each(['ghost', 'danger'] as const)('applies the variant %s', (variant) => {
+    const wrapper = mount(BaseButton, { props: { variant } })
 
-    expect(wrapper.get('button').classes()).toContain('base-button--ghost')
+    expect(wrapper.get('button').classes()).toContain(`base-button--${variant}`)
   })
 })
