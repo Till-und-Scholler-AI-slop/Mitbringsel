@@ -73,6 +73,22 @@ describe('BaseInput', () => {
     expect(wrapper.get('input').attributes('maxlength')).toBeUndefined()
   })
 
+  it('counts an emoji as one character', () => {
+    const wrapper = mountInput({ modelValue: '😀😀', maxLength: 30 })
+
+    expect(wrapper.get('.counter').text()).toBe('2/30')
+  })
+
+  it('shows the suffix slot next to the input', () => {
+    const wrapper = mount(BaseInput, {
+      props: { label: 'Link', modelValue: '' },
+      slots: { suffix: '<button type="button">Paste</button>' },
+    })
+
+    expect(wrapper.get('.control button').text()).toBe('Paste')
+    expect(wrapper.find('.control input').exists()).toBe(true)
+  })
+
   it('has no counter without a limit', () => {
     expect(mountInput().find('.counter').exists()).toBe(false)
   })

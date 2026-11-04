@@ -34,6 +34,56 @@
       "hint": "You become the founder and can invite others afterwards.",
       "cancel": "Cancel",
       "submit": "Create"
+    },
+    "join": {
+      "open": "Paste invite link"
+    }
+  },
+  "join": {
+    "title": "Join with an invite link",
+    "intro": "Someone from the household sends you a link. Tap it in the message or paste it here.",
+    "linkLabel": "Invite link",
+    "placeholder": "mitbringsel.tinowolter.com/invite/…",
+    "paste": "Paste",
+    "submit": "Open invite",
+    "wait": "Wait {seconds} s",
+    "notALink": "That is not a Mitbringsel invite link. It ends in “/invite/” and a long string of characters.",
+    "limit": {
+      "title": "Take a breath",
+      "body": "Too many tries in a short time. You can try again in {seconds} seconds."
+    },
+    "noLink": {
+      "title": "No link yet?",
+      "body": "Ask someone from the household. Founders and admins create it under “Manage household” and send it to you."
+    }
+  },
+  "invite": {
+    "title": "You are invited!",
+    "loadingText": "Loading invite …",
+    "card": "Invite",
+    "invitedBy": "{name} invites you to",
+    "invitedByUnknown": "You are invited to",
+    "members": "Members",
+    "someMembers": "Some members",
+    "more": "+ {count} more",
+    "join": "Join",
+    "invalid": {
+      "title": "Oops, no match",
+      "card": "This link is no longer valid",
+      "body": "The invite has expired or was withdrawn. Ask the person who invited you for a new link.",
+      "home": "To the start page"
+    },
+    "limit": {
+      "title": "Take a breath",
+      "card": "Too many requests",
+      "body": "This invite link was opened too often in a short time. Wait a moment, then you can continue.",
+      "wait": "{seconds} seconds left",
+      "stillValid": "The link stays valid.",
+      "retryIn": "Try again in {seconds} s"
+    },
+    "failed": {
+      "title": "That did not work",
+      "card": "The invite could not be loaded"
     }
   },
   "login": {

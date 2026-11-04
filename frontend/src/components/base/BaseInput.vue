@@ -43,15 +43,19 @@ const describedBy = computed(() => (props.error || props.hint ? messageId : unde
         {{ length }}/{{ maxLength }}
       </span>
     </div>
-    <input
-      :id="id"
-      v-model="model"
-      v-bind="$attrs"
-      class="input"
-      type="text"
-      :aria-invalid="Boolean(error) || undefined"
-      :aria-describedby="describedBy"
-    />
+    <div class="control">
+      <input
+        :id="id"
+        v-model="model"
+        v-bind="$attrs"
+        class="input"
+        type="text"
+        :aria-invalid="Boolean(error) || undefined"
+        :aria-describedby="describedBy"
+      />
+      <!-- e.g. a paste button next to the field -->
+      <slot name="suffix" />
+    </div>
     <p v-if="error" :id="messageId" class="message message--error" role="alert">
       <BaseIcon name="alert" :size="18" />
       <span>{{ error }}</span>
@@ -90,7 +94,14 @@ const describedBy = computed(() => (props.error || props.hint ? messageId : unde
   font-weight: var(--font-weight-heavy);
 }
 
+.control {
+  display: flex;
+  gap: var(--space-2);
+}
+
 .input {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   min-height: var(--size-touch);
   padding: 0 var(--space-4);

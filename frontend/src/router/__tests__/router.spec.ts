@@ -6,7 +6,7 @@ import type { AuthStatus } from '@/stores/auth'
 
 import { createAppRouter, type AuthGuardStore } from '../index'
 
-// StartView and LoginView are imported by the router but never rendered here.
+// StartView, InviteView and LoginView are imported by the router but never rendered here.
 beforeEach(() => {
   setActivePinia(createPinia())
 })
@@ -34,6 +34,8 @@ describe('auth guard', () => {
   it.each([
     { status: 'authenticated', path: '/', want: 'home' },
     { status: 'anonymous', path: '/', want: 'login' },
+    { status: 'authenticated', path: '/invite/abc', want: 'invite' },
+    { status: 'anonymous', path: '/invite/abc', want: 'login' },
     // A server error must not look like a logout.
     { status: 'error', path: '/', want: 'home' },
     { status: 'anonymous', path: '/login', want: 'login' },

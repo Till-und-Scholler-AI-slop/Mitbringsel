@@ -34,6 +34,56 @@
       "hint": "Du wirst Gründer:in und kannst danach andere einladen.",
       "cancel": "Abbrechen",
       "submit": "Gründen"
+    },
+    "join": {
+      "open": "Einladungslink einfügen"
+    }
+  },
+  "join": {
+    "title": "Mit Einladungslink beitreten",
+    "intro": "Jemand aus dem Haushalt schickt dir einen Link. Tippe ihn in der Nachricht an oder füge ihn hier ein.",
+    "linkLabel": "Einladungslink",
+    "placeholder": "mitbringsel.tinowolter.com/invite/…",
+    "paste": "Einfügen",
+    "submit": "Einladung öffnen",
+    "wait": "Noch {seconds} s warten",
+    "notALink": "Das ist kein Mitbringsel-Einladungslink. Er endet auf „/invite/“ und einer langen Zeichenfolge.",
+    "limit": {
+      "title": "Kurz durchatmen",
+      "body": "Zu viele Versuche in kurzer Zeit. In {seconds} Sekunden kannst du es noch einmal versuchen."
+    },
+    "noLink": {
+      "title": "Noch keinen Link?",
+      "body": "Frag eine Person aus dem Haushalt. Gründer:innen und Admins erstellen ihn unter „Haushalt verwalten“ und schicken ihn dir."
+    }
+  },
+  "invite": {
+    "title": "Du bist eingeladen!",
+    "loadingText": "Einladung wird geladen …",
+    "card": "Einladung",
+    "invitedBy": "{name} lädt dich ein in",
+    "invitedByUnknown": "Du bist eingeladen in",
+    "members": "Mitglieder",
+    "someMembers": "Einige Mitglieder",
+    "more": "+ {count} weitere",
+    "join": "Beitreten",
+    "invalid": {
+      "title": "Hoppla, kein Treffer",
+      "card": "Dieser Link gilt nicht mehr",
+      "body": "Die Einladung ist abgelaufen oder wurde zurückgezogen. Bitte die Person, die dich eingeladen hat, um einen neuen Link.",
+      "home": "Zur Startseite"
+    },
+    "limit": {
+      "title": "Kurz durchatmen",
+      "card": "Zu viele Anfragen",
+      "body": "Dieser Einladungslink wurde in kurzer Zeit zu oft geöffnet. Warte einen Moment, dann geht es weiter.",
+      "wait": "Noch {seconds} Sekunden",
+      "stillValid": "Der Link bleibt gültig.",
+      "retryIn": "Erneut versuchen in {seconds} s"
+    },
+    "failed": {
+      "title": "Das hat nicht geklappt",
+      "card": "Die Einladung konnte nicht geladen werden"
     }
   },
   "login": {

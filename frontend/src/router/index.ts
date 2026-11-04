@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 
 import { useAuthStore, type AuthStatus } from '@/stores/auth'
 
+import InviteView from '../views/InviteView.vue'
 import StartView from '../views/StartView.vue'
 import LoginView from '../views/LoginView.vue'
 import { loginRoute } from './loginQuery'
@@ -29,6 +30,13 @@ export function createAppRouter(
     history,
     routes: [
       { path: '/', name: 'home', component: StartView, meta: { requiresAuth: true } },
+      {
+        path: '/invite/:token',
+        name: 'invite',
+        component: InviteView,
+        props: true,
+        meta: { requiresAuth: true },
+      },
       { path: '/login', name: 'login', component: LoginView },
     ],
   })

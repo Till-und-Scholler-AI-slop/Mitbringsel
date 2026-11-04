@@ -7,8 +7,10 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import GroupCard from '@/components/start/GroupCard.vue'
+import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import ProfileMenu from '@/components/start/ProfileMenu.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
@@ -23,6 +25,7 @@ const { online } = useOnlineStatus()
 const loadError = useErrorMessage(() => groups.errorCode)
 
 const createOpen = ref(false)
+const joinOpen = ref(false)
 
 // "Hallo Lena": the first word of the display name.
 const firstName = computed(() => auth.user?.displayName.trim().split(/\s+/)[0] ?? '')
@@ -53,7 +56,7 @@ watch(online, (isOnline) => {
 <template>
   <div class="start">
     <header class="bar">
-      <span class="logo">{{ t('app.name') }}</span>
+      <BrandLogo />
       <ProfileMenu
         v-if="auth.user"
         :name="auth.user.displayName"
@@ -96,6 +99,9 @@ watch(online, (isOnline) => {
           <BaseButton @click="createOpen = true">
             <BaseIcon name="plus" /> {{ t('start.create.open') }}
           </BaseButton>
+          <BaseButton variant="secondary" @click="joinOpen = true">
+            <BaseIcon name="link" /> {{ t('start.join.open') }}
+          </BaseButton>
         </BaseEmptyState>
 
         <template v-else>
@@ -108,12 +114,16 @@ watch(online, (isOnline) => {
             <BaseButton @click="createOpen = true">
               <BaseIcon name="plus" /> {{ t('start.create.open') }}
             </BaseButton>
+            <BaseButton variant="secondary" @click="joinOpen = true">
+              <BaseIcon name="link" /> {{ t('start.join.open') }}
+            </BaseButton>
           </div>
         </template>
       </section>
     </main>
 
     <CreateGroupDialog v-model:open="createOpen" />
+    <JoinGroupDialog v-model:open="joinOpen" />
   </div>
 </template>
 
@@ -134,20 +144,6 @@ watch(online, (isOnline) => {
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   background: var(--color-brand);
   color: var(--color-on-brand);
-}
-
-.logo {
-  display: inline-block;
-  padding: var(--space-1-5) var(--space-4);
-  border-radius: var(--radius-full);
-  background: var(--color-accent-tomato);
-  color: var(--color-on-accent);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-black);
-  line-height: var(--line-height-tight);
-  letter-spacing: -0.01em;
-  box-shadow: var(--shadow-sticker);
-  transform: rotate(-3deg);
 }
 
 .content {
@@ -251,6 +247,7 @@ watch(online, (isOnline) => {
 .create-box {
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-3);
   border: var(--border-width-md) dashed var(--color-text-muted);
   border-radius: var(--radius-lg);
