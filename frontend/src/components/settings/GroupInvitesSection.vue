@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import OpenInvitesList from '@/components/settings/OpenInvitesList.vue'
 import InviteLinkBox from '@/components/settings/InviteLinkBox.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
@@ -60,6 +61,8 @@ async function create() {
       <BaseIcon name="alert" />
       {{ errorCode === ERROR_TOO_MANY_INVITES ? t('settings.invites.limit') : errorMessage }}
     </p>
+
+    <OpenInvitesList :group-id="group.id" @revoked="errorCode = null" />
   </section>
 </template>
 

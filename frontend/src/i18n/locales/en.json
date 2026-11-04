@@ -231,6 +231,23 @@
         "share": "Share",
         "shareTitle": "Invitation to “{name}”",
         "onlyNow": "You only see the link now. Copy or share it before you leave the page."
+      },
+      "open": {
+        "title": "Open links",
+        "count": "{count} of {max}",
+        "empty": "No open links.",
+        "loadFailed": "The open links could not be loaded.",
+        "createdBy": "Created by {name}",
+        "createdByUnknown": "Created by a deleted account",
+        "details": "{age} · {remaining}",
+        "remaining": {
+          "day": "{count} day left | {count} days left",
+          "hour": "{count} hour left | {count} hours left",
+          "minute": "{count} minute left | {count} minutes left"
+        },
+        "revoke": "Revoke",
+        "revokeAria": "Revoke the link of {name}",
+        "revokeAriaUnknown": "Revoke the link of a deleted account"
       }
     }
   }

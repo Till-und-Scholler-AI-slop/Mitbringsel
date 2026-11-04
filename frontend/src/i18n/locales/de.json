@@ -231,6 +231,23 @@
         "share": "Teilen",
         "shareTitle": "Einladung zu „{name}“",
         "onlyNow": "Den Link siehst du nur jetzt. Kopiere oder teile ihn, bevor du die Seite verlässt."
+      },
+      "open": {
+        "title": "Offene Links",
+        "count": "{count} von {max}",
+        "empty": "Keine offenen Links.",
+        "loadFailed": "Die offenen Links konnten nicht geladen werden.",
+        "createdBy": "Erstellt von {name}",
+        "createdByUnknown": "Erstellt von einem gelöschten Konto",
+        "details": "{age} · {remaining}",
+        "remaining": {
+          "day": "noch {count} Tag | noch {count} Tage",
+          "hour": "noch {count} Stunde | noch {count} Stunden",
+          "minute": "noch {count} Minute | noch {count} Minuten"
+        },
+        "revoke": "Widerrufen",
+        "revokeAria": "Link von {name} widerrufen",
+        "revokeAriaUnknown": "Link eines gelöschten Kontos widerrufen"
       }
     }
   }

@@ -1,3 +1,6 @@
+/** How many invite links a group can have open at once (the backend answers TOO_MANY_INVITES beyond). */
+export const MAX_OPEN_INVITES = 10
+
 /** The path in front of the token in an invite link: `<origin>/invite/<token>`. */
 export const INVITE_PATH = '/invite/'
 

@@ -74,6 +74,51 @@ describe('GroupInvitesSection', () => {
     expect(wrapper.findAll('button').map((b) => b.text())).not.toContain('Create invite link')
   })
 
+  it('shows the open links and the new link in the list', async () => {
+    service.list.mockResolvedValue([
+      {
+        id: 'i0',
+        createdAt: '2026-11-03T10:00:00Z',
+        expiresAt: '2026-11-10T10:00:00Z',
+        createdByName: 'Jonas',
+      },
+    ])
+    const wrapper = await mountSection()
+
+    expect(wrapper.findAll('.row')).toHaveLength(1)
+
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.created-by').map((e) => e.text())).toEqual([
+      'Created by Lena',
+      'Created by Jonas',
+    ])
+    expect(wrapper.get('.count').text()).toBe('2 of 10')
+  })
+
+  it('forgets the "10 links" message once a link is revoked', async () => {
+    service.list.mockResolvedValue([
+      {
+        id: 'i0',
+        createdAt: '2026-11-03T10:00:00Z',
+        expiresAt: '2026-11-10T10:00:00Z',
+        createdByName: 'Jonas',
+      },
+    ])
+    service.create.mockRejectedValueOnce(new ApiError('TOO_MANY_INVITES', 409))
+    service.revoke.mockResolvedValue(undefined)
+    const wrapper = await mountSection()
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.section > .problem').exists()).toBe(true)
+
+    await wrapper.get('.revoke').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.section > .problem').exists()).toBe(false)
+  })
+
   it('says that 10 links are open when the limit is reached', async () => {
     service.create.mockRejectedValueOnce(new ApiError('TOO_MANY_INVITES', 409))
     const wrapper = await mountSection()
