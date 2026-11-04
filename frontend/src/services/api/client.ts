@@ -79,15 +79,42 @@ export async function apiGet<T>(path: string): Promise<T> {
   return (await response.json()) as T
 }
 
-/**
- * POSTs `body` as JSON, or nothing if it is omitted. Resolves without a value:
- * every POST endpoint so far answers 204 No Content.
- */
-export async function apiPost(path: string, body?: unknown): Promise<void> {
-  await request(path, {
-    method: 'POST',
+// The request options for `method`, with `body` sent as JSON if there is one.
+function jsonInit(method: string, body?: unknown): RequestInit {
+  return {
+    method,
     ...(body === undefined
       ? {}
       : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-  })
+  }
+}
+
+/**
+ * POSTs `body` as JSON, or nothing if it is omitted. Resolves without a value,
+ * for endpoints that answer 204 No Content; see apiPostJson for the others.
+ */
+export async function apiPost(path: string, body?: unknown): Promise<void> {
+  await request(path, jsonInit('POST', body))
+}
+
+/** Like apiPost, for endpoints that answer with a JSON body (e.g. 201 Created). */
+export async function apiPostJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await request(path, jsonInit('POST', body))
+  return (await response.json()) as T
+}
+
+/** PATCHes `body` as JSON and returns the JSON the endpoint answers with. */
+export async function apiPatchJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await request(path, jsonInit('PATCH', body))
+  return (await response.json()) as T
+}
+
+/** PUTs `body` as JSON. Resolves without a value (204 No Content). */
+export async function apiPut(path: string, body: unknown): Promise<void> {
+  await request(path, jsonInit('PUT', body))
+}
+
+/** Sends DELETE. Resolves without a value (204 No Content). */
+export async function apiDelete(path: string): Promise<void> {
+  await request(path, jsonInit('DELETE'))
 }

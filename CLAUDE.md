@@ -17,6 +17,8 @@ Projektdokumentation (Ziele, Architektur, Konventionen): `docs/README.md`. Bei W
 
 Erklärungen auf Deutsch. Code, Bezeichner, Commit-Messages und Code-Kommentare auf Englisch.
 
+Antworten knapp halten: nur wirklich wichtige Infos, kein Geschwafel. Ausnahme sind die Erklärungen zum Warum und zu Go-Idiomen aus der Arbeitsweise.
+
 ## Regeln
 
 Code-Regeln, Tests und Commits: `docs/conventions.md` und `docs/testing.md`. Wichtige Entscheidungen als ADR in `docs/adr/`.

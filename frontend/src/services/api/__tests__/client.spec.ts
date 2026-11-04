@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, apiGet, apiPost, setUnauthenticatedHandler } from '../client'
+import {
+  ApiError,
+  apiDelete,
+  apiGet,
+  apiPatchJson,
+  apiPost,
+  apiPostJson,
+  apiPut,
+  setUnauthenticatedHandler,
+} from '../client'
 
 function stubFetch(impl: () => Promise<Response>) {
   vi.stubGlobal('fetch', vi.fn(impl))
@@ -82,6 +91,59 @@ describe('apiPost', () => {
       code: 'CROSS_ORIGIN_REQUEST',
       status: 403,
     })
+  })
+})
+
+describe('apiPostJson, apiPatchJson, apiPut, apiDelete', () => {
+  it('apiPostJson sends the body and returns the parsed answer', async () => {
+    stubFetch(() => Promise.resolve(Response.json({ id: 'g1' }, { status: 201 })))
+
+    await expect(apiPostJson('/groups', { name: 'WG' })).resolves.toEqual({ id: 'g1' })
+    expect(fetch).toHaveBeenCalledWith('/api/v1/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"name":"WG"}',
+    })
+  })
+
+  it('apiPatchJson sends the body and returns the parsed answer', async () => {
+    stubFetch(() => Promise.resolve(Response.json({ id: 'g1', name: 'Büro' })))
+
+    await expect(apiPatchJson('/groups/g1', { name: 'Büro' })).resolves.toEqual({
+      id: 'g1',
+      name: 'Büro',
+    })
+    expect(fetch).toHaveBeenCalledWith('/api/v1/groups/g1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"name":"Büro"}',
+    })
+  })
+
+  it('apiPut sends the body and resolves without a value', async () => {
+    stubFetch(() => Promise.resolve(new Response(null, { status: 204 })))
+
+    await expect(apiPut('/groups/g1/members/u1/role', { role: 'admin' })).resolves.toBeUndefined()
+    expect(fetch).toHaveBeenCalledWith('/api/v1/groups/g1/members/u1/role', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"role":"admin"}',
+    })
+  })
+
+  it('apiDelete sends no body and resolves without a value', async () => {
+    stubFetch(() => Promise.resolve(new Response(null, { status: 204 })))
+
+    await expect(apiDelete('/groups/g1')).resolves.toBeUndefined()
+    expect(fetch).toHaveBeenCalledWith('/api/v1/groups/g1', { method: 'DELETE' })
+  })
+
+  it('apiDelete maps the backend error code and status', async () => {
+    stubFetch(() =>
+      Promise.resolve(Response.json({ error: { code: 'FORBIDDEN' } }, { status: 403 })),
+    )
+
+    await expect(apiDelete('/groups/g1')).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 })
   })
 })
 

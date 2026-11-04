@@ -16,6 +16,23 @@ export type MeResponse = Schemas['Me']
 /** Body of POST /api/v1/auth/dev/login. */
 export type DevLoginRequest = Schemas['DevLoginRequest']
 
+/** A group with its members, as sent by GET /api/v1/groups. */
+export type Group = Schemas['Group']
+
+/** Response of GET /api/v1/groups. */
+export type GroupListResponse = Schemas['GroupList']
+
+export type GroupMember = Schemas['GroupMember']
+
+/** The role of a member: one owner per group, then admins and members. */
+export type Role = Schemas['Role']
+
+/** Body of POST /api/v1/groups and PATCH /api/v1/groups/{groupId}. */
+export type GroupNameRequest = Schemas['GroupNameRequest']
+
+/** Body of PUT /api/v1/groups/{groupId}/members/{userId}/role. */
+export type SetRoleRequest = Schemas['SetRoleRequest']
+
 /** Error body of every failed API call: the backend sends codes, not texts. */
 export type ApiErrorBody = Schemas['Error']
 
