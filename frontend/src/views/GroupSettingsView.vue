@@ -8,6 +8,7 @@ import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
+import GroupDangerSection from '@/components/settings/GroupDangerSection.vue'
 import MemberActionsDialog from '@/components/settings/MemberActionsDialog.vue'
 import MemberRow from '@/components/settings/MemberRow.vue'
 import RenameGroupDialog from '@/components/settings/RenameGroupDialog.vue'
@@ -121,6 +122,8 @@ function goHome() {
           </ul>
           <p class="explain">{{ t('settings.members.explain') }}</p>
         </section>
+
+        <GroupDangerSection :group="group" />
 
         <RenameGroupDialog v-model:open="renameOpen" :group="group" />
         <MemberActionsDialog
