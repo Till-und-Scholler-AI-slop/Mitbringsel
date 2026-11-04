@@ -26,13 +26,23 @@ export const ERROR_CODE_UNKNOWN = 'UNKNOWN'
 export class ApiError extends Error {
   readonly code: string
   readonly status: number | undefined
+  /** From the Retry-After header of a 429 answer: seconds until the next try makes sense. */
+  readonly retryAfterSeconds: number | undefined
 
-  constructor(code: string, status?: number) {
+  constructor(code: string, status?: number, retryAfterSeconds?: number) {
     super(code)
     this.name = 'ApiError'
     this.code = code
     this.status = status
+    this.retryAfterSeconds = retryAfterSeconds
   }
+}
+
+// Retry-After can also be a date; the backend only sends whole seconds, so
+// anything else counts as "not given".
+function readRetryAfter(response: Response): number | undefined {
+  const seconds = Number(response.headers.get('Retry-After'))
+  return Number.isInteger(seconds) && seconds > 0 ? seconds : undefined
 }
 
 function isApiErrorBody(value: unknown): value is ApiErrorBody {
@@ -69,7 +79,7 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
     if (response.status === HTTP_STATUS_UNAUTHORIZED) {
       unauthenticatedHandler?.()
     }
-    throw new ApiError(await readErrorCode(response), response.status)
+    throw new ApiError(await readErrorCode(response), response.status, readRetryAfter(response))
   }
   return response
 }
@@ -98,7 +108,7 @@ export async function apiPost(path: string, body?: unknown): Promise<void> {
 }
 
 /** Like apiPost, for endpoints that answer with a JSON body (e.g. 201 Created). */
-export async function apiPostJson<T>(path: string, body: unknown): Promise<T> {
+export async function apiPostJson<T>(path: string, body?: unknown): Promise<T> {
   const response = await request(path, jsonInit('POST', body))
   return (await response.json()) as T
 }

@@ -33,6 +33,14 @@ export type GroupNameRequest = Schemas['GroupNameRequest']
 /** Body of PUT /api/v1/groups/{groupId}/members/{userId}/role. */
 export type SetRoleRequest = Schemas['SetRoleRequest']
 
+/** What an invite link leads to, as sent by GET /api/v1/invites/{token}. */
+export type InvitePreview = Schemas['InvitePreview']
+
+export type InviteMember = Schemas['InviteMember']
+
+/** Response of POST /api/v1/invites/{token}/accept. */
+export type InviteAccepted = Schemas['InviteAccepted']
+
 /** Error body of every failed API call: the backend sends codes, not texts. */
 export type ApiErrorBody = Schemas['Error']
 
