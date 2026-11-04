@@ -227,6 +227,19 @@ describe('GroupSettingsView', () => {
     wrapper.unmount()
   })
 
+  it.each([
+    ['owner', 'Delete household'],
+    ['admin', 'Leave household'],
+    ['member', 'Leave household'],
+  ] as const)('a %s sees "%s"', async (role, title) => {
+    service.list.mockResolvedValue([group(role)])
+
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('#danger-title').text()).toBe(title)
+    wrapper.unmount()
+  })
+
   it('goes back to the start page', async () => {
     service.list.mockResolvedValue([group('owner')])
     const { wrapper, router } = await mountView()

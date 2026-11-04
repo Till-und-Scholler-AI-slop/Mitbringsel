@@ -198,6 +198,25 @@
         "back": "Zurück",
         "remove": "Entfernen"
       }
+    },
+    "danger": {
+      "leave": {
+        "title": "Haushalt verlassen",
+        "description": "Du verlierst den Zugriff auf alle Listen. Mit einem neuen Einladungslink kannst du später wieder beitreten.",
+        "open": "Austreten",
+        "dialogTitle": "„{name}“ verlassen?",
+        "body": "Du verlierst den Zugriff auf alle Listen dieses Haushalts. Mit einem neuen Einladungslink kannst du jederzeit wieder beitreten.",
+        "confirm": "Austreten"
+      },
+      "delete": {
+        "title": "Haushalt löschen",
+        "description": "Als Gründer:in kannst du nicht austreten, nur den Haushalt löschen. Dabei verschwinden alle Listen und Artikel für alle Mitglieder.",
+        "open": "Haushalt löschen",
+        "dialogTitle": "Haushalt löschen?",
+        "body": "„{name}“ wird mit allen Listen und Artikeln für alle Mitglieder gelöscht. Das lässt sich nicht rückgängig machen.",
+        "confirm": "Endgültig löschen"
+      },
+      "cancel": "Abbrechen"
     }
   }
 }

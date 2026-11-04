@@ -198,6 +198,25 @@
         "back": "Back",
         "remove": "Remove"
       }
+    },
+    "danger": {
+      "leave": {
+        "title": "Leave household",
+        "description": "You lose access to all lists. With a new invite link you can join again later.",
+        "open": "Leave",
+        "dialogTitle": "Leave “{name}”?",
+        "body": "You lose access to all lists of this household. With a new invite link you can join again any time.",
+        "confirm": "Leave"
+      },
+      "delete": {
+        "title": "Delete household",
+        "description": "As the founder you cannot leave, only delete the household. All lists and items disappear for all members.",
+        "open": "Delete household",
+        "dialogTitle": "Delete household?",
+        "body": "“{name}” is deleted with all lists and items for all members. This cannot be undone.",
+        "confirm": "Delete for good"
+      },
+      "cancel": "Cancel"
     }
   }
 }
