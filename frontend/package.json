@@ -51,5 +51,8 @@
     "openapi-typescript": {
       "typescript": "$typescript"
     }
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true
   }
 }
