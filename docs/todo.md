@@ -17,7 +17,15 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 - [ ] **Account löschen und letzter Owner:** Löscht der letzte Owner einer Gruppe seinen Account, fällt seine Mitgliedschaft per `ON DELETE CASCADE` weg und die Gruppe hat keinen Owner mehr. Beim Bau der Account-Löschung festlegen: vorher einen Owner bestimmen lassen, das älteste Mitglied automatisch befördern oder leere Gruppen löschen.
 - [ ] **Owner-Übergabe:** Der Owner kann die Gruppe nur löschen, nicht übergeben (siehe [Überblick](overview.md)). Nachrüsten, falls sich das im Alltag als Lücke zeigt.
 - [ ] **Abgelaufene Einladungen aufräumen:** Abgelaufene und widerrufene Zeilen in `group_invites` werden nur ignoriert, nie gelöscht. Zusammen mit dem Aufräum-Job für Sessions und `processed_ops` (Phase 5) umsetzen.
-- [ ] **Lange Gruppennamen:** Im Frontend mit „…“ abschneiden, wenn der Name nicht in die Zeile passt (bis 30 Zeichen erlaubt).
+
+## Start
+
+- [ ] **Einladungslink einfügen:** Der Button und der Dialog aus dem Design fehlen noch auf der Startseite. Kommen mit dem Beitreten (Phase 3, Schritt 3).
+- [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
+- [ ] **Listen-Chips und letzte Aktivität auf den Haushalt-Karten:** Das Design zeigt sie, sie brauchen Listen und Artikel (Phase 4).
+- [ ] **Desktop-Rahmen mit Seitenleiste:** Das Design hat auf dem Desktop eine Navigation links (Start, Haushalte, Listen). Die Startseite ist vorerst einspaltig; die Seitenleiste mit dem Haushalt- und Listen-Screen bauen (Phase 4).
+- [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
+- [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
 ## Komponenten
 

@@ -24,9 +24,10 @@ defineOptions({ inheritAttrs: false })
 const id = useId()
 const messageId = `${id}-message`
 
-const overLimit = computed(
-  () => props.maxLength !== undefined && model.value.length > props.maxLength,
-)
+// Counted in characters, not UTF-16 units, so an emoji counts once (like on
+// the server).
+const length = computed(() => Array.from(model.value).length)
+const overLimit = computed(() => props.maxLength !== undefined && length.value > props.maxLength)
 const describedBy = computed(() => (props.error || props.hint ? messageId : undefined))
 </script>
 
@@ -39,7 +40,7 @@ const describedBy = computed(() => (props.error || props.hint ? messageId : unde
         :class="['counter', { 'counter--over': overLimit }]"
         aria-live="polite"
       >
-        {{ model.length }}/{{ maxLength }}
+        {{ length }}/{{ maxLength }}
       </span>
     </div>
     <input

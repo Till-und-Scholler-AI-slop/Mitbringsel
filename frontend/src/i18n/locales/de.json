@@ -1,20 +1,39 @@
 {
   "common": {
-    "close": "Schließen"
+    "close": "Schließen",
+    "retry": "Nochmal versuchen"
   },
   "app": {
     "name": "Mitbringsel"
   },
-  "home": {
-    "backend": {
-      "label": "Server",
-      "loading": "Verbindung wird geprüft …",
-      "ok": "Verbunden",
-      "retry": "Erneut prüfen"
+  "start": {
+    "greeting": "Hallo {name}",
+    "offline": {
+      "badge": "Offline",
+      "body": "Ohne Internet kannst du gerade keinen Haushalt gründen oder ändern."
     },
-    "user": {
-      "signedInAs": "Angemeldet als {name}",
+    "profile": {
+      "label": "Profil von {name}",
       "logout": "Abmelden"
+    },
+    "groups": {
+      "title": "Deine Haushalte",
+      "loading": "Haushalte werden geladen …",
+      "loadFailed": "Deine Haushalte konnten nicht geladen werden.",
+      "members": "{count} Mitglied | {count} Mitglieder"
+    },
+    "empty": {
+      "title": "Noch kein Haushalt",
+      "description": "Lege einen Haushalt an oder tritt einem bei, in dem schon jemand einkauft."
+    },
+    "create": {
+      "open": "Haushalt gründen",
+      "title": "Haushalt gründen",
+      "nameLabel": "Name des Haushalts",
+      "namePlaceholder": "z. B. WG Kaiserstraße",
+      "hint": "Du wirst Gründer:in und kannst danach andere einladen.",
+      "cancel": "Abbrechen",
+      "submit": "Gründen"
     }
   },
   "login": {
@@ -53,8 +72,8 @@
     "CROSS_ORIGIN_REQUEST": "Die Anfrage wurde aus Sicherheitsgründen abgelehnt.",
     "DB_UNAVAILABLE": "Die Datenbank ist gerade nicht erreichbar.",
     "FORBIDDEN": "Dafür fehlt dir die Berechtigung.",
-    "GROUP_NAME_INVALID": "Der Gruppenname muss 1 bis 30 Zeichen lang sein.",
-    "GROUP_NOT_FOUND": "Diese Gruppe gibt es nicht, oder du bist kein Mitglied.",
+    "GROUP_NAME_INVALID": "Der Name des Haushalts muss 1 bis 30 Zeichen lang sein.",
+    "GROUP_NOT_FOUND": "Diesen Haushalt gibt es nicht, oder du bist kein Mitglied.",
     "INTERNAL_ERROR": "Auf dem Server ist ein Fehler aufgetreten.",
     "INVITE_EXPIRED": "Dieser Einladungslink ist abgelaufen oder wurde zurückgezogen.",
     "INVITE_NOT_FOUND": "Diesen Einladungslink gibt es nicht.",
@@ -64,7 +83,7 @@
     "METHOD_NOT_ALLOWED": "Diese Aktion ist hier nicht möglich.",
     "NETWORK": "Der Server ist nicht erreichbar.",
     "NOT_FOUND": "Das gibt es nicht (mehr).",
-    "OWNER_IMMUTABLE": "Der Owner kann nicht austreten oder die Rolle wechseln. Lösche stattdessen die Gruppe.",
+    "OWNER_IMMUTABLE": "Die Gründer:in kann weder austreten noch die Rolle wechseln. Lösche stattdessen den Haushalt.",
     "RATE_LIMITED": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
     "TOO_MANY_INVITES": "Es sind schon zu viele Einladungslinks offen. Ziehe einen zurück, um einen neuen zu erstellen.",
     "UNAUTHENTICATED": "Du bist nicht angemeldet.",

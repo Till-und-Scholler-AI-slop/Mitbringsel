@@ -2,7 +2,7 @@ import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 
 import { useAuthStore, type AuthStatus } from '@/stores/auth'
 
-import HomeView from '../views/HomeView.vue'
+import StartView from '../views/StartView.vue'
 import LoginView from '../views/LoginView.vue'
 import { loginRoute } from './loginQuery'
 
@@ -28,7 +28,7 @@ export function createAppRouter(
   const router = createRouter({
     history,
     routes: [
-      { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
+      { path: '/', name: 'home', component: StartView, meta: { requiresAuth: true } },
       { path: '/login', name: 'login', component: LoginView },
     ],
   })
