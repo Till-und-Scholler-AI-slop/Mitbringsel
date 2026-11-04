@@ -5,10 +5,7 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 ## Login
 
 - [ ] **Datenschutz und Impressum:** Seiten anlegen und im Login-Footer links neben dem Sprachschalter verlinken (im Design vorgesehen). Hängt an der offenen Entscheidung in der Roadmap.
-- [ ] **Einladungslink-Zustand:** Login-Variante „Anmelden und beitreten“ mit Einladungskarte (Einladende Person, Gruppe, Mitglieder). Kommt mit Phase 3 (Gruppen und Einladungen).
-- [ ] **Login-Limit als Seite statt JSON:** `/auth/google/login` und `/callback` werden per Navigation geöffnet; bei `429` sieht man die rohe JSON-Antwort. Besser wäre ein Redirect auf `/login?error=rate_limited` mit Text im Frontend (Phase 3, Schritt 5).
 - [ ] **Google-App veröffentlichen:** Für den Status "In Produktion" im Google-Zustimmungsbildschirm braucht es einen Link zur Datenschutzerklärung (hängt am Punkt oben); bis dahin können sich nur eingetragene Testnutzer anmelden.
-- [ ] **Zurück zur vorherigen Seite nach erneutem Login:** Nach einer abgelaufenen Sitzung landet man nach dem Login immer auf `/`. Für den Rücksprung müsste das Ziel im Login-Versuch (Cookie) durch den Google-Ablauf mitreisen und gegen Open Redirects geprüft werden (nur relative Pfade der App). Sinnvoll, sobald es mehr als eine Seite gibt.
 - [ ] **Stores bei Logout und abgelaufener Sitzung leeren:** Der Gruppen-Store leert sich selbst, sobald sich die Nutzer-ID ändert (`watch` auf die ID in `stores/groups.ts`). Listen-Store (Phase 4) und weitere Stores müssen dasselbe tun.
 - [ ] **Sprache aus dem Nutzerprofil:** Der Sprachschalter merkt sich die Wahl vorerst nur in `localStorage`. Sobald das Profil die Sprache speichern kann, gewinnt nach dem Login das Profil (siehe [Konventionen](conventions.md), i18n).
 
@@ -20,12 +17,16 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 ## Start
 
-- [ ] **Einladungslink einfügen:** Der Button und der Dialog aus dem Design fehlen noch auf der Startseite. Kommen mit dem Beitreten (Phase 3, Schritt 3).
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
 - [ ] **Listen-Chips und letzte Aktivität auf den Haushalt-Karten:** Das Design zeigt sie, sie brauchen Listen und Artikel (Phase 4).
 - [ ] **Desktop-Rahmen mit Seitenleiste:** Das Design hat auf dem Desktop eine Navigation links (Start, Haushalte, Listen). Die Startseite ist vorerst einspaltig; die Seitenleiste mit dem Haushalt- und Listen-Screen bauen (Phase 4).
 - [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
+
+## Einladung
+
+- [ ] **Desktop-Variante der Einladungsseite:** Das Design (`markt2-einladung-desktop-*`) setzt Kopf und Karte nebeneinander. `InviteView` ist vorerst einspaltig und zentriert, wie auf dem Handy.
+- [ ] **Ablaufdatum der Einladung anzeigen:** Die Vorschau liefert `expiresAt`, die Seite zeigt es nicht (im Design nicht vorgesehen).
 
 ## Komponenten
 

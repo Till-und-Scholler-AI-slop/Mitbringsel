@@ -106,6 +106,13 @@ describe('apiPostJson, apiPatchJson, apiPut, apiDelete', () => {
     })
   })
 
+  it('apiPostJson works without a body', async () => {
+    stubFetch(() => Promise.resolve(Response.json({ groupId: 'g1' })))
+
+    await expect(apiPostJson('/invites/t/accept')).resolves.toEqual({ groupId: 'g1' })
+    expect(fetch).toHaveBeenCalledWith('/api/v1/invites/t/accept', { method: 'POST' })
+  })
+
   it('apiPatchJson sends the body and returns the parsed answer', async () => {
     stubFetch(() => Promise.resolve(Response.json({ id: 'g1', name: 'Büro' })))
 
@@ -144,6 +151,38 @@ describe('apiPostJson, apiPatchJson, apiPut, apiDelete', () => {
     )
 
     await expect(apiDelete('/groups/g1')).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 })
+  })
+})
+
+describe('Retry-After', () => {
+  function rateLimited(retryAfter: string | null) {
+    stubFetch(() =>
+      Promise.resolve(
+        Response.json(
+          { error: { code: 'RATE_LIMITED' } },
+          { status: 429, headers: retryAfter === null ? {} : { 'Retry-After': retryAfter } },
+        ),
+      ),
+    )
+  }
+
+  it('is passed on in seconds', async () => {
+    rateLimited('42')
+
+    await expect(apiGet('/invites/x')).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+      status: 429,
+      retryAfterSeconds: 42,
+    })
+  })
+
+  it.each([null, 'soon', '0', '-5', '1.5'])('is left out when it is %j', async (value) => {
+    rateLimited(value)
+
+    const err: unknown = await apiGet('/invites/x').catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).retryAfterSeconds).toBeUndefined()
   })
 })
 

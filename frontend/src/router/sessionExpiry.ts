@@ -19,7 +19,8 @@ export function installSessionExpiry(router: Router, auth: SessionExpiryStore) {
     if (!auth.expireSession()) {
       return
     }
-    router.push(loginRoute(true)).catch((err: unknown) => {
+    // The user comes back to this page after signing in again.
+    router.push(loginRoute(true, router.currentRoute.value.fullPath)).catch((err: unknown) => {
       // The user stays on the page and sees the failed request instead;
       // logged so the cause is not lost.
       console.error('redirect to login after expired session failed', err)

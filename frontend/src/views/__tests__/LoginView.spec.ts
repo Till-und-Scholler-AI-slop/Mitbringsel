@@ -150,6 +150,43 @@ describe('LoginView', () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
+  it('says so when too many sign-ins came from the address', async () => {
+    const { wrapper } = await mountLogin({ path: '/login?error=rate_limited' })
+
+    const alert = wrapper.get('[role="alert"]')
+    expect(alert.text()).toContain('Too many sign-in attempts')
+    expect(alert.find('button.retry').exists()).toBe(false)
+  })
+
+  it('passes the page to continue on to the Google login', async () => {
+    const { wrapper } = await mountLogin({ path: '/login?next=/invite/abc' })
+
+    await googleButton(wrapper).trigger('click')
+
+    expect(redirectTo).toHaveBeenCalledWith(`${GOOGLE_LOGIN_URL}?next=%2Finvite%2Fabc`)
+  })
+
+  it('does not pass on a page that leads to another site', async () => {
+    const { wrapper } = await mountLogin({ path: '/login?next=//evil.example' })
+
+    await googleButton(wrapper).trigger('click')
+
+    expect(redirectTo).toHaveBeenCalledWith(GOOGLE_LOGIN_URL)
+  })
+
+  it('continues on that page after the dev login', async () => {
+    const { wrapper, router } = await mountLogin({
+      devUser: DEV_USER,
+      path: '/login?next=/invite/abc',
+    })
+    router.addRoute({ path: '/invite/:token', component: { template: '<p />' } })
+
+    await wrapper.get('button.dev').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/invite/abc')
+  })
+
   it('reports an unreachable server with the translated error', async () => {
     const { wrapper } = await mountLogin({ status: 'error', errorCode: 'NETWORK' })
 

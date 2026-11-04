@@ -2,9 +2,10 @@ import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 
 import { useAuthStore, type AuthStatus } from '@/stores/auth'
 
+import InviteView from '../views/InviteView.vue'
 import StartView from '../views/StartView.vue'
 import LoginView from '../views/LoginView.vue'
-import { loginRoute } from './loginQuery'
+import { loginNext, loginRoute } from './loginQuery'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -29,6 +30,13 @@ export function createAppRouter(
     history,
     routes: [
       { path: '/', name: 'home', component: StartView, meta: { requiresAuth: true } },
+      {
+        path: '/invite/:token',
+        name: 'invite',
+        component: InviteView,
+        props: true,
+        // Open to everyone: the page shows the invite and asks to sign in.
+      },
       { path: '/login', name: 'login', component: LoginView },
     ],
   })
@@ -43,10 +51,10 @@ export function createAppRouter(
     // 'error' passes on purpose: if the server is briefly unreachable, the
     // page shows the error instead of pretending the user is logged out.
     if (to.meta.requiresAuth && auth.status === 'anonymous') {
-      return loginRoute(auth.sessionExpired)
+      return loginRoute(auth.sessionExpired, to.fullPath)
     }
     if (to.name === 'login' && auth.status === 'authenticated') {
-      return { name: 'home' }
+      return loginNext(to.query) ?? { name: 'home' }
     }
     return true
   })

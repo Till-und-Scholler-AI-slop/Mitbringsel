@@ -4,14 +4,20 @@ Das Backend wickelt den Google-Login selbst ab (OpenID Connect, Authorization Co
 
 ## Login-Ablauf
 
-1. Frontend leitet auf `GET /api/v1/auth/google/login` weiter.
-2. Backend erzeugt `state`, `nonce` und PKCE-Verifier und speichert sie in einem kurzlebigen Cookie (`__Secure-google-login`, lokal `google-login`): `HttpOnly`, `SameSite=Lax`, 10 Minuten gültig und nur für den Pfad des Callbacks. Danach leitet es zu Google weiter.
+1. Frontend leitet auf `GET /api/v1/auth/google/login` weiter, optional mit `?next=<Pfad>` (siehe „Rücksprung nach dem Login“).
+2. Backend erzeugt `state`, `nonce` und PKCE-Verifier und speichert sie zusammen mit dem Rücksprungpfad in einem kurzlebigen Cookie (`__Secure-google-login`, lokal `google-login`): `HttpOnly`, `SameSite=Lax`, 10 Minuten gültig und nur für den Pfad des Callbacks. Danach leitet es zu Google weiter.
 3. Google leitet auf `/api/v1/auth/google/callback` zurück. Das Backend prüft `state` gegen das Cookie, tauscht den Code mit dem PKCE-Verifier gegen Tokens und validiert das ID-Token (Signatur, Aussteller, Ablauf, Client-ID als Audience, `nonce`). Konten ohne bestätigte E-Mail-Adresse (`email_verified`) werden abgelehnt. Das Cookie wird in jedem Fall gelöscht, ein Versuch gilt nur einmal.
 4. Backend legt den Nutzer an oder aktualisiert ihn (Schlüssel: Google `sub`, nicht die E-Mail).
-5. Backend erstellt eine Session in der Datenbank, setzt das Session-Cookie (`HttpOnly`, `Secure`, `SameSite=Lax`) und leitet auf `/` weiter.
+5. Backend erstellt eine Session in der Datenbank, setzt das Session-Cookie (`HttpOnly`, `Secure`, `SameSite=Lax`) und leitet auf den Rücksprungpfad weiter, ohne einen auf `/`.
 6. Frontend lädt den aktuellen Nutzer über `GET /api/v1/me`.
 
-Bricht der Nutzer bei Google ab, leitet das Backend auf `/login?error=access_denied` um, bei jedem anderen Fehler auf `/login?error=login_failed`; die Login-Seite zeigt dann einen Fehlerhinweis mit "Nochmal versuchen". Details stehen nur im Server-Log.
+Bricht der Nutzer bei Google ab, leitet das Backend auf `/login?error=access_denied` um, bei jedem anderen Fehler auf `/login?error=login_failed`; die Login-Seite zeigt dann einen Fehlerhinweis mit "Nochmal versuchen". Hatte der Login einen Rücksprungpfad, hängt das Backend `&next=<Pfad>` an, damit auch der zweite Versuch dort endet. Details stehen nur im Server-Log.
+
+### Rücksprung nach dem Login
+
+Wer einen Einladungslink öffnet oder dessen Sitzung abgelaufen ist, soll nach dem Login auf derselben Seite weitermachen, nicht auf `/`. Das Frontend gibt dazu den Pfad als `?next=` an `/api/v1/auth/google/login` mit (und an die Login-Seite: `/login?next=<Pfad>`). Das Backend legt ihn als vierten Wert (base64url) in das Login-Cookie und leitet nach dem Callback dorthin.
+
+Der Pfad ist ein Angriffspunkt (Open Redirect: ein Link, der echt anmeldet und dann auf eine fremde Seite führt). Deshalb gilt `safeNextPath` in `httpapi/nextpath.go`: Er muss mit genau einem `/` beginnen (kein `//host`, kein `/\host`), darf keinen Backslash und keine Steuerzeichen enthalten (Browser entfernen Tabs und Zeilenumbrüche aus URLs, aus `/<Tab>/host` würde `//host`), muss gültiges UTF-8 sein, höchstens 512 Bytes lang und ohne Schema und Host. Alles andere wird ignoriert, der Login endet dann auf `/`. Die Prüfung läuft beim Setzen und noch einmal beim Lesen des Cookies, weil der Browser dort beliebige Werte schicken kann. Das Frontend prüft denselben Pfad vor jedem eigenen Rücksprung noch einmal. Das tut `router/nextPath.ts` mit denselben Regeln; Router-Wächter und Sitzungsablauf hängen `?next=` an die Login-Seite, die es an `/api/v1/auth/google/login` weitergibt. `/invite/:token` ist öffentlich: Anonyme sehen die Einladung mit „Mit Google beitreten“ (Rücksprung auf dieselbe Seite), danach genügt „Beitreten“.
 
 Warum ein Cookie statt einer Tabelle für `state` und Co.: Die Werte gehören zu genau einem Browser und leben wenige Minuten. Im Cookie brauchen sie weder Migration noch Aufräum-Job, und für Fremde sind sie wertlos (der Verifier passt nur zu einem Code für genau diesen Versuch).
 
@@ -35,7 +41,7 @@ Die Google-Endpunkte sind fest im Code hinterlegt statt beim Start aus Googles D
 - Die Middleware `requireUser` in `httpapi` prüft die Session pro Route und legt die User-ID in den Request-Context. Unbekannte oder abgelaufene Sessions ergeben `401 UNAUTHENTICATED`, Datenbankfehler `500 INTERNAL_ERROR`, damit ein kurzer Ausfall niemanden abmeldet. Die Middleware liegt in `httpapi` und nicht in `auth`, weil sie HTTP übersetzt und `auth` sonst `httpapi` importieren müsste, das selbst `auth` nutzt.
 - Schreibende REST-Requests werden zusätzlich zu `SameSite` gegen CSRF geprüft: `http.CrossOriginProtection` aus der Standardbibliothek liegt um den ganzen Router und lehnt POST, PUT, PATCH und DELETE ab, die laut `Sec-Fetch-Site` (ältere Browser: `Origin` gegen `Host`) von einer anderen Seite kommen. Antwort: `403 CROSS_ORIGIN_REQUEST`. GET verändert deshalb nie etwas.
 - Jede Service-Methode prüft die Gruppenmitgliedschaft. Der Zugriff auf fremde Gruppen liefert `404`, um keine Existenz zu verraten.
-- Rate Limiting (Token-Bucket im Speicher, `httpapi/ratelimit.go`, bei Überschreitung `429 RATE_LIMITED` mit `Retry-After`):
+- Rate Limiting (Token-Bucket im Speicher, `httpapi/ratelimit.go`, bei Überschreitung `429 RATE_LIMITED` mit `Retry-After`; die beiden Google-Routen leiten stattdessen auf `/login?error=rate_limited` um, weil der Browser sie per Navigation öffnet und sonst rohes JSON zeigen würde):
 
   | Route | Schlüssel | Grenze pro Minute |
   |---|---|---|
