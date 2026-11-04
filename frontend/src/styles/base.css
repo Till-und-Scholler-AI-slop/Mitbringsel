@@ -23,3 +23,8 @@ button {
   outline: var(--border-width-lg) solid var(--color-focus);
   outline-offset: var(--border-width-lg);
 }
+
+/* A modal dialog does not stop the page behind it from scrolling by itself. */
+body:has(dialog[open]) {
+  overflow: hidden;
+}

@@ -42,6 +42,17 @@ export const ICONS = {
     'M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07',
   ],
   retry: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'],
+  plus: ['M5 12h14', 'M12 5v14'],
+  close: ['M18 6 6 18', 'm6 6 12 12'],
+  link: [
+    'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71',
+    'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  ],
+  home: [
+    'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8',
+    'M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  ],
+  chevronRight: ['m9 18 6-6-6-6'],
 } as const satisfies Record<string, readonly string[]>
 
 export type IconName = keyof typeof ICONS

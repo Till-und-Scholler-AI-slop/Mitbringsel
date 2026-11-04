@@ -1,4 +1,7 @@
 {
+  "common": {
+    "close": "Schließen"
+  },
   "app": {
     "name": "Mitbringsel"
   },

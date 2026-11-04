@@ -99,6 +99,7 @@
   --color-offline-bg: #16181d;
   --color-offline-text: #ffffff;
   --color-spinner-track: rgb(22 24 29 / 0.15);
+  --color-scrim: rgb(22 24 29 / 0.45);
 
   /* Google sign-in button, colors fixed by Google's branding guidelines. */
   --color-google-bg: #ffffff;
@@ -140,6 +141,7 @@
     --color-offline-bg: #0f1626;
     --color-offline-text: #f2f5fa;
     --color-spinner-track: rgb(242 245 250 / 0.2);
+    --color-scrim: rgb(0 0 0 / 0.55);
 
     --color-google-bg: #131314;
     --color-google-border: #8e918f;
@@ -176,6 +178,7 @@
   --color-offline-bg: #0f1626;
   --color-offline-text: #f2f5fa;
   --color-spinner-track: rgb(242 245 250 / 0.2);
+  --color-scrim: rgb(0 0 0 / 0.55);
 
   --color-google-bg: #131314;
   --color-google-border: #8e918f;
