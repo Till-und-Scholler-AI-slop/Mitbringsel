@@ -6,7 +6,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
 import type { GroupsService } from '@/services/api/groups'
-import type { Group, Role } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
+import type { Group, GroupMember, Role } from '@/types/api'
 
 import GroupSettingsView from '../GroupSettingsView.vue'
 
@@ -24,12 +25,17 @@ vi.mock('@/stores/groups', async (importOriginal) => {
   return { ...original, useGroupsStore: original.defineGroupsStore(service, () => 'user-1') }
 })
 
-function group(role: Role, name = 'WG Kaiserstraße'): Group {
+function member(userId: string, displayName: string, role: Role): GroupMember {
+  return { userId, displayName, avatarUrl: null, role, joinedAt: '2026-01-01T10:00:00Z' }
+}
+
+// The viewer is always "user-1" (Jonas); the other members are given per test.
+function group(role: Role, others: GroupMember[] = [], name = 'WG Kaiserstraße'): Group {
   return {
     id: 'g1',
     name,
     role,
-    members: [],
+    members: [member('user-1', 'Jonas', role), ...others],
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',
   }
@@ -38,6 +44,14 @@ function group(role: Role, name = 'WG Kaiserstraße'): Group {
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  useAuthStore().user = {
+    id: 'user-1',
+    email: 'jonas@example.com',
+    displayName: 'Jonas',
+    avatarUrl: null,
+    locale: 'en',
+    theme: 'system',
+  }
   // jsdom has no modal <dialog>.
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
     this.setAttribute('open', '')
@@ -130,7 +144,7 @@ describe('GroupSettingsView', () => {
 
   it('renames the household and shows the new name', async () => {
     service.list.mockResolvedValue([group('owner')])
-    service.rename.mockResolvedValue(group('owner', 'WG Süd'))
+    service.rename.mockResolvedValue(group('owner', [], 'WG Süd'))
     const { wrapper } = await mountView()
 
     await wrapper
@@ -143,6 +157,73 @@ describe('GroupSettingsView', () => {
 
     expect(service.rename).toHaveBeenCalledWith('g1', 'WG Süd')
     expect(wrapper.get('.name').text()).toBe('WG Süd')
+    wrapper.unmount()
+  })
+
+  it('lists the members, owner first, and marks the signed-in user', async () => {
+    service.list.mockResolvedValue([
+      group('admin', [member('u-mehmet', 'Mehmet', 'member'), member('u-lena', 'Lena', 'owner')]),
+    ])
+
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('[aria-labelledby="members-title"] .count').text()).toBe('3 members')
+    expect(wrapper.findAll('.member .name').map((e) => e.text())).toEqual([
+      'Lena',
+      'Jonas (You)',
+      'Mehmet',
+    ])
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['owner', ['Actions for Anna', 'Actions for Mehmet']],
+    ['admin', ['Actions for Mehmet']],
+    ['member', []],
+  ] as const)('a %s can open the actions of: %j', async (role, labels) => {
+    // Lena is the owner; for an owner viewer she is replaced by Anna, an admin.
+    const others = [member('u-mehmet', 'Mehmet', 'member')]
+    others.unshift(
+      role === 'owner' ? member('u-anna', 'Anna', 'admin') : member('u-lena', 'Lena', 'owner'),
+    )
+    service.list.mockResolvedValue([group(role, others)])
+
+    const { wrapper } = await mountView()
+
+    expect(wrapper.findAll('.member button').map((b) => b.attributes('aria-label'))).toEqual(labels)
+    wrapper.unmount()
+  })
+
+  it('makes a member admin from the actions dialog', async () => {
+    service.list.mockResolvedValue([group('owner', [member('u-mehmet', 'Mehmet', 'member')])])
+    service.setMemberRole.mockResolvedValue(undefined)
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.member button').trigger('click')
+    await wrapper.findAll('dialog .action')[0]!.trigger('click')
+    await flushPromises()
+
+    expect(service.setMemberRole).toHaveBeenCalledWith('g1', 'u-mehmet', 'admin')
+    expect(wrapper.findAll('.member .role').map((e) => e.text())).toEqual(['Founder', 'Admin'])
+    expect(wrapper.find('dialog .action').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('drops a removed member from the list', async () => {
+    service.list.mockResolvedValue([
+      group('admin', [member('u-lena', 'Lena', 'owner'), member('u-mehmet', 'Mehmet', 'member')]),
+    ])
+    service.removeMember.mockResolvedValue(undefined)
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.member button').trigger('click')
+    await wrapper.get('dialog .action').trigger('click')
+    await wrapper.get('dialog .remove').trigger('click')
+    await flushPromises()
+
+    expect(service.removeMember).toHaveBeenCalledWith('g1', 'u-mehmet')
+    expect(wrapper.findAll('.member .name').map((e) => e.text())).toEqual(['Lena', 'Jonas (You)'])
+    expect(wrapper.find('dialog .action').exists()).toBe(false)
     wrapper.unmount()
   })
 

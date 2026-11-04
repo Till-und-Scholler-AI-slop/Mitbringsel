@@ -165,6 +165,39 @@
       "nameLabel": "Neuer Name",
       "cancel": "Abbrechen",
       "submit": "Speichern"
+    },
+    "roles": {
+      "owner": "Gründer:in",
+      "admin": "Admin",
+      "member": "Mitglied"
+    },
+    "members": {
+      "title": "Mitglieder",
+      "count": "{count} Mitglied | {count} Mitglieder",
+      "you": "(Du)",
+      "actionsFor": "Aktionen für {name}",
+      "explain": "Gründer:in löscht den Haushalt und ernennt Admins. Admins laden ein, benennen um und entfernen Mitglieder. Mitglieder nutzen die Listen und können austreten."
+    },
+    "member": {
+      "title": "Mitglied verwalten",
+      "question": "Was soll mit {name} passieren?",
+      "promote": {
+        "title": "Zum Admin machen",
+        "description": "Darf einladen, umbenennen und Mitglieder entfernen."
+      },
+      "demote": {
+        "title": "Admin-Rechte entziehen",
+        "description": "{name} wird wieder normales Mitglied."
+      },
+      "remove": {
+        "title": "Aus Haushalt entfernen",
+        "description": "{name} verliert den Zugriff auf alle Listen."
+      },
+      "confirm": {
+        "body": "{name} verliert den Zugriff auf alle Listen von „{group}“. Mit einem neuen Einladungslink kann {name} später wieder beitreten.",
+        "back": "Zurück",
+        "remove": "Entfernen"
+      }
     }
   }
 }

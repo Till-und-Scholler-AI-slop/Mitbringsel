@@ -8,10 +8,14 @@ import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
+import MemberActionsDialog from '@/components/settings/MemberActionsDialog.vue'
+import MemberRow from '@/components/settings/MemberRow.vue'
 import RenameGroupDialog from '@/components/settings/RenameGroupDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
-import { canManage } from '@/services/groupRoles'
+import { canManage, memberActions, sortMembers } from '@/services/groupRoles'
+import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
+import type { Role } from '@/types/api'
 
 type ViewState = 'loading' | 'failed' | 'missing' | 'ready'
 
@@ -19,13 +23,24 @@ const props = defineProps<{ groupId: string }>()
 
 const { t } = useI18n()
 const router = useRouter()
+const auth = useAuthStore()
 const groups = useGroupsStore()
 const loadError = useErrorMessage(() => groups.errorCode)
 
 const renameOpen = ref(false)
+// The member whose actions are open; looked up again so a member who is gone closes the dialog.
+const selectedId = ref<string | null>(null)
 
 const group = computed(() => groups.byId(props.groupId))
 const canRename = computed(() => group.value !== undefined && canManage(group.value.role))
+
+const members = computed(() => sortMembers(group.value?.members ?? []))
+const selected = computed(() => members.value.find((m) => m.userId === selectedId.value))
+
+function canAct(userId: string, role: Role): boolean {
+  if (!group.value || userId === auth.user?.id) return false
+  return memberActions(group.value.role, role).length > 0
+}
 
 // A group that is in the store is shown, even if the last reload failed.
 // "missing": the groups loaded, and this one is not among them.
@@ -89,7 +104,32 @@ function goHome() {
           </div>
         </section>
 
+        <section class="section" aria-labelledby="members-title">
+          <div class="section-head">
+            <h2 id="members-title" class="section-title">{{ t('settings.members.title') }}</h2>
+            <span class="count">{{ t('settings.members.count', members.length) }}</span>
+          </div>
+          <ul class="members">
+            <MemberRow
+              v-for="member in members"
+              :key="member.userId"
+              :member="member"
+              :is-me="member.userId === auth.user?.id"
+              :can-act="canAct(member.userId, member.role)"
+              @act="selectedId = member.userId"
+            />
+          </ul>
+          <p class="explain">{{ t('settings.members.explain') }}</p>
+        </section>
+
         <RenameGroupDialog v-model:open="renameOpen" :group="group" />
+        <MemberActionsDialog
+          v-if="selected"
+          :open="true"
+          :group="group"
+          :member="selected"
+          @update:open="selectedId = null"
+        />
       </template>
     </main>
   </div>
@@ -179,6 +219,29 @@ function goHome() {
   margin: 0;
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-black);
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.members {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--border-width-md) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sticker);
+}
+
+.explain {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
 }
 
 .name-card {
