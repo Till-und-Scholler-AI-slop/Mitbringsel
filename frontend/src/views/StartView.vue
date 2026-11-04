@@ -236,8 +236,12 @@ watch(online, (isOnline) => {
   font-weight: var(--font-weight-black);
 }
 
+/* minmax(0, 1fr), not the default auto column: an auto column is at least as
+   wide as its widest content, so a long household name (which does not wrap)
+   would push the cards out of the screen on a phone. */
 .cards {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   margin: 0;
   padding: 0;
@@ -254,7 +258,7 @@ watch(online, (isOnline) => {
 
 @media (min-width: 48rem) {
   .cards {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .create-box {
