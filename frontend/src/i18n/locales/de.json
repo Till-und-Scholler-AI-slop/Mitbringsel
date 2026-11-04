@@ -217,6 +217,21 @@
         "confirm": "Endgültig löschen"
       },
       "cancel": "Abbrechen"
+    },
+    "invites": {
+      "title": "Einladungslink",
+      "description": "Wer den Link hat, kann beitreten. Er gilt 7 Tage und für beliebig viele Personen.",
+      "create": "Einladungslink erstellen",
+      "limit": "Es sind schon 10 Links offen. Widerrufe einen alten Link, dann kannst du einen neuen erstellen.",
+      "link": {
+        "label": "Einladungslink",
+        "copy": "Kopieren",
+        "copied": "Kopiert",
+        "copyFailed": "Kopieren hat nicht geklappt. Markiere den Link und kopiere ihn von Hand.",
+        "share": "Teilen",
+        "shareTitle": "Einladung zu „{name}“",
+        "onlyNow": "Den Link siehst du nur jetzt. Kopiere oder teile ihn, bevor du die Seite verlässt."
+      }
     }
   }
 }

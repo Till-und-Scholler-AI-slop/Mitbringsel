@@ -8,6 +8,7 @@ import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
+import GroupInvitesSection from '@/components/settings/GroupInvitesSection.vue'
 import GroupDangerSection from '@/components/settings/GroupDangerSection.vue'
 import MemberActionsDialog from '@/components/settings/MemberActionsDialog.vue'
 import MemberRow from '@/components/settings/MemberRow.vue'
@@ -33,7 +34,7 @@ const renameOpen = ref(false)
 const selectedId = ref<string | null>(null)
 
 const group = computed(() => groups.byId(props.groupId))
-const canRename = computed(() => group.value !== undefined && canManage(group.value.role))
+const isManager = computed(() => group.value !== undefined && canManage(group.value.role))
 
 const members = computed(() => sortMembers(group.value?.members ?? []))
 const selected = computed(() => members.value.find((m) => m.userId === selectedId.value))
@@ -95,7 +96,7 @@ function goHome() {
         <section class="section" aria-labelledby="name-title">
           <div class="section-head">
             <h2 id="name-title" class="section-title">{{ t('settings.name.title') }}</h2>
-            <BaseButton v-if="canRename" variant="secondary" @click="renameOpen = true">
+            <BaseButton v-if="isManager" variant="secondary" @click="renameOpen = true">
               <BaseIcon name="pencil" /> {{ t('settings.name.rename') }}
             </BaseButton>
           </div>
@@ -122,6 +123,8 @@ function goHome() {
           </ul>
           <p class="explain">{{ t('settings.members.explain') }}</p>
         </section>
+
+        <GroupInvitesSection v-if="isManager" :group="group" />
 
         <GroupDangerSection :group="group" />
 

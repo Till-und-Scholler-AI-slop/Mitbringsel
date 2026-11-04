@@ -90,6 +90,18 @@ export const ICONS = {
     'M3 6h18',
     'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
   ],
+  copy: [
+    'M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z',
+    'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2',
+  ],
+  check: ['M20 6 9 17l-5-5'],
+  share: [
+    'M15 5a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+    'M3 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+    'M15 19a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+    'm8.59 13.51 6.83 3.98',
+    'm15.41 6.51-6.82 3.98',
+  ],
 } as const satisfies Record<string, readonly string[]>
 
 export type IconName = keyof typeof ICONS
