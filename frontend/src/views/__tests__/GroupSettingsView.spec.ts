@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
+import type { GroupInvitesService } from '@/services/api/groupInvites'
 import type { GroupsService } from '@/services/api/groups'
 import { useAuthStore } from '@/stores/auth'
 import type { Group, GroupMember, Role } from '@/types/api'
@@ -20,6 +21,19 @@ const service = vi.hoisted(() => ({
   setMemberRole: vi.fn<GroupsService['setMemberRole']>(),
 }))
 
+const invitesService = vi.hoisted(() => ({
+  list: vi.fn<GroupInvitesService['list']>(),
+  create: vi.fn<GroupInvitesService['create']>(),
+  revoke: vi.fn<GroupInvitesService['revoke']>(),
+}))
+
+vi.mock('@/stores/groupInvites', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/stores/groupInvites')>()
+  return {
+    ...original,
+    useGroupInvitesStore: original.defineGroupInvitesStore(invitesService, () => 'user-1'),
+  }
+})
 vi.mock('@/stores/groups', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/groups')>()
   return { ...original, useGroupsStore: original.defineGroupsStore(service, () => 'user-1') }
@@ -44,6 +58,7 @@ function group(role: Role, others: GroupMember[] = [], name = 'WG Kaiserstraße'
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  invitesService.list.mockResolvedValue([])
   useAuthStore().user = {
     id: 'user-1',
     email: 'jonas@example.com',
@@ -237,6 +252,20 @@ describe('GroupSettingsView', () => {
     const { wrapper } = await mountView()
 
     expect(wrapper.get('#danger-title').text()).toBe(title)
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['owner', true],
+    ['admin', true],
+    ['member', false],
+  ] as const)('a %s sees the invite link section: %s', async (role, sees) => {
+    service.list.mockResolvedValue([group(role)])
+
+    const { wrapper } = await mountView()
+
+    expect(wrapper.find('#invites-title').exists()).toBe(sees)
+    expect(invitesService.list).toHaveBeenCalledTimes(sees ? 1 : 0)
     wrapper.unmount()
   })
 

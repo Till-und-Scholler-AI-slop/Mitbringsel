@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { extractInviteToken } from '../inviteLink'
+import { buildInviteLink, extractInviteToken } from '../inviteLink'
 
 const TOKEN = 'Kx9f2mQ7vLp3Zt8RnW4cYb6HdJs1Ua5EoN0gXiT7wBq'
 
@@ -27,5 +27,23 @@ describe('extractInviteToken', () => {
     `https://example.com/invite/${TOKEN}%20x`,
   ])('rejects %j', (input) => {
     expect(extractInviteToken(input)).toBeNull()
+  })
+})
+
+describe('buildInviteLink', () => {
+  it('puts the token behind /invite/ on the given origin', () => {
+    expect(buildInviteLink('https://mitbringsel.tinowolter.com', TOKEN)).toBe(
+      `https://mitbringsel.tinowolter.com/invite/${TOKEN}`,
+    )
+  })
+
+  it('is what extractInviteToken reads back', () => {
+    expect(extractInviteToken(buildInviteLink('http://localhost:5173', TOKEN))).toBe(TOKEN)
+  })
+
+  it('cannot change the path with a strange token', () => {
+    expect(buildInviteLink('https://example.com', 'a/b?c')).toBe(
+      'https://example.com/invite/a%2Fb%3Fc',
+    )
   })
 })
