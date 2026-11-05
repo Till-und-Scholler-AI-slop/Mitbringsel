@@ -6,9 +6,13 @@ name: Deploy
 #
 # Server details are not in this file. They live in the GitHub Environment
 # of the same name:
-#   secrets: SSH_PRIVATE_KEY, SSH_KNOWN_HOSTS
-#   vars:    SSH_HOST, SSH_USER, SSH_PORT (optional, default 22), DEPLOY_DIR,
+#   secrets: SSH_PRIVATE_KEY, SSH_KNOWN_HOSTS, SSH_HOST,
+#            SSH_PORT (optional, default 22)
+#   vars:    SSH_USER, DEPLOY_DIR,
 #            APP_URL (optional, shown as link on the deployment)
+#
+# SSH_HOST and SSH_PORT are secrets although they are not strictly secret:
+# the repository is public, and Actions logs mask secrets but print vars.
 
 on:
   workflow_call:
@@ -73,9 +77,9 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
-          SSH_HOST: ${{ vars.SSH_HOST }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ vars.SSH_USER }}
-          SSH_PORT: ${{ vars.SSH_PORT || '22' }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
           install -m 700 -d ~/.ssh
           install -m 600 /dev/null ~/.ssh/deploy_key

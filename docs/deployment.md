@@ -72,7 +72,7 @@ Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im Git
 ## CI/CD mit GitHub Actions
 
 1. **Bei jedem Pull Request und Push auf `main`** (Workflow `.github/workflows/ci.yml`, auch manuell startbar): Lint (`golangci-lint`, ESLint, Prettier), Typprüfung (`vue-tsc`), Backend-Tests mit Postgres über `testcontainers-go`, Frontend-Tests, Build beider Teile. Dazu `docker compose config` für Staging und Production mit `deploy/.env.example` (Job `deploy-config`) und ein Build beider Container-Images ohne Push (Job `images`), damit kaputte Compose-Dateien oder Dockerfiles schon im PR auffallen. Feature-Branches ohne PR laufen nicht, damit ein PR nicht doppelt geprüft wird. Lokal entsprechen dem `make lint`, `make test`, `make frontend-lint`, `make frontend-test` und `make frontend-build`.
-2. **Push auf `main`, CI grün:** Der Job `images` läuft erst nach den Backend- und Frontend-Jobs und pusht `ghcr.io/till-und-scholler-ai-slop/mitbringsel-backend` und `…-web`, getaggt mit dem vollen Commit-SHA (kein `latest`). Nur dieser Job hat `packages: write`; angemeldet wird mit dem automatischen `GITHUB_TOKEN`. Der Layer-Cache liegt im GitHub-Actions-Cache (je Image ein eigener Bereich), sodass unveränderte Abhängigkeiten nicht neu gebaut werden. Da das Repo privat ist, sind auch die Images privat.
+2. **Push auf `main`, CI grün:** Der Job `images` läuft erst nach den Backend- und Frontend-Jobs und pusht `ghcr.io/till-und-scholler-ai-slop/mitbringsel-backend` und `…-web`, getaggt mit dem vollen Commit-SHA (kein `latest`). Nur dieser Job hat `packages: write`; angemeldet wird mit dem automatischen `GITHUB_TOKEN`. Der Layer-Cache liegt im GitHub-Actions-Cache (je Image ein eigener Bereich), sodass unveränderte Abhängigkeiten nicht neu gebaut werden. Die Images sind privat, obwohl das Repo öffentlich ist: Ihre Sichtbarkeit wird in den Package-Settings von GHCR festgelegt, nicht vom Repo übernommen.
 3. **Deploy Staging:** Der Job `deploy-staging` läuft nach `images` und `deploy-config` und ruft den wiederverwendbaren Workflow `.github/workflows/deploy.yml` auf (siehe [Deployment-Ablauf](#deployment-ablauf)). Läufe auf `main` werden nicht abgebrochen, damit kein Deployment mittendrin stoppt; bei PRs bricht ein neuer Push den alten Lauf weiterhin ab.
 4. **GitHub Release veröffentlicht:** Die Images des Release-Commits zusätzlich mit der Version taggen und genauso in `mitbringsel-prod` deployen. Rollback heißt: die vorherige Version deployen.
 5. **E2E-Tests** laufen zunächst nur nightly oder manuell, um die Pipeline schnell zu halten.
@@ -85,7 +85,7 @@ Secrets liegen ausschließlich in den GitHub Environments `staging` und `product
 
 1. Eingaben prüfen: Tag muss ein voller SHA sein, `DEPLOY_DIR` ein gültiger Pfad.
 2. Checkout genau dieses Commits, damit Compose-Dateien und `deploy.sh` zu den Images passen.
-3. SSH einrichten: privater Key und gepinnter Host-Key aus den Secrets, `StrictHostKeyChecking yes`. Keine fremden SSH-Actions.
+3. SSH einrichten: Host, privater Key und gepinnter Host-Key aus den Secrets, `StrictHostKeyChecking yes`. Keine fremden SSH-Actions.
 4. `docker-compose.yml`, die Override-Datei der Umgebung (falls vorhanden) und `deploy.sh` per `scp` nach `<DEPLOY_DIR>/incoming/`.
 5. Per `ssh` `deploy.sh <tag>` ausführen. Das `GITHUB_TOKEN` des Jobs (nur `packages: read`, läuft mit dem Job ab) geht per stdin mit.
 
@@ -135,11 +135,13 @@ Danach die lokale Datei `mitbringsel-deploy` löschen, sobald sie in GitHub hint
 | --- | --- | --- |
 | Secret | `SSH_PRIVATE_KEY` | Inhalt von `mitbringsel-deploy` |
 | Secret | `SSH_KNOWN_HOSTS` | Ausgabe von `ssh-keyscan` |
-| Variable | `SSH_HOST` | Hostname oder IP des VPS |
+| Secret | `SSH_HOST` | Hostname oder IP des VPS |
+| Secret | `SSH_PORT` | nur nötig, wenn nicht 22 |
 | Variable | `SSH_USER` | `deploy` |
-| Variable | `SSH_PORT` | nur nötig, wenn nicht 22 |
 | Variable | `DEPLOY_DIR` | `/opt/personal-projects/slop/mitbringsel/staging` |
 | Variable | `APP_URL` | optional, z.B. `https://mitbringsel-dev.tinowolter.com` |
+
+`SSH_HOST` und `SSH_PORT` sind nicht wirklich geheim, liegen aber trotzdem als Secret: Das Repo ist öffentlich und damit auch die Actions-Logs, und GitHub schwärzt dort nur Secrets, Variablen erscheinen im Klartext.
 
 Unter *Deployment branches and tags* nur `main` erlauben, damit kein anderer Branch an die Secrets kommt.
 
