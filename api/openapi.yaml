@@ -639,6 +639,146 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /lists/{listId}/items:
+    parameters:
+      - $ref: "#/components/parameters/ListId"
+    get:
+      operationId: listItems
+      summary: List the items of a list
+      description: Oldest first. Deleted items are left out.
+      tags: [items]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The items of the list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemList"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createItem
+      summary: Add an item to a list
+      description: |
+        Every member may do this, also in an archived list. The `id` is
+        optional: without it the server picks one. Sending the same `id` for
+        the same list again returns the stored item unchanged; an `id` that
+        belongs to another list or to a deleted item is `ITEM_ID_TAKEN`.
+      tags: [items]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItemRequest"
+      responses:
+        "201":
+          description: The item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /items/{itemId}:
+    parameters:
+      - $ref: "#/components/parameters/ItemId"
+    get:
+      operationId: getItem
+      summary: Get an item
+      tags: [items]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updateItem
+      summary: Change an item
+      description: |
+        Every member may do this. Send the fields to change; a field that is
+        left out stays as it is. `quantity`, `unit` and `note` can be set to
+        `null` to remove them; `name` and `checked` cannot be `null`. At
+        least one field is required. Checking an item records who and when.
+
+        Changes are merged per field (last write wins): the server gives
+        each REST change the newest clock, so the latest request wins.
+      tags: [items]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateItemRequest"
+      responses:
+        "200":
+          description: The item as it is stored now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Item"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteItem
+      summary: Delete an item
+      description: |
+        Every member may do this. Deleting an item that is deleted already
+        is fine and answers 204, too.
+      tags: [items]
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The item is deleted.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
   /invites/{token}:
     parameters:
       - $ref: "#/components/parameters/InviteToken"
@@ -733,6 +873,16 @@ components:
           path: github.com/google/uuid
     ListId:
       name: listId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        x-go-type: uuid.UUID
+        x-go-type-import:
+          path: github.com/google/uuid
+    ItemId:
+      name: itemId
       in: path
       required: true
       schema:
@@ -946,6 +1096,180 @@ components:
         archived:
           type: boolean
 
+    Item:
+      type: object
+      required:
+        - id
+        - listId
+        - name
+        - quantity
+        - unit
+        - note
+        - checked
+        - checkedBy
+        - checkedAt
+        - createdBy
+        - createdAt
+        - serverSeq
+        - clocks
+      properties:
+        id:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        listId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        name:
+          type: string
+        quantity:
+          type: number
+          format: double
+          nullable: true
+          description: null if the item has no quantity.
+        unit:
+          allOf:
+            - $ref: "#/components/schemas/Unit"
+          nullable: true
+          description: null if the item has no unit.
+        note:
+          type: string
+          nullable: true
+          description: null if the item has no note.
+        checked:
+          type: boolean
+        checkedBy:
+          type: string
+          format: uuid
+          nullable: true
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: |
+            The member who checked the item; null while it is not checked, or
+            if that person deleted their account.
+        checkedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: null while the item is not checked.
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: null if that person deleted their account.
+        createdAt:
+          type: string
+          format: date-time
+        serverSeq:
+          type: integer
+          format: int64
+          description: |
+            Orders changes across lists and items; clients ask for what
+            changed after the last one they saw.
+        clocks:
+          $ref: "#/components/schemas/ItemClocks"
+
+    ItemClocks:
+      type: object
+      description: |
+        The hybrid logical clock (HLC) of the latest accepted change per
+        field, `<wall>-<counter>-<node>` (docs/sync.md). Clients need them to
+        merge changes per field.
+      required: [name, quantity, unit, note, checked]
+      properties:
+        name:
+          type: string
+        quantity:
+          type: string
+        unit:
+          type: string
+        note:
+          type: string
+        checked:
+          type: string
+
+    ItemList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Item"
+
+    CreateItemRequest:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: |
+            Optional. A UUID chosen by the client (UUIDv7); the server picks
+            one if it is left out.
+        name:
+          type: string
+          description: |
+            1 to 100 characters after trimming whitespace, otherwise
+            `ITEM_NAME_INVALID`.
+        quantity:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            Above 0 and at most 100000, otherwise `ITEM_QUANTITY_INVALID`.
+        unit:
+          allOf:
+            - $ref: "#/components/schemas/Unit"
+          nullable: true
+          description: Otherwise `ITEM_UNIT_INVALID`.
+        note:
+          type: string
+          nullable: true
+          description: |
+            At most 500 characters after trimming; blank counts as no note.
+            Otherwise `ITEM_NOTE_INVALID`.
+
+    UpdateItemRequest:
+      type: object
+      description: |
+        At least one field. `quantity`, `unit` and `note` accept `null` to
+        remove the value; for `name` and `checked`, `null` is an invalid
+        request.
+      properties:
+        name:
+          type: string
+        quantity:
+          type: number
+          format: double
+          nullable: true
+        unit:
+          allOf:
+            - $ref: "#/components/schemas/Unit"
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        checked:
+          type: boolean
+
+    Unit:
+      type: string
+      description: How a quantity is measured; the frontend translates it.
+      enum: [piece, g, kg, ml, l, pack]
+
     Invite:
       type: object
       required: [id, createdAt, expiresAt, createdByName]
@@ -1105,6 +1429,12 @@ components:
         - RATE_LIMITED
         - LIST_NOT_FOUND
         - LIST_NAME_INVALID
+        - ITEM_NOT_FOUND
+        - ITEM_NAME_INVALID
+        - ITEM_QUANTITY_INVALID
+        - ITEM_UNIT_INVALID
+        - ITEM_NOTE_INVALID
+        - ITEM_ID_TAKEN
       # Go constant names; without them oapi-codegen would turn NOT_FOUND
       # into NOTFOUND.
       x-enum-varnames:
@@ -1127,3 +1457,9 @@ components:
         - RateLimited
         - ListNotFound
         - ListNameInvalid
+        - ItemNotFound
+        - ItemNameInvalid
+        - ItemQuantityInvalid
+        - ItemUnitInvalid
+        - ItemNoteInvalid
+        - ItemIDTaken

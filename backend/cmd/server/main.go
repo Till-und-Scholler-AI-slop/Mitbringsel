@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +18,7 @@ import (
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/group"
 	"mitbringsel/internal/httpapi"
+	"mitbringsel/internal/item"
 	"mitbringsel/internal/list"
 	"mitbringsel/internal/platform/db"
 	"mitbringsel/internal/platform/db/sqlcgen"
@@ -84,6 +87,12 @@ func run() error {
 	invites := group.NewInviteService(groupRepo)
 	// The group repository doubles as the list service's membership lookup.
 	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo)
+	// Items check access through the list service.
+	items := item.NewService(item.NewPostgresRepository(pool), lists)
+	itemClock, err := newItemClock()
+	if err != nil {
+		return err
+	}
 
 	// Declared with the interface type and only assigned when configured:
 	// an interface holding a nil *auth.GoogleProvider would not compare
@@ -99,14 +108,16 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Env:      cfg.Env,
-			DB:       pool,
-			Sessions: sessions,
-			Users:    users,
-			Groups:   groups,
-			Invites:  invites,
-			Lists:    lists,
-			Google:   google,
+			Env:       cfg.Env,
+			DB:        pool,
+			Sessions:  sessions,
+			Users:     users,
+			Groups:    groups,
+			Invites:   invites,
+			Lists:     lists,
+			Items:     items,
+			ItemClock: itemClock,
+			Google:    google,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
@@ -132,4 +143,19 @@ func run() error {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil
+}
+
+// newItemClock returns the clock for item changes made over REST. Its node
+// ID is random per process, so two server processes never issue the same
+// clock (docs/sync.md).
+func newItemClock() (*item.Clock, error) {
+	suffix := make([]byte, 3)
+	if _, err := rand.Read(suffix); err != nil {
+		return nil, fmt.Errorf("random node id: %w", err)
+	}
+	clock, err := item.NewClock("srv-"+hex.EncodeToString(suffix), time.Now)
+	if err != nil {
+		return nil, fmt.Errorf("create item clock: %w", err)
+	}
+	return clock, nil
 }

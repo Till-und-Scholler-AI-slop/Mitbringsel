@@ -52,7 +52,13 @@ func NewHLC(wall time.Time, counter uint16, node string) (HLC, error) {
 	if !validNode(node) {
 		return "", fmt.Errorf("%w: node must be 1 to %d characters of A-Z, a-z, 0-9, _ and -", ErrInvalidHLC, MaxNodeLength)
 	}
-	return HLC(fmt.Sprintf("%0*x-%0*x-%s", wallDigits, ms, counterDigits, counter, node)), nil
+	return formatHLC(ms, counter, node), nil
+}
+
+// formatHLC writes the parts in the fixed format. The caller has checked
+// them.
+func formatHLC(wallMs int64, counter uint16, node string) HLC {
+	return HLC(fmt.Sprintf("%0*x-%0*x-%s", wallDigits, wallMs, counterDigits, counter, node))
 }
 
 // ParseHLC checks that s is a clock in the exact format and returns it. Only

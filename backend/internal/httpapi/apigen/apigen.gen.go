@@ -11,25 +11,31 @@ import (
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeCrossOrigin      ErrorCode = "CROSS_ORIGIN_REQUEST"
-	ErrorCodeDBUnavailable    ErrorCode = "DB_UNAVAILABLE"
-	ErrorCodeForbidden        ErrorCode = "FORBIDDEN"
-	ErrorCodeGroupNameInvalid ErrorCode = "GROUP_NAME_INVALID"
-	ErrorCodeGroupNotFound    ErrorCode = "GROUP_NOT_FOUND"
-	ErrorCodeInternal         ErrorCode = "INTERNAL_ERROR"
-	ErrorCodeInvalidIdentity  ErrorCode = "INVALID_IDENTITY"
-	ErrorCodeInvalidRequest   ErrorCode = "INVALID_REQUEST"
-	ErrorCodeInvalidRole      ErrorCode = "INVALID_ROLE"
-	ErrorCodeInviteExpired    ErrorCode = "INVITE_EXPIRED"
-	ErrorCodeInviteNotFound   ErrorCode = "INVITE_NOT_FOUND"
-	ErrorCodeListNameInvalid  ErrorCode = "LIST_NAME_INVALID"
-	ErrorCodeListNotFound     ErrorCode = "LIST_NOT_FOUND"
-	ErrorCodeMethodNotAllowed ErrorCode = "METHOD_NOT_ALLOWED"
-	ErrorCodeNotFound         ErrorCode = "NOT_FOUND"
-	ErrorCodeOwnerImmutable   ErrorCode = "OWNER_IMMUTABLE"
-	ErrorCodeRateLimited      ErrorCode = "RATE_LIMITED"
-	ErrorCodeTooManyInvites   ErrorCode = "TOO_MANY_INVITES"
-	ErrorCodeUnauthenticated  ErrorCode = "UNAUTHENTICATED"
+	ErrorCodeCrossOrigin         ErrorCode = "CROSS_ORIGIN_REQUEST"
+	ErrorCodeDBUnavailable       ErrorCode = "DB_UNAVAILABLE"
+	ErrorCodeForbidden           ErrorCode = "FORBIDDEN"
+	ErrorCodeGroupNameInvalid    ErrorCode = "GROUP_NAME_INVALID"
+	ErrorCodeGroupNotFound       ErrorCode = "GROUP_NOT_FOUND"
+	ErrorCodeInternal            ErrorCode = "INTERNAL_ERROR"
+	ErrorCodeInvalidIdentity     ErrorCode = "INVALID_IDENTITY"
+	ErrorCodeInvalidRequest      ErrorCode = "INVALID_REQUEST"
+	ErrorCodeInvalidRole         ErrorCode = "INVALID_ROLE"
+	ErrorCodeInviteExpired       ErrorCode = "INVITE_EXPIRED"
+	ErrorCodeInviteNotFound      ErrorCode = "INVITE_NOT_FOUND"
+	ErrorCodeItemIDTaken         ErrorCode = "ITEM_ID_TAKEN"
+	ErrorCodeItemNameInvalid     ErrorCode = "ITEM_NAME_INVALID"
+	ErrorCodeItemNotFound        ErrorCode = "ITEM_NOT_FOUND"
+	ErrorCodeItemNoteInvalid     ErrorCode = "ITEM_NOTE_INVALID"
+	ErrorCodeItemQuantityInvalid ErrorCode = "ITEM_QUANTITY_INVALID"
+	ErrorCodeItemUnitInvalid     ErrorCode = "ITEM_UNIT_INVALID"
+	ErrorCodeListNameInvalid     ErrorCode = "LIST_NAME_INVALID"
+	ErrorCodeListNotFound        ErrorCode = "LIST_NOT_FOUND"
+	ErrorCodeMethodNotAllowed    ErrorCode = "METHOD_NOT_ALLOWED"
+	ErrorCodeNotFound            ErrorCode = "NOT_FOUND"
+	ErrorCodeOwnerImmutable      ErrorCode = "OWNER_IMMUTABLE"
+	ErrorCodeRateLimited         ErrorCode = "RATE_LIMITED"
+	ErrorCodeTooManyInvites      ErrorCode = "TOO_MANY_INVITES"
+	ErrorCodeUnauthenticated     ErrorCode = "UNAUTHENTICATED"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -56,6 +62,18 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeInviteExpired:
 		return true
 	case ErrorCodeInviteNotFound:
+		return true
+	case ErrorCodeItemIDTaken:
+		return true
+	case ErrorCodeItemNameInvalid:
+		return true
+	case ErrorCodeItemNotFound:
+		return true
+	case ErrorCodeItemNoteInvalid:
+		return true
+	case ErrorCodeItemQuantityInvalid:
+		return true
+	case ErrorCodeItemUnitInvalid:
 		return true
 	case ErrorCodeListNameInvalid:
 		return true
@@ -151,6 +169,57 @@ func (e Theme) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Defines values for Unit.
+const (
+	UnitG     Unit = "g"
+	UnitKg    Unit = "kg"
+	UnitL     Unit = "l"
+	UnitMl    Unit = "ml"
+	UnitPack  Unit = "pack"
+	UnitPiece Unit = "piece"
+)
+
+// Valid indicates whether the value is a known member of the Unit enum.
+func (e Unit) Valid() bool {
+	switch e {
+	case UnitG:
+		return true
+	case UnitKg:
+		return true
+	case UnitL:
+		return true
+	case UnitMl:
+		return true
+	case UnitPack:
+		return true
+	case UnitPiece:
+		return true
+	default:
+		return false
+	}
+}
+
+// CreateItemRequest defines model for CreateItemRequest.
+type CreateItemRequest struct {
+	// ID Optional. A UUID chosen by the client (UUIDv7); the server picks
+	// one if it is left out.
+	ID *uuid.UUID `json:"id,omitempty"`
+
+	// Name 1 to 100 characters after trimming whitespace, otherwise
+	// `ITEM_NAME_INVALID`.
+	Name string `json:"name"`
+
+	// Note At most 500 characters after trimming; blank counts as no note.
+	// Otherwise `ITEM_NOTE_INVALID`.
+	Note *string `json:"note,omitempty"`
+
+	// Quantity Above 0 and at most 100000, otherwise `ITEM_QUANTITY_INVALID`.
+	Quantity *float64 `json:"quantity,omitempty"`
+
+	// Unit Otherwise `ITEM_UNIT_INVALID`.
+	Unit *Unit `json:"unit,omitempty"`
 }
 
 // DevLoginRequest defines model for DevLoginRequest.
@@ -279,6 +348,59 @@ type InvitePreview struct {
 	Members []InviteMember `json:"members"`
 }
 
+// Item defines model for Item.
+type Item struct {
+	Checked bool `json:"checked"`
+
+	// CheckedAt null while the item is not checked.
+	CheckedAt *time.Time `json:"checkedAt"`
+
+	// CheckedBy The member who checked the item; null while it is not checked, or
+	// if that person deleted their account.
+	CheckedBy *uuid.UUID `json:"checkedBy"`
+
+	// Clocks The hybrid logical clock (HLC) of the latest accepted change per
+	// field, `<wall>-<counter>-<node>` (docs/sync.md). Clients need them to
+	// merge changes per field.
+	Clocks    ItemClocks `json:"clocks"`
+	CreatedAt time.Time  `json:"createdAt"`
+
+	// CreatedBy null if that person deleted their account.
+	CreatedBy *uuid.UUID `json:"createdBy"`
+	ID        uuid.UUID  `json:"id"`
+	ListID    uuid.UUID  `json:"listId"`
+	Name      string     `json:"name"`
+
+	// Note null if the item has no note.
+	Note *string `json:"note"`
+
+	// Quantity null if the item has no quantity.
+	Quantity *float64 `json:"quantity"`
+
+	// ServerSeq Orders changes across lists and items; clients ask for what
+	// changed after the last one they saw.
+	ServerSeq int64 `json:"serverSeq"`
+
+	// Unit null if the item has no unit.
+	Unit *Unit `json:"unit"`
+}
+
+// ItemClocks The hybrid logical clock (HLC) of the latest accepted change per
+// field, `<wall>-<counter>-<node>` (docs/sync.md). Clients need them to
+// merge changes per field.
+type ItemClocks struct {
+	Checked  string `json:"checked"`
+	Name     string `json:"name"`
+	Note     string `json:"note"`
+	Quantity string `json:"quantity"`
+	Unit     string `json:"unit"`
+}
+
+// ItemList defines model for ItemList.
+type ItemList struct {
+	Items []Item `json:"items"`
+}
+
 // List defines model for List.
 type List struct {
 	// ArchivedAt null for an active list.
@@ -339,11 +461,28 @@ type SetRoleRequest struct {
 // Theme defines model for Theme.
 type Theme string
 
+// Unit How a quantity is measured; the frontend translates it.
+type Unit string
+
+// UpdateItemRequest At least one field. `quantity`, `unit` and `note` accept `null` to
+// remove the value; for `name` and `checked`, `null` is an invalid
+// request.
+type UpdateItemRequest struct {
+	Checked  *bool    `json:"checked,omitempty"`
+	Name     *string  `json:"name,omitempty"`
+	Note     *string  `json:"note,omitempty"`
+	Quantity *float64 `json:"quantity,omitempty"`
+	Unit     *Unit    `json:"unit,omitempty"`
+}
+
 // GroupID defines model for GroupId.
 type GroupID = uuid.UUID
 
 // InviteToken defines model for InviteToken.
 type InviteToken = string
+
+// ItemID defines model for ItemId.
+type ItemID = uuid.UUID
 
 // ListID defines model for ListId.
 type ListID = uuid.UUID
@@ -392,8 +531,14 @@ type CreateListJSONRequestBody = ListNameRequest
 // SetGroupMemberRoleJSONRequestBody defines body for SetGroupMemberRole for application/json ContentType.
 type SetGroupMemberRoleJSONRequestBody = SetRoleRequest
 
+// UpdateItemJSONRequestBody defines body for UpdateItem for application/json ContentType.
+type UpdateItemJSONRequestBody = UpdateItemRequest
+
 // UpdateListJSONRequestBody defines body for UpdateList for application/json ContentType.
 type UpdateListJSONRequestBody = ListNameRequest
 
 // SetListArchivedJSONRequestBody defines body for SetListArchived for application/json ContentType.
 type SetListArchivedJSONRequestBody = SetListArchivedRequest
+
+// CreateItemJSONRequestBody defines body for CreateItem for application/json ContentType.
+type CreateItemJSONRequestBody = CreateItemRequest

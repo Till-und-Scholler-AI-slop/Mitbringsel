@@ -367,6 +367,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/lists/{listId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: components["parameters"]["ListId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the items of a list
+         * @description Oldest first. Deleted items are left out.
+         */
+        get: operations["listItems"];
+        put?: never;
+        /**
+         * Add an item to a list
+         * @description Every member may do this, also in an archived list. The `id` is
+         *     optional: without it the server picks one. Sending the same `id` for
+         *     the same list again returns the stored item unchanged; an `id` that
+         *     belongs to another list or to a deleted item is `ITEM_ID_TAKEN`.
+         */
+        post: operations["createItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        /** Get an item */
+        get: operations["getItem"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an item
+         * @description Every member may do this. Deleting an item that is deleted already
+         *     is fine and answers 204, too.
+         */
+        delete: operations["deleteItem"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an item
+         * @description Every member may do this. Send the fields to change; a field that is
+         *     left out stays as it is. `quantity`, `unit` and `note` can be set to
+         *     `null` to remove them; `name` and `checked` cannot be `null`. At
+         *     least one field is required. Checking an item records who and when.
+         *
+         *     Changes are merged per field (last write wins): the server gives
+         *     each REST change the newest clock, so the latest request wins.
+         */
+        patch: operations["updateItem"];
+        trace?: never;
+    };
     "/invites/{token}": {
         parameters: {
             query?: never;
@@ -511,6 +574,106 @@ export interface components {
         SetListArchivedRequest: {
             archived: boolean;
         };
+        Item: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            listId: string;
+            name: string;
+            /**
+             * Format: double
+             * @description null if the item has no quantity.
+             */
+            quantity: number | null;
+            /** @description null if the item has no unit. */
+            unit: components["schemas"]["Unit"] | null;
+            /** @description null if the item has no note. */
+            note: string | null;
+            checked: boolean;
+            /**
+             * Format: uuid
+             * @description The member who checked the item; null while it is not checked, or
+             *     if that person deleted their account.
+             */
+            checkedBy: string | null;
+            /**
+             * Format: date-time
+             * @description null while the item is not checked.
+             */
+            checkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description null if that person deleted their account.
+             */
+            createdBy: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: int64
+             * @description Orders changes across lists and items; clients ask for what
+             *     changed after the last one they saw.
+             */
+            serverSeq: number;
+            clocks: components["schemas"]["ItemClocks"];
+        };
+        /**
+         * @description The hybrid logical clock (HLC) of the latest accepted change per
+         *     field, `<wall>-<counter>-<node>` (docs/sync.md). Clients need them to
+         *     merge changes per field.
+         */
+        ItemClocks: {
+            name: string;
+            quantity: string;
+            unit: string;
+            note: string;
+            checked: string;
+        };
+        ItemList: {
+            items: components["schemas"]["Item"][];
+        };
+        CreateItemRequest: {
+            /**
+             * Format: uuid
+             * @description Optional. A UUID chosen by the client (UUIDv7); the server picks
+             *     one if it is left out.
+             */
+            id?: string;
+            /**
+             * @description 1 to 100 characters after trimming whitespace, otherwise
+             *     `ITEM_NAME_INVALID`.
+             */
+            name: string;
+            /**
+             * Format: double
+             * @description Above 0 and at most 100000, otherwise `ITEM_QUANTITY_INVALID`.
+             */
+            quantity?: number | null;
+            /** @description Otherwise `ITEM_UNIT_INVALID`. */
+            unit?: components["schemas"]["Unit"] | null;
+            /**
+             * @description At most 500 characters after trimming; blank counts as no note.
+             *     Otherwise `ITEM_NOTE_INVALID`.
+             */
+            note?: string | null;
+        };
+        /**
+         * @description At least one field. `quantity`, `unit` and `note` accept `null` to
+         *     remove the value; for `name` and `checked`, `null` is an invalid
+         *     request.
+         */
+        UpdateItemRequest: {
+            name?: string;
+            /** Format: double */
+            quantity?: number | null;
+            unit?: components["schemas"]["Unit"] | null;
+            note?: string | null;
+            checked?: boolean;
+        };
+        /**
+         * @description How a quantity is measured; the frontend translates it.
+         * @enum {string}
+         */
+        Unit: "piece" | "g" | "kg" | "ml" | "l" | "pack";
         Invite: {
             /** Format: uuid */
             id: string;
@@ -575,7 +738,7 @@ export interface components {
          * @description Machine-readable error; the frontend translates it.
          * @enum {string}
          */
-        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID";
+        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID" | "ITEM_NOT_FOUND" | "ITEM_NAME_INVALID" | "ITEM_QUANTITY_INVALID" | "ITEM_UNIT_INVALID" | "ITEM_NOTE_INVALID" | "ITEM_ID_TAKEN";
     };
     responses: {
         /** @description The request failed; `error.code` says why. */
@@ -602,6 +765,7 @@ export interface components {
         GroupId: string;
         UserId: string;
         ListId: string;
+        ItemId: string;
         /** @description The secret from the invite link. */
         InviteToken: string;
     };
@@ -1199,6 +1363,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["List"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    listItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: components["parameters"]["ListId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The items of the list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemList"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    createItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: components["parameters"]["ListId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateItemRequest"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    getItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    deleteItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item is deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    updateItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateItemRequest"];
+            };
+        };
+        responses: {
+            /** @description The item as it is stored now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"];
                 };
             };
             400: components["responses"]["Error"];
