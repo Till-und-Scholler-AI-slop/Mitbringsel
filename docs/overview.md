@@ -35,6 +35,8 @@ Die Hierarchie ist: Nutzer gehören zu Gruppen, Gruppen haben mehrere Listen, Li
 
 - Mehrere Listen pro Gruppe (z.B. "Supermarkt", "Drogerie", "Baumarkt")
 - Listen erstellen, umbenennen, archivieren, löschen
+- Alle Mitglieder erstellen, benennen um und archivieren Listen; löschen (samt aller Artikel) dürfen nur Owner und Admins
+- Listennamen haben höchstens 50 Zeichen; doppelte Namen innerhalb einer Gruppe sind erlaubt
 
 **Artikel**
 

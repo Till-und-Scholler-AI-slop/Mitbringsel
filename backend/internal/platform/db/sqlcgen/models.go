@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Group struct {
@@ -33,6 +34,33 @@ type GroupMember struct {
 	UserID   uuid.UUID
 	Role     string
 	JoinedAt time.Time
+}
+
+type Item struct {
+	ID          uuid.UUID
+	ListID      uuid.UUID
+	Name        string
+	Quantity    pgtype.Numeric
+	Unit        *string
+	Note        *string
+	Checked     bool
+	CheckedBy   *uuid.UUID
+	CheckedAt   *time.Time
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+	DeletedAt   *time.Time
+	FieldClocks []byte
+	ServerSeq   int64
+}
+
+type List struct {
+	ID         uuid.UUID
+	GroupID    uuid.UUID
+	Name       string
+	ArchivedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	ServerSeq  int64
 }
 
 type Session struct {
