@@ -31,7 +31,10 @@ function group(name: string, memberCount: number): Group {
 function mountCard(g: Group) {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/groups/:groupId/settings', name: 'group-settings', component: {} }],
+    routes: [
+      { path: '/groups/:groupId', name: 'group', component: {} },
+      { path: '/groups/:groupId/settings', name: 'group-settings', component: {} },
+    ],
   })
   return mount(GroupCard, {
     props: { group: g },
@@ -53,6 +56,12 @@ describe('GroupCard', () => {
     [6, '6 members'],
   ])('says how many members there are (%i)', (count, text) => {
     expect(mountCard(group('WG', count)).get('.members').text()).toBe(text)
+  })
+
+  it('links the name to the household', () => {
+    const link = mountCard(group('WG Kaiserstraße', 2)).get('h3 a')
+
+    expect(link.attributes('href')).toBe('/groups/g1')
   })
 
   it('links to the settings of the household', () => {

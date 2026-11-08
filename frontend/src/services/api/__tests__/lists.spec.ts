@@ -18,7 +18,10 @@ function list(id: string, name: string): List {
 
 // A new Response per call: the body of a Response can only be read once.
 function stubFetch(makeResponse: () => Response) {
-  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(makeResponse())))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(makeResponse())),
+  )
 }
 
 afterEach(() => {

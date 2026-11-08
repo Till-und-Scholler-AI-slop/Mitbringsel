@@ -61,12 +61,16 @@ onMounted(() => {
 function goHome() {
   return router.push({ name: 'home' })
 }
+
+function goBack() {
+  return router.push({ name: 'group', params: { groupId: props.groupId } })
+}
 </script>
 
 <template>
   <div class="settings">
     <header class="bar">
-      <BaseIconButton icon="arrowLeft" :label="t('settings.back')" @click="goHome" />
+      <BaseIconButton icon="arrowLeft" :label="t('settings.back')" @click="goBack" />
       <h1 class="title">{{ t('settings.title') }}</h1>
     </header>
 
