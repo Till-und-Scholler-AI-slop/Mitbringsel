@@ -153,6 +153,183 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /groups:
+    get:
+      operationId: listGroups
+      summary: List the groups of the logged-in user
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: All groups the user is a member of, with their members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Group"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createGroup
+      summary: Create a group
+      description: The logged-in user becomes its only member and owner.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupNameRequest"
+      responses:
+        "201":
+          description: The new group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /groups/{groupId}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      operationId: getGroup
+      summary: Get one group
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: renameGroup
+      summary: Rename a group
+      description: Owners only.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupNameRequest"
+      responses:
+        "200":
+          description: The renamed group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteGroup
+      summary: Delete a group
+      description: Owners only. Removes the group with all its members.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /groups/{groupId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      operationId: setMemberRole
+      summary: Change the role of a member
+      description: |
+        Owners only. The last owner cannot step down (`409 LAST_OWNER`).
+        Setting the role a member already has is not an error.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetMemberRoleRequest"
+      responses:
+        "204":
+          description: The role is set.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: removeMember
+      summary: Remove a member, or leave the group
+      description: |
+        Everyone may remove themselves (leave the group); removing someone
+        else needs an owner. The last owner cannot be removed
+        (`409 LAST_OWNER`): someone else has to become owner first, or the
+        group is deleted.
+      tags: [groups]
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The member is no longer in the group.
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -160,6 +337,20 @@ components:
       in: cookie
       # Staging and production; local development uses "session".
       name: __Host-session
+
+  parameters:
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/ID"
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/ID"
 
   responses:
     Error:
@@ -170,6 +361,15 @@ components:
             $ref: "#/components/schemas/Error"
 
   schemas:
+    ID:
+      type: string
+      format: uuid
+      # The Go side uses google/uuid like the rest of the backend,
+      # instead of oapi-codegen's own UUID type.
+      x-go-type: uuid.UUID
+      x-go-type-import:
+        path: github.com/google/uuid
+
     Health:
       type: object
       required: [status]
@@ -211,6 +411,73 @@ components:
       type: string
       enum: [light, dark, system]
 
+    Group:
+      type: object
+      description: A group as one of its members sees it.
+      required: [id, name, role, members, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/ID"
+        name:
+          type: string
+        role:
+          allOf:
+            - $ref: "#/components/schemas/GroupRole"
+          description: The role of the logged-in user in this group.
+        members:
+          type: array
+          description: Everyone in the group, including the logged-in user.
+          items:
+            $ref: "#/components/schemas/GroupMember"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    GroupMember:
+      type: object
+      required: [userId, displayName, avatarUrl, role, joinedAt]
+      properties:
+        userId:
+          $ref: "#/components/schemas/ID"
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          description: null if the user has no avatar.
+        role:
+          $ref: "#/components/schemas/GroupRole"
+        joinedAt:
+          type: string
+          format: date-time
+
+    GroupRole:
+      type: string
+      description: |
+        `owner` manages the group (rename, delete, members, roles); `member`
+        uses its lists.
+      enum: [owner, member]
+
+    GroupNameRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: |
+            1 to 100 characters after trimming; otherwise
+            `400 GROUP_NAME_INVALID`.
+
+    SetMemberRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/GroupRole"
+
     DevLoginRequest:
       type: object
       required: [email]
@@ -250,6 +517,9 @@ components:
         - CROSS_ORIGIN_REQUEST
         - INVALID_REQUEST
         - INVALID_IDENTITY
+        - GROUP_OWNER_REQUIRED
+        - GROUP_NAME_INVALID
+        - LAST_OWNER
       # Go constant names; without them oapi-codegen would turn NOT_FOUND
       # into NOTFOUND.
       x-enum-varnames:
@@ -261,3 +531,6 @@ components:
         - CrossOrigin
         - InvalidRequest
         - InvalidIdentity
+        - GroupOwnerRequired
+        - GroupNameInvalid
+        - LastOwner

@@ -4,19 +4,24 @@
 package apigen
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeCrossOrigin      ErrorCode = "CROSS_ORIGIN_REQUEST"
-	ErrorCodeDBUnavailable    ErrorCode = "DB_UNAVAILABLE"
-	ErrorCodeInternal         ErrorCode = "INTERNAL_ERROR"
-	ErrorCodeInvalidIdentity  ErrorCode = "INVALID_IDENTITY"
-	ErrorCodeInvalidRequest   ErrorCode = "INVALID_REQUEST"
-	ErrorCodeMethodNotAllowed ErrorCode = "METHOD_NOT_ALLOWED"
-	ErrorCodeNotFound         ErrorCode = "NOT_FOUND"
-	ErrorCodeUnauthenticated  ErrorCode = "UNAUTHENTICATED"
+	ErrorCodeCrossOrigin        ErrorCode = "CROSS_ORIGIN_REQUEST"
+	ErrorCodeDBUnavailable      ErrorCode = "DB_UNAVAILABLE"
+	ErrorCodeGroupNameInvalid   ErrorCode = "GROUP_NAME_INVALID"
+	ErrorCodeGroupOwnerRequired ErrorCode = "GROUP_OWNER_REQUIRED"
+	ErrorCodeInternal           ErrorCode = "INTERNAL_ERROR"
+	ErrorCodeInvalidIdentity    ErrorCode = "INVALID_IDENTITY"
+	ErrorCodeInvalidRequest     ErrorCode = "INVALID_REQUEST"
+	ErrorCodeLastOwner          ErrorCode = "LAST_OWNER"
+	ErrorCodeMethodNotAllowed   ErrorCode = "METHOD_NOT_ALLOWED"
+	ErrorCodeNotFound           ErrorCode = "NOT_FOUND"
+	ErrorCodeUnauthenticated    ErrorCode = "UNAUTHENTICATED"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -26,17 +31,41 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeDBUnavailable:
 		return true
+	case ErrorCodeGroupNameInvalid:
+		return true
+	case ErrorCodeGroupOwnerRequired:
+		return true
 	case ErrorCodeInternal:
 		return true
 	case ErrorCodeInvalidIdentity:
 		return true
 	case ErrorCodeInvalidRequest:
 		return true
+	case ErrorCodeLastOwner:
+		return true
 	case ErrorCodeMethodNotAllowed:
 		return true
 	case ErrorCodeNotFound:
 		return true
 	case ErrorCodeUnauthenticated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GroupRole.
+const (
+	GroupRoleMember GroupRole = "member"
+	GroupRoleOwner  GroupRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the GroupRole enum.
+func (e GroupRole) Valid() bool {
+	switch e {
+	case GroupRoleMember:
+		return true
+	case GroupRoleOwner:
 		return true
 	default:
 		return false
@@ -119,6 +148,44 @@ type ErrorBody struct {
 // ErrorCode Machine-readable error; the frontend translates it.
 type ErrorCode string
 
+// Group A group as one of its members sees it.
+type Group struct {
+	CreatedAt time.Time `json:"createdAt"`
+	ID        ID        `json:"id"`
+
+	// Members Everyone in the group, including the logged-in user.
+	Members []GroupMember `json:"members"`
+	Name    string        `json:"name"`
+
+	// Role The role of the logged-in user in this group.
+	Role      GroupRole `json:"role"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// GroupMember defines model for GroupMember.
+type GroupMember struct {
+	// AvatarURL null if the user has no avatar.
+	AvatarURL   *string   `json:"avatarUrl"`
+	DisplayName string    `json:"displayName"`
+	JoinedAt    time.Time `json:"joinedAt"`
+
+	// Role `owner` manages the group (rename, delete, members, roles); `member`
+	// uses its lists.
+	Role   GroupRole `json:"role"`
+	UserID ID        `json:"userId"`
+}
+
+// GroupNameRequest defines model for GroupNameRequest.
+type GroupNameRequest struct {
+	// Name 1 to 100 characters after trimming; otherwise
+	// `400 GROUP_NAME_INVALID`.
+	Name string `json:"name"`
+}
+
+// GroupRole `owner` manages the group (rename, delete, members, roles); `member`
+// uses its lists.
+type GroupRole string
+
 // Health defines model for Health.
 type Health struct {
 	Status HealthStatus `json:"status"`
@@ -126,6 +193,9 @@ type Health struct {
 
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
+
+// ID defines model for ID.
+type ID = uuid.UUID
 
 // Locale defines model for Locale.
 type Locale string
@@ -141,8 +211,21 @@ type Me struct {
 	Theme       Theme     `json:"theme"`
 }
 
+// SetMemberRoleRequest defines model for SetMemberRoleRequest.
+type SetMemberRoleRequest struct {
+	// Role `owner` manages the group (rename, delete, members, roles); `member`
+	// uses its lists.
+	Role GroupRole `json:"role"`
+}
+
 // Theme defines model for Theme.
 type Theme string
+
+// GroupID defines model for GroupId.
+type GroupID = ID
+
+// UserID defines model for UserId.
+type UserID = ID
 
 // GoogleCallbackParams defines parameters for GoogleCallback.
 type GoogleCallbackParams struct {
@@ -155,3 +238,12 @@ type GoogleCallbackParams struct {
 
 // DevLoginJSONRequestBody defines body for DevLogin for application/json ContentType.
 type DevLoginJSONRequestBody = DevLoginRequest
+
+// CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
+type CreateGroupJSONRequestBody = GroupNameRequest
+
+// RenameGroupJSONRequestBody defines body for RenameGroup for application/json ContentType.
+type RenameGroupJSONRequestBody = GroupNameRequest
+
+// SetMemberRoleJSONRequestBody defines body for SetMemberRole for application/json ContentType.
+type SetMemberRoleJSONRequestBody = SetMemberRoleRequest
