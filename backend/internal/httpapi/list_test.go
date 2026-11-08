@@ -21,7 +21,7 @@ import (
 
 var (
 	testListID = uuid.MustParse("0190a8c4-0000-7000-8000-0000000000b1")
-	listTime   = time.Date(2026, time.March, 2, 9, 0, 0, 0, time.UTC)
+	listTime   = time.Date(2026, time.March, 2, 9, 0, 0, 0, testZone)
 )
 
 // fakeLists returns the configured lists or error for every method and
@@ -171,6 +171,7 @@ func TestListResponses(t *testing.T) {
 			if strings.Join(lists.calls, "|") != strings.Join(tt.wantCalls, "|") {
 				t.Errorf("calls = %q, want %q", lists.calls, tt.wantCalls)
 			}
+			requireUTCTimestamps(t, rec.Body.Bytes())
 			var got apigen.List
 			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 				t.Fatalf("decode body %s: %v", rec.Body, err)
@@ -214,6 +215,7 @@ func TestListLists(t *testing.T) {
 
 		rec := listRequest(t, lists, http.MethodGet, groupListsPathFor(), "")
 
+		requireUTCTimestamps(t, rec.Body.Bytes())
 		var got apigen.ListList
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode body %s: %v", rec.Body, err)

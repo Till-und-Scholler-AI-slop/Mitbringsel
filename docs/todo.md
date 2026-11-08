@@ -15,7 +15,6 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 - [ ] **Owner-Übergabe:** Der Owner kann die Gruppe nur löschen, nicht übergeben (siehe [Überblick](overview.md)). Nachrüsten, falls sich das im Alltag als Lücke zeigt.
 - [ ] **Limit für Gruppen pro Nutzer:** `POST /api/v1/groups` legt beliebig viele Gruppen an; jeder angemeldete Nutzer könnte die Tabelle füllen. Vor dem öffentlichen Start eine Obergrenze (z.B. pro Nutzer und Mitglieder pro Gruppe) im Service festlegen, mit eigenem Fehlercode.
 - [ ] **Limit für Listen pro Gruppe:** `Service.Create` im Paket `list` legt beliebig viele Listen an. Zusammen mit dem Gruppen-Limit eine Obergrenze im Service festlegen, mit eigenem Fehlercode.
-- [ ] **Zeitstempel der API in UTC:** Die Antworten enthalten die Zeitzone der Datenbankverbindung (z.B. `+01:00`), nicht `Z` (bestätigt am lokalen Server, bei Gruppen und Listen). Gültiges RFC 3339, aber vom Server-Setup abhängig. In den Mappern (`newGroupResponse`, `newListResponse`) `.UTC()` aufrufen, wenn das Frontend Zeiten vergleicht oder anzeigt.
 - [ ] **Abgelaufene Einladungen aufräumen:** Abgelaufene und widerrufene Zeilen in `group_invites` werden nur ignoriert, nie gelöscht. Zusammen mit dem Aufräum-Job für Sessions und `processed_ops` (Phase 5) umsetzen.
 
 ## Start

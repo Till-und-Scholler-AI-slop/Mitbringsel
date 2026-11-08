@@ -31,8 +31,8 @@ type InviteService interface {
 func newInviteResponse(i group.Invite) apigen.Invite {
 	return apigen.Invite{
 		ID:            i.ID,
-		CreatedAt:     i.CreatedAt,
-		ExpiresAt:     i.ExpiresAt,
+		CreatedAt:     i.CreatedAt.UTC(),
+		ExpiresAt:     i.ExpiresAt.UTC(),
 		CreatedByName: nullIfEmpty(i.CreatedByName),
 	}
 }
@@ -46,7 +46,7 @@ func newInvitePreviewResponse(p group.InvitePreview) apigen.InvitePreview {
 		GroupName:          p.GroupName,
 		InvitedByName:      nullIfEmpty(p.InvitedBy),
 		InvitedByAvatarURL: nullIfEmpty(p.InvitedByAvatarURL),
-		ExpiresAt:          p.ExpiresAt,
+		ExpiresAt:          p.ExpiresAt.UTC(),
 		MemberCount:        p.MemberCount,
 		Members:            members,
 	}
@@ -101,8 +101,8 @@ func createInviteHandler(invites InviteService) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusCreated, apigen.InviteCreated{
 			ID:            invite.ID,
-			CreatedAt:     invite.CreatedAt,
-			ExpiresAt:     invite.ExpiresAt,
+			CreatedAt:     invite.CreatedAt.UTC(),
+			ExpiresAt:     invite.ExpiresAt.UTC(),
 			CreatedByName: nullIfEmpty(invite.CreatedByName),
 			Token:         token,
 		})

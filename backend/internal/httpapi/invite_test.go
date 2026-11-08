@@ -128,6 +128,7 @@ func TestCreateInvite(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Errorf("Cache-Control = %q, want no-store: the body holds a secret", got)
 	}
+	requireUTCTimestamps(t, rec.Body.Bytes())
 	var got apigen.InviteCreated
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode body %s: %v", rec.Body, err)
@@ -164,6 +165,7 @@ func TestListInvites(t *testing.T) {
 		if strings.Contains(strings.ToLower(rec.Body.String()), "token") {
 			t.Errorf("list contains a token: %s", rec.Body)
 		}
+		requireUTCTimestamps(t, rec.Body.Bytes())
 		var got apigen.InviteList
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode body %s: %v", rec.Body, err)
@@ -199,6 +201,7 @@ func TestPreviewInvite(t *testing.T) {
 		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 			t.Errorf("Cache-Control = %q, want no-store", got)
 		}
+		requireUTCTimestamps(t, rec.Body.Bytes())
 		var got apigen.InvitePreview
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode body %s: %v", rec.Body, err)

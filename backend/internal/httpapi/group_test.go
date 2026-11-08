@@ -24,7 +24,7 @@ const groupToken = "GROUP-TOKEN"
 var (
 	testGroupID  = uuid.MustParse("0190a8c4-0000-7000-8000-0000000000a1")
 	testMemberID = uuid.MustParse("0190a8c4-0000-7000-8000-000000000002")
-	groupTime    = time.Date(2026, time.March, 1, 10, 0, 0, 0, time.UTC)
+	groupTime    = time.Date(2026, time.March, 1, 10, 0, 0, 0, testZone)
 )
 
 // fakeGroups returns the configured details or error for every method and
@@ -168,6 +168,7 @@ func TestGroupResponses(t *testing.T) {
 			if strings.Join(groups.calls, "|") != strings.Join(tt.wantCalls, "|") {
 				t.Errorf("calls = %q, want %q", groups.calls, tt.wantCalls)
 			}
+			requireUTCTimestamps(t, rec.Body.Bytes())
 			var got apigen.Group
 			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 				t.Fatalf("decode body %s: %v", rec.Body, err)
@@ -205,6 +206,7 @@ func TestListGroups(t *testing.T) {
 
 		rec := groupRequest(t, groups, http.MethodGet, groupsPath, "")
 
+		requireUTCTimestamps(t, rec.Body.Bytes())
 		var got apigen.GroupList
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode body %s: %v", rec.Body, err)

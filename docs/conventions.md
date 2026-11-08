@@ -16,6 +16,7 @@ Best Practices und SOLID gelten für jeden Schritt. Claude weist aktiv darauf hi
 - Kein `any` in TypeScript; Typen für alle API- und WebSocket-Nachrichten.
 - Eingaben werden im Backend immer validiert, auch wenn das Frontend schon validiert (z.B. Name 1 bis 200 Zeichen, Notiz bis 1000 Zeichen).
 - Fehler werden nie still geschluckt: geloggt, an den Nutzer übersetzt gemeldet, oder bewusst kommentiert ignoriert.
+- Zeitstempel in der API sind UTC (`…Z`). Jeder Mapper in `httpapi` ruft `.UTC()` auf, weil pgx Zeiten in der lokalen Zone des Servers liefert. Handler-Tests nutzen Fixtures in `testZone` und prüfen mit `requireUTCTimestamps`, damit ein vergessener Aufruf auffällt.
 - Konventionelle Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
 - Migrationen sind abwärtskompatibel: Die vorherige Version des Backends muss mit dem neuen Schema noch laufen, weil ein fehlgeschlagenes Deployment nur die Images zurückrollt, nicht die Datenbank. Spalten und Tabellen also erst hinzufügen und erst in einem späteren Release entfernen oder umbenennen.
 - Generierter Code (sqlc unter `internal/platform/db/sqlcgen`, API-Typen unter `internal/httpapi/apigen` und `frontend/src/types/openapi.gen.ts`) wird eingecheckt und nie von Hand bearbeitet. Nach Änderungen an `db/queries`, `db/migrations` oder `api/openapi.yaml` `make generate` ausführen; die CI prüft, ob der Stand aktuell ist.
