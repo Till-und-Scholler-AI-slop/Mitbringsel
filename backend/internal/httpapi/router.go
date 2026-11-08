@@ -36,6 +36,7 @@ type Deps struct {
 	DB       Pinger
 	Sessions SessionManager
 	Users    UserService
+	Groups   GroupService
 	// Google is nil if the Google login is not configured, which only
 	// development allows; its routes then answer 404.
 	Google GoogleLogin
@@ -68,6 +69,9 @@ func NewRouter(deps Deps) http.Handler {
 
 	r.handle(http.MethodGet, HealthPath, healthHandler(deps.DB))
 	r.handle(http.MethodGet, mePath, protect(meHandler(deps.Users)))
+	r.handle(http.MethodGet, groupsPath, protect(listGroupsHandler(deps.Groups)))
+	r.handle(http.MethodPost, groupsPath, protect(createGroupHandler(deps.Groups)))
+	r.handle(http.MethodGet, groupPath, protect(getGroupHandler(deps.Groups)))
 	// Not behind requireUser: logging out must work with an expired
 	// session, too.
 	r.handle(http.MethodPost, logoutPath, logoutHandler(deps.Sessions, deps.Env))
