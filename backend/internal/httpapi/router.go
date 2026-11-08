@@ -41,20 +41,26 @@ type Deps struct {
 	Google GoogleLogin
 }
 
-// router wraps http.ServeMux and remembers which methods each path allows.
-// The mux answers unknown paths and wrong methods with plain text; knowing
-// the allowed methods lets us answer both in our JSON error format instead.
+// probeMethods are the methods the fallback tries to find out which ones a
+// path allows. The order is the order of the Allow header.
+var probeMethods = []string{
+	http.MethodGet,
+	http.MethodPost,
+	http.MethodPut,
+	http.MethodPatch,
+	http.MethodDelete,
+}
+
+// router wraps http.ServeMux. The mux answers unknown paths and wrong
+// methods with plain text; the fallback below answers both in our JSON error
+// format instead.
 type router struct {
-	mux     *http.ServeMux
-	methods map[string][]string
+	mux *http.ServeMux
 }
 
 // NewRouter builds the HTTP handler with all API routes registered.
 func NewRouter(deps Deps) http.Handler {
-	r := &router{
-		mux:     http.NewServeMux(),
-		methods: make(map[string][]string),
-	}
+	r := &router{mux: http.NewServeMux()}
 
 	// protect puts requireUser in front of a handler: only requests with a
 	// valid session reach it.
@@ -90,16 +96,34 @@ func NewRouter(deps Deps) http.Handler {
 	return csrf.Handler(r.mux)
 }
 
+// handle registers a handler for one method and path. The path may contain
+// wildcards like "/groups/{groupId}".
 func (r *router) handle(method, path string, h http.HandlerFunc) {
 	r.mux.HandleFunc(method+" "+path, h)
-	r.methods[path] = append(r.methods[path], method)
 }
 
 func (r *router) fallback(w http.ResponseWriter, req *http.Request) {
-	if allowed, ok := r.methods[req.URL.Path]; ok {
+	if allowed := r.allowedMethods(req); len(allowed) > 0 {
 		w.Header().Set("Allow", strings.Join(allowed, ", "))
 		writeError(w, http.StatusMethodNotAllowed, apigen.ErrorCodeMethodNotAllowed)
 		return
 	}
 	writeError(w, http.StatusNotFound, apigen.ErrorCodeNotFound)
+}
+
+// allowedMethods returns the methods for which a route matches the request's
+// path. It asks the mux itself, so wildcard paths like "/groups/<uuid>" work
+// without a second matching logic that could disagree with the mux.
+func (r *router) allowedMethods(req *http.Request) []string {
+	var allowed []string
+	for _, method := range probeMethods {
+		probe := req.Clone(req.Context())
+		probe.Method = method
+		// Without a more specific route the mux answers with the "/"
+		// catch-all, which is this fallback.
+		if _, pattern := r.mux.Handler(probe); pattern != "/" {
+			allowed = append(allowed, method)
+		}
+	}
+	return allowed
 }
