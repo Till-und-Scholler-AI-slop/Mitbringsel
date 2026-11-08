@@ -51,6 +51,12 @@ const API_ERROR_CODES: Record<ApiErrorCode, true> = {
   RATE_LIMITED: true,
   LIST_NOT_FOUND: true,
   LIST_NAME_INVALID: true,
+  ITEM_NOT_FOUND: true,
+  ITEM_NAME_INVALID: true,
+  ITEM_QUANTITY_INVALID: true,
+  ITEM_UNIT_INVALID: true,
+  ITEM_NOTE_INVALID: true,
+  ITEM_ID_TAKEN: true,
 }
 
 describe('error messages', () => {

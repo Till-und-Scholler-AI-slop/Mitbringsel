@@ -48,6 +48,9 @@ type Deps struct {
 	Groups   GroupService
 	Invites  InviteService
 	Lists    ListService
+	Items    ItemService
+	// ItemClock stamps the item changes that arrive over REST.
+	ItemClock ItemClock
 	// Google is nil if the Google login is not configured, which only
 	// development allows; its routes then answer 404.
 	Google GoogleLogin
@@ -101,6 +104,11 @@ func NewRouter(deps Deps) http.Handler {
 	r.handle(http.MethodPatch, listPath, protect(updateListHandler(deps.Lists)))
 	r.handle(http.MethodDelete, listPath, protect(deleteListHandler(deps.Lists)))
 	r.handle(http.MethodPut, listArchivedPath, protect(setListArchivedHandler(deps.Lists)))
+	r.handle(http.MethodGet, listItemsPath, protect(listItemsHandler(deps.Items)))
+	r.handle(http.MethodPost, listItemsPath, protect(createItemHandler(deps.Items, deps.ItemClock)))
+	r.handle(http.MethodGet, itemPath, protect(getItemHandler(deps.Items)))
+	r.handle(http.MethodPatch, itemPath, protect(updateItemHandler(deps.Items, deps.ItemClock)))
+	r.handle(http.MethodDelete, itemPath, protect(deleteItemHandler(deps.Items)))
 	r.handle(http.MethodPost, inviteAcceptPath, protect(acceptLimit(acceptInviteHandler(deps.Invites))))
 	// Not behind requireUser: the page behind an invite link shows the
 	// invitation before the visitor has signed in. The token is the secret.

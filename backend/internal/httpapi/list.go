@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -35,16 +34,11 @@ type ListService interface {
 // API contract. Timestamps are converted to UTC: pgx reads them in the local
 // zone of the server, which would put that offset into the JSON.
 func newListResponse(l list.List) apigen.List {
-	var archivedAt *time.Time
-	if l.ArchivedAt != nil {
-		utc := l.ArchivedAt.UTC()
-		archivedAt = &utc
-	}
 	return apigen.List{
 		ID:         l.ID,
 		GroupID:    l.GroupID,
 		Name:       l.Name,
-		ArchivedAt: archivedAt,
+		ArchivedAt: utcPtr(l.ArchivedAt),
 		CreatedAt:  l.CreatedAt.UTC(),
 		UpdatedAt:  l.UpdatedAt.UTC(),
 		ServerSeq:  l.ServerSeq,
