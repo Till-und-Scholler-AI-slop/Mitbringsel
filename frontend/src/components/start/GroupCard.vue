@@ -22,7 +22,12 @@ const avatars = computed(() => props.group.members.slice(0, MAX_AVATARS))
     <span class="icon" aria-hidden="true"><BaseIcon name="home" :size="22" /></span>
     <div class="text">
       <!-- title: the full name for names too long for the line -->
-      <h3 class="name" :title="group.name">{{ group.name }}</h3>
+      <h3 class="name" :title="group.name">
+        <!-- The link covers the whole card (see .link::after); the settings link stays above it. -->
+        <RouterLink class="link" :to="{ name: 'group', params: { groupId: group.id } }">{{
+          group.name
+        }}</RouterLink>
+      </h3>
       <p class="members">{{ t('start.groups.members', group.members.length) }}</p>
     </div>
     <span class="avatars" aria-hidden="true">
@@ -47,6 +52,7 @@ const avatars = computed(() => props.group.members.slice(0, MAX_AVATARS))
 
 <style scoped>
 .card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -97,8 +103,20 @@ const avatars = computed(() => props.group.members.slice(0, MAX_AVATARS))
   display: flex;
 }
 
+.link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
 /* Looks like BaseIconButton, but it is a link: it leads to another page. */
 .settings {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;

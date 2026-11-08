@@ -154,9 +154,68 @@
     "UNAUTHENTICATED": "You are not signed in.",
     "UNKNOWN": "Something went wrong."
   },
+  "group": {
+    "back": "Back to the start page",
+    "settings": "Manage household",
+    "loading": "Loading household …",
+    "loadFailed": "The household could not be loaded.",
+    "missing": {
+      "title": "Household not found",
+      "description": "It no longer exists, or you are not a member.",
+      "home": "To the start page"
+    },
+    "lists": {
+      "title": "Lists",
+      "loading": "Loading lists …",
+      "loadFailed": "The lists could not be loaded.",
+      "empty": {
+        "title": "No list yet",
+        "description": "Create a list, for example for the weekly shopping."
+      },
+      "new": "New list",
+      "actionsFor": "Actions for {name}",
+      "archived": {
+        "toggle": "Archived ({count})"
+      }
+    },
+    "name": {
+      "createTitle": "New list",
+      "renameTitle": "Rename list",
+      "label": "Name of the list",
+      "placeholder": "e.g. Weekly shopping",
+      "cancel": "Cancel",
+      "create": "Create",
+      "save": "Save"
+    },
+    "actions": {
+      "title": "Manage list",
+      "question": "What should happen to “{name}”?",
+      "rename": {
+        "title": "Rename",
+        "description": "Gives the list a new name."
+      },
+      "archive": {
+        "title": "Archive",
+        "description": "Hides the list. Its items are kept."
+      },
+      "unarchive": {
+        "title": "Restore",
+        "description": "Shows the list among the active lists again."
+      },
+      "delete": {
+        "title": "Delete",
+        "description": "Removes the list with all its items for everyone."
+      },
+      "confirm": {
+        "body": "“{name}” is deleted with all its items for all members. This cannot be undone.",
+        "back": "Back",
+        "delete": "Delete"
+      }
+    }
+  },
   "settings": {
     "title": "Manage household",
-    "back": "Back to the start page",
+    "back": "Back to the household",
     "loading": "Loading household …",
     "loadFailed": "The household could not be loaded.",
     "missing": {

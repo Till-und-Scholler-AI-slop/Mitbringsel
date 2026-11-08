@@ -35,9 +35,7 @@ function fakeService(
   return {
     list: vi.fn((groupId: string, { includeArchived }: { includeArchived: boolean }) =>
       Promise.resolve(
-        initial.filter(
-          (l) => l.groupId === groupId && (includeArchived || l.archivedAt === null),
-        ),
+        initial.filter((l) => l.groupId === groupId && (includeArchived || l.archivedAt === null)),
       ),
     ),
     create: vi.fn((groupId: string, name: string) => Promise.resolve(list('l-new', name, groupId))),

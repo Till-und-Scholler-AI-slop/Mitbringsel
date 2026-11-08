@@ -154,9 +154,68 @@
     "UNAUTHENTICATED": "Du bist nicht angemeldet.",
     "UNKNOWN": "Etwas ist schiefgelaufen."
   },
+  "group": {
+    "back": "Zurück zur Startseite",
+    "settings": "Haushalt verwalten",
+    "loading": "Haushalt wird geladen …",
+    "loadFailed": "Der Haushalt konnte nicht geladen werden.",
+    "missing": {
+      "title": "Haushalt nicht gefunden",
+      "description": "Er existiert nicht mehr, oder du bist kein Mitglied.",
+      "home": "Zur Startseite"
+    },
+    "lists": {
+      "title": "Listen",
+      "loading": "Listen werden geladen …",
+      "loadFailed": "Die Listen konnten nicht geladen werden.",
+      "empty": {
+        "title": "Noch keine Liste",
+        "description": "Lege eine Liste an, zum Beispiel für den Wocheneinkauf."
+      },
+      "new": "Neue Liste",
+      "actionsFor": "Aktionen für {name}",
+      "archived": {
+        "toggle": "Archiviert ({count})"
+      }
+    },
+    "name": {
+      "createTitle": "Neue Liste",
+      "renameTitle": "Liste umbenennen",
+      "label": "Name der Liste",
+      "placeholder": "z. B. Wocheneinkauf",
+      "cancel": "Abbrechen",
+      "create": "Anlegen",
+      "save": "Speichern"
+    },
+    "actions": {
+      "title": "Liste verwalten",
+      "question": "Was soll mit „{name}“ passieren?",
+      "rename": {
+        "title": "Umbenennen",
+        "description": "Gibt der Liste einen neuen Namen."
+      },
+      "archive": {
+        "title": "Archivieren",
+        "description": "Blendet die Liste aus. Die Artikel bleiben erhalten."
+      },
+      "unarchive": {
+        "title": "Wiederherstellen",
+        "description": "Zeigt die Liste wieder bei den aktiven Listen."
+      },
+      "delete": {
+        "title": "Löschen",
+        "description": "Entfernt die Liste mit allen Artikeln für alle."
+      },
+      "confirm": {
+        "body": "„{name}“ wird mit allen Artikeln für alle Mitglieder gelöscht. Das lässt sich nicht rückgängig machen.",
+        "back": "Zurück",
+        "delete": "Löschen"
+      }
+    }
+  },
   "settings": {
     "title": "Haushalt verwalten",
-    "back": "Zurück zur Startseite",
+    "back": "Zurück zum Haushalt",
     "loading": "Haushalt wird geladen …",
     "loadFailed": "Der Haushalt konnte nicht geladen werden.",
     "missing": {

@@ -26,15 +26,14 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
 - [ ] **Listen-Chips und letzte Aktivität auf den Haushalt-Karten:** Das Design zeigt sie, sie brauchen Listen und Artikel (Phase 4).
-- [ ] **Desktop-Rahmen mit Seitenleiste:** Das Design hat auf dem Desktop eine Navigation links (Start, Haushalte, Listen). Die Startseite ist vorerst einspaltig; die Seitenleiste mit dem Haushalt- und Listen-Screen bauen (Phase 4).
+- [ ] **Desktop-Rahmen mit Seitenleiste:** Das Design hat auf dem Desktop eine Navigation links (Start, Haushalte, Listen). Startseite und Haushalt-Screen sind vorerst einspaltig; die Seitenleiste baue ich mit der Listenansicht (Phase 4).
 - [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
 ## Verwalten
 
 - [ ] **Desktop-Variante des Verwalten-Screens:** Das Design (`verwalten-desktop-*`) setzt Name und Mitglieder neben Einladung und Austreten. `GroupSettingsView` ist vorerst einspaltig.
-- [ ] **Zurück zum Haushalt:** Der Pfeil im Kopf führt vorerst zur Startseite. Mit dem Haushalt-Screen (Phase 4) dorthin zurückführen, und die `GroupCard` zum Haushalt verlinken statt nur zu den Einstellungen.
-- [ ] **Namensformular teilen:** `RenameGroupDialog` und `CreateGroupDialog` sind fast gleich (Validierung, Fehleranzeige, Buttons). Bei einer dritten Verwendung ein gemeinsames Formular herausziehen.
+- [ ] **Namensformular teilen:** `RenameGroupDialog` und `CreateGroupDialog` sind fast gleich (Validierung, Fehleranzeige, Buttons). Mit `ListNameDialog` (Anlegen und Umbenennen von Listen) gibt es eine dritte Verwendung: jetzt ein gemeinsames Formular herausziehen.
 
 ## Einladung
 

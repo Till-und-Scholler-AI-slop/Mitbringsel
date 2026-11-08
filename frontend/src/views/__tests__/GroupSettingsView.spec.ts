@@ -82,6 +82,7 @@ async function mountView(groupId = 'g1') {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<p />' } },
+      { path: '/groups/:groupId', name: 'group', component: { template: '<p />' } },
       { path: '/groups/:groupId/settings', name: 'group-settings', component: {} },
     ],
   })
@@ -269,14 +270,15 @@ describe('GroupSettingsView', () => {
     wrapper.unmount()
   })
 
-  it('goes back to the start page', async () => {
+  it('goes back to the household', async () => {
     service.list.mockResolvedValue([group('owner')])
     const { wrapper, router } = await mountView()
 
-    await wrapper.get('button[aria-label="Back to the start page"]').trigger('click')
+    await wrapper.get('button[aria-label="Back to the household"]').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.name).toBe('home')
+    expect(router.currentRoute.value.name).toBe('group')
+    expect(router.currentRoute.value.params.groupId).toBe('g1')
     wrapper.unmount()
   })
 })

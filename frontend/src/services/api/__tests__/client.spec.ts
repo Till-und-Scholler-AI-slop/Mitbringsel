@@ -140,7 +140,9 @@ describe('apiPostJson, apiPatchJson, apiPut, apiPutJson, apiDelete', () => {
   })
 
   it('apiPutJson sends the body and returns the parsed answer', async () => {
-    stubFetch(() => Promise.resolve(Response.json({ id: 'l1', archivedAt: '2026-01-01T10:00:00Z' })))
+    stubFetch(() =>
+      Promise.resolve(Response.json({ id: 'l1', archivedAt: '2026-01-01T10:00:00Z' })),
+    )
 
     await expect(apiPutJson('/lists/l1/archived', { archived: true })).resolves.toEqual({
       id: 'l1',

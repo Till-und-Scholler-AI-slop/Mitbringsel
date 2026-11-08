@@ -26,7 +26,8 @@ export const listsService: ListsService = {
   },
   create: (groupId, name) =>
     apiPostJson<List>(groupListsPath(groupId), { name } satisfies ListNameRequest),
-  rename: (listId, name) => apiPatchJson<List>(listPath(listId), { name } satisfies ListNameRequest),
+  rename: (listId, name) =>
+    apiPatchJson<List>(listPath(listId), { name } satisfies ListNameRequest),
   setArchived: (listId, archived) =>
     apiPutJson<List>(`${listPath(listId)}/archived`, { archived } satisfies SetListArchivedRequest),
   remove: (listId) => apiDelete(listPath(listId)),

@@ -3,6 +3,7 @@ import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 import { useAuthStore, type AuthStatus } from '@/stores/auth'
 
 import GroupSettingsView from '../views/GroupSettingsView.vue'
+import GroupView from '../views/GroupView.vue'
 import InviteView from '../views/InviteView.vue'
 import StartView from '../views/StartView.vue'
 import LoginView from '../views/LoginView.vue'
@@ -37,6 +38,13 @@ export function createAppRouter(
         component: InviteView,
         props: true,
         // Open to everyone: the page shows the invite and asks to sign in.
+      },
+      {
+        path: '/groups/:groupId',
+        name: 'group',
+        component: GroupView,
+        props: true,
+        meta: { requiresAuth: true },
       },
       {
         path: '/groups/:groupId/settings',

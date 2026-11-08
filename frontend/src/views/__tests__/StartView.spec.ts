@@ -76,6 +76,7 @@ async function mountView() {
     history: createMemoryHistory(),
     routes: [
       { path: '/login', name: 'login', component: { template: '<p />' } },
+      { path: '/groups/:groupId', name: 'group', component: { template: '<p />' } },
       {
         path: '/groups/:groupId/settings',
         name: 'group-settings',
