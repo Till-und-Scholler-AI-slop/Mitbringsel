@@ -1,0 +1,488 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { ref } from 'vue'
+
+import { ApiError } from '@/services/api/client'
+import type { ItemsService } from '@/services/api/items'
+import type { Item } from '@/types/api'
+
+import { defineItemsStore } from '../items'
+
+const ANNA = '0190a8c4-0000-7000-8000-00000000000a'
+const BEN = '0190a8c4-0000-7000-8000-00000000000b'
+const CHECKED_AT = '2026-02-01T10:00:00Z'
+
+function item(id: string, name: string, listId = 'l1', checked = false): Item {
+  return {
+    id,
+    listId,
+    name,
+    quantity: null,
+    unit: null,
+    note: null,
+    checked,
+    checkedBy: checked ? BEN : null,
+    checkedAt: checked ? CHECKED_AT : null,
+    createdBy: ANNA,
+    createdAt: '2026-01-01T10:00:00Z',
+    serverSeq: 1,
+    clocks: { name: 'c', quantity: 'c', unit: 'c', note: 'c', checked: 'c' },
+  }
+}
+
+/**
+ * A fake backend with the items of each list; tests override single
+ * functions. update() answers the stored item as the real one does: the
+ * item with the changed fields, checked by Anna.
+ */
+function fakeService(
+  initial: Item[] = [],
+): ItemsService & { [K in keyof ItemsService]: ReturnType<typeof vi.fn> } {
+  return {
+    list: vi.fn((listId: string) => Promise.resolve(initial.filter((i) => i.listId === listId))),
+    create: vi.fn((listId: string, request: { name: string }) =>
+      Promise.resolve(item('i-new', request.name, listId)),
+    ),
+    update: vi.fn((id: string, change: Record<string, unknown>) => {
+      const stored = initial.find((i) => i.id === id) ?? item(id, 'x')
+      const checked = (change.checked as boolean | undefined) ?? stored.checked
+      return Promise.resolve({
+        ...stored,
+        ...change,
+        checkedBy: checked ? ANNA : null,
+        checkedAt: checked ? CHECKED_AT : null,
+      })
+    }),
+    remove: vi.fn(() => Promise.resolve()),
+  }
+}
+
+/** The signed-in user as a ref, so tests can switch the user. */
+function setup(service: ItemsService, userId: string | null = ANNA) {
+  const user = ref(userId)
+  const store = defineItemsStore(service, () => user.value)()
+  return { store, user }
+}
+
+const names = (items: Item[]) => items.map((i) => i.name)
+
+/** A promise the test settles by hand, to look at the state in between. */
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined
+  let reject: (err: unknown) => void = () => undefined
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
+
+describe('items store: load', () => {
+  it('knows nothing about a list before it is loaded', () => {
+    const { store } = setup(fakeService())
+
+    expect(store.statusOf('l1')).toBe('idle')
+    expect(store.errorCodeOf('l1')).toBeNull()
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.openItems('l1')).toEqual([])
+    expect(store.checkedItems('l1')).toEqual([])
+  })
+
+  it('loads the items and tells open and checked ones apart', async () => {
+    const service = fakeService([
+      item('i1', 'Milch'),
+      item('i2', 'Brot', 'l1', true),
+      item('i3', 'Eier'),
+    ])
+    const { store } = setup(service)
+
+    await store.load('l1')
+
+    expect(service.list).toHaveBeenCalledWith('l1')
+    expect(store.statusOf('l1')).toBe('ready')
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot', 'Eier'])
+    expect(names(store.openItems('l1'))).toEqual(['Milch', 'Eier'])
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot'])
+  })
+
+  it('keeps the items of each list apart', async () => {
+    const { store } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Nägel', 'l2')]))
+
+    await store.load('l1')
+    await store.load('l2')
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+    expect(names(store.itemsOf('l2'))).toEqual(['Nägel'])
+  })
+
+  it('finds an item of any loaded list by its ID', async () => {
+    const { store } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Nägel', 'l2')]))
+    await store.load('l1')
+    await store.load('l2')
+
+    expect(store.byId('i2')?.name).toBe('Nägel')
+    expect(store.byId('unknown')).toBeUndefined()
+  })
+
+  it('reports the error code and keeps the items from before', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const { store } = setup(service)
+    await store.load('l1')
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+
+    await store.load('l1')
+
+    expect(store.statusOf('l1')).toBe('error')
+    expect(store.errorCodeOf('l1')).toBe('NETWORK')
+    expect(store.itemsOf('l1')).toHaveLength(1)
+  })
+
+  it('does not blame other lists for an error', async () => {
+    const service = fakeService([item('i2', 'Nägel', 'l2')])
+    const { store } = setup(service)
+    await store.load('l2')
+    service.list.mockRejectedValueOnce(new ApiError('LIST_NOT_FOUND', 404))
+
+    await store.load('l1')
+
+    expect(store.statusOf('l1')).toBe('error')
+    expect(store.statusOf('l2')).toBe('ready')
+  })
+
+  it('uses UNKNOWN for errors that are not from the API', async () => {
+    const service = fakeService()
+    service.list.mockRejectedValueOnce(new Error('boom'))
+    const { store } = setup(service)
+
+    await store.load('l1')
+
+    expect(store.errorCodeOf('l1')).toBe('UNKNOWN')
+  })
+
+  it('clears the error when a later load works', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await store.load('l1')
+
+    expect(store.statusOf('l1')).toBe('ready')
+    expect(store.errorCodeOf('l1')).toBeNull()
+  })
+})
+
+describe('items store: reset', () => {
+  it('forgets the items when the user logs out', async () => {
+    const { store, user } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    user.value = null
+    await Promise.resolve()
+
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.statusOf('l1')).toBe('idle')
+  })
+
+  it('forgets the items when another user signs in', async () => {
+    const { store, user } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    user.value = BEN
+    await Promise.resolve()
+
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.byId('i1')).toBeUndefined()
+  })
+
+  it('ignores a load that was still running at the reset', async () => {
+    const service = fakeService()
+    const answer = deferred<Item[]>()
+    service.list.mockReturnValueOnce(answer.promise)
+    const { store, user } = setup(service)
+
+    const loading = store.load('l1')
+    user.value = null
+    await Promise.resolve()
+    answer.resolve([item('i1', 'Old user')])
+    await loading
+
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.statusOf('l1')).toBe('idle')
+  })
+
+  it('ignores a failing load that was still running at the reset', async () => {
+    const service = fakeService()
+    const answer = deferred<Item[]>()
+    service.list.mockReturnValueOnce(answer.promise)
+    const { store, user } = setup(service)
+
+    const loading = store.load('l1')
+    user.value = null
+    await Promise.resolve()
+    answer.reject(new ApiError('NETWORK'))
+    await loading
+
+    expect(store.statusOf('l1')).toBe('idle')
+    expect(store.errorCodeOf('l1')).toBeNull()
+  })
+
+  it('does not bring back a check that was still running at the reset', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const answer = deferred<Item>()
+    const { store, user } = setup(service)
+    await store.load('l1')
+    service.update.mockReturnValueOnce(answer.promise)
+
+    const checking = store.setChecked('i1', true)
+    user.value = null
+    await Promise.resolve()
+    answer.resolve(item('i1', 'Milch', 'l1', true))
+    await checking
+
+    expect(store.itemsOf('l1')).toEqual([])
+  })
+})
+
+describe('items store: create', () => {
+  it('adds a created item at the end and returns it', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const { store } = setup(service)
+    await store.load('l1')
+
+    const created = await store.create('l1', { name: 'Brot', quantity: 1, unit: 'pack' })
+
+    expect(service.create).toHaveBeenCalledWith('l1', { name: 'Brot', quantity: 1, unit: 'pack' })
+    expect(created.id).toBe('i-new')
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+  })
+
+  it('does not list an item twice when the server answers a repeated request', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    service.create.mockResolvedValue(item('i1', 'Milch'))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await store.create('l1', { id: 'i1', name: 'Milch' })
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('does not add an item when creating fails', async () => {
+    const service = fakeService()
+    service.create.mockRejectedValueOnce(new ApiError('ITEM_NAME_INVALID', 400))
+    const { store } = setup(service)
+
+    await expect(store.create('l1', { name: '' })).rejects.toMatchObject({
+      code: 'ITEM_NAME_INVALID',
+    })
+    expect(store.itemsOf('l1')).toEqual([])
+  })
+})
+
+describe('items store: update', () => {
+  it('takes the changed item from the answer of the server', async () => {
+    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await store.update('i2', { name: 'Vollkornbrot', quantity: 2 })
+
+    expect(service.update).toHaveBeenCalledWith('i2', { name: 'Vollkornbrot', quantity: 2 })
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Vollkornbrot'])
+    expect(store.byId('i2')?.quantity).toBe(2)
+  })
+
+  it('shows nothing early: the item stays until the server answers', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const answer = deferred<Item>()
+    const { store } = setup(service)
+    await store.load('l1')
+    service.update.mockReturnValueOnce(answer.promise)
+
+    const updating = store.update('i1', { name: 'Hafermilch' })
+    await Promise.resolve()
+
+    expect(store.byId('i1')?.name).toBe('Milch')
+    answer.resolve(item('i1', 'Hafermilch'))
+    await updating
+    expect(store.byId('i1')?.name).toBe('Hafermilch')
+  })
+
+  it('keeps the item when updating fails', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    service.update.mockRejectedValueOnce(new ApiError('ITEM_NAME_INVALID', 400))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await expect(store.update('i1', { name: ' ' })).rejects.toMatchObject({
+      code: 'ITEM_NAME_INVALID',
+    })
+    expect(store.byId('i1')?.name).toBe('Milch')
+  })
+})
+
+describe('items store: setChecked', () => {
+  it('checks at once, before the server answers', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const answer = deferred<Item>()
+    const { store } = setup(service)
+    await store.load('l1')
+    service.update.mockReturnValueOnce(answer.promise)
+
+    const checking = store.setChecked('i1', true)
+
+    expect(service.update).toHaveBeenCalledWith('i1', { checked: true })
+    expect(store.byId('i1')?.checked).toBe(true)
+    expect(store.byId('i1')?.checkedBy).toBe(ANNA)
+    expect(store.byId('i1')?.checkedAt).not.toBeNull()
+    expect(names(store.checkedItems('l1'))).toEqual(['Milch'])
+
+    answer.resolve(item('i1', 'Milch', 'l1', true))
+    await checking
+  })
+
+  it('takes who and when from the answer of the server', async () => {
+    const { store } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    await store.setChecked('i1', true)
+
+    expect(store.byId('i1')?.checkedBy).toBe(ANNA)
+    expect(store.byId('i1')?.checkedAt).toBe(CHECKED_AT)
+  })
+
+  it('unchecks at once and clears who and when', async () => {
+    const service = fakeService([item('i1', 'Milch', 'l1', true)])
+    const answer = deferred<Item>()
+    const { store } = setup(service)
+    await store.load('l1')
+    service.update.mockReturnValueOnce(answer.promise)
+
+    const unchecking = store.setChecked('i1', false)
+
+    expect(store.byId('i1')).toMatchObject({ checked: false, checkedBy: null, checkedAt: null })
+    expect(names(store.openItems('l1'))).toEqual(['Milch'])
+
+    answer.resolve(item('i1', 'Milch'))
+    await unchecking
+  })
+
+  it('puts the old state back and throws when the request fails', async () => {
+    const service = fakeService([item('i1', 'Milch', 'l1', true)])
+    service.update.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await expect(store.setChecked('i1', false)).rejects.toMatchObject({ code: 'NETWORK' })
+
+    expect(store.byId('i1')).toMatchObject({
+      checked: true,
+      checkedBy: BEN,
+      checkedAt: CHECKED_AT,
+    })
+  })
+
+  it('lets the last tap win when the answers come in a different order', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const first = deferred<Item>()
+    const second = deferred<Item>()
+    const { store } = setup(service)
+    await store.load('l1')
+    service.update.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+
+    const checking = store.setChecked('i1', true)
+    const unchecking = store.setChecked('i1', false)
+    expect(store.byId('i1')?.checked).toBe(false)
+
+    // The late answer to the first tap must not check the item again.
+    second.resolve(item('i1', 'Milch'))
+    await unchecking
+    first.resolve(item('i1', 'Milch', 'l1', true))
+    await checking
+
+    expect(store.byId('i1')?.checked).toBe(false)
+  })
+
+  it('does not roll back an older tap that fails after a newer one', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const first = deferred<Item>()
+    const { store } = setup(service)
+    await store.load('l1')
+    service.update.mockReturnValueOnce(first.promise)
+
+    const checking = store.setChecked('i1', true)
+    const unchecking = store.setChecked('i1', false)
+    first.reject(new ApiError('NETWORK'))
+
+    // The first tap still reports its error to the caller ...
+    await expect(checking).rejects.toMatchObject({ code: 'NETWORK' })
+    await unchecking
+    // ... but the state belongs to the newest tap.
+    expect(store.byId('i1')?.checked).toBe(false)
+  })
+
+  it('does not roll back onto an item that a reload has replaced', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const answer = deferred<Item>()
+    const { store } = setup(service)
+    await store.load('l1')
+    service.update.mockReturnValueOnce(answer.promise)
+
+    const checking = store.setChecked('i1', true)
+    service.list.mockResolvedValueOnce([item('i1', 'Milch', 'l1', true)])
+    await store.load('l1')
+    answer.reject(new ApiError('NETWORK'))
+    await expect(checking).rejects.toBeInstanceOf(ApiError)
+
+    // The reload holds fresher data from the server than the state before the tap.
+    expect(store.byId('i1')?.checked).toBe(true)
+  })
+
+  it('still sends the change for an item it does not know', async () => {
+    const service = fakeService()
+    const { store } = setup(service)
+
+    await store.setChecked('unknown', true)
+
+    expect(service.update).toHaveBeenCalledWith('unknown', { checked: true })
+  })
+})
+
+describe('items store: remove', () => {
+  it('drops a deleted item from its list only', async () => {
+    const { store } = setup(
+      fakeService([item('i1', 'Milch'), item('i2', 'Brot'), item('i3', 'Nägel', 'l2')]),
+    )
+    await store.load('l1')
+    await store.load('l2')
+
+    await store.remove('i1')
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
+    expect(names(store.itemsOf('l2'))).toEqual(['Nägel'])
+  })
+
+  it('keeps the item when deleting fails', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    service.remove.mockRejectedValueOnce(new ApiError('ITEM_NOT_FOUND', 404))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await expect(store.remove('i1')).rejects.toMatchObject({ code: 'ITEM_NOT_FOUND' })
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('still asks the server about an item it does not know', async () => {
+    const service = fakeService()
+    const { store } = setup(service)
+
+    await store.remove('unknown')
+
+    expect(service.remove).toHaveBeenCalledWith('unknown')
+  })
+})

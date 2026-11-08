@@ -62,6 +62,21 @@ export type ListNameRequest = Schemas['ListNameRequest']
 /** Body of PUT /api/v1/lists/{listId}/archived. */
 export type SetListArchivedRequest = Schemas['SetListArchivedRequest']
 
+/** An item of a list (GET /api/v1/items/{itemId}). */
+export type Item = Schemas['Item']
+
+/** Response of GET /api/v1/lists/{listId}/items. */
+export type ItemListResponse = Schemas['ItemList']
+
+/** Body of POST /api/v1/lists/{listId}/items. */
+export type CreateItemRequest = Schemas['CreateItemRequest']
+
+/** Body of PATCH /api/v1/items/{itemId}: only the fields to change. */
+export type UpdateItemRequest = Schemas['UpdateItemRequest']
+
+/** How a quantity is measured (piece, g, kg, ml, l, pack). */
+export type Unit = Schemas['Unit']
+
 /** Error body of every failed API call: the backend sends codes, not texts. */
 export type ApiErrorBody = Schemas['Error']
 
