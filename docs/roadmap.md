@@ -4,7 +4,7 @@
 
 Claude spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hier nach der Entscheidung ab.
 
-- [ ] LWW pro Feld (empfohlen) oder pro Artikel für das erste Release
+- [x] LWW pro Feld für das erste Release (siehe [ADR 0004](adr/0004-lww-pro-feld.md))
 - [x] Styling-Ansatz nach Claude Design: eigenes CSS mit Tokens, kein Tailwind (siehe [ADR 0003](adr/0003-eigenes-css-mit-tokens.md))
 - [x] API-Vertrag: OpenAPI-Spezifikation (`api/openapi.yaml`), daraus generierte Typen für Go und TypeScript (siehe [ADR 0002](adr/0002-openapi-als-api-vertrag.md))
 - [ ] Bestätigung der vorgeschlagenen Libraries aus dem [Tech-Stack](tech-stack.md)
