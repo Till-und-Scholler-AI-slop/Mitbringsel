@@ -26,6 +26,15 @@ sql:
               import: github.com/google/uuid
               type: UUID
               pointer: true
+          # Quantities are amounts like 0.5 or 250; float64 is precise enough
+          # and needs no extra dependency.
+          - db_type: "pg_catalog.numeric"
+            go_type: float64
+          - db_type: "pg_catalog.numeric"
+            nullable: true
+            go_type:
+              type: float64
+              pointer: true
           - db_type: timestamptz
             go_type: time.Time
           - db_type: timestamptz

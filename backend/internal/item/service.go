@@ -1,0 +1,306 @@
+package item
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
+
+	"mitbringsel/internal/list"
+)
+
+// ListAccess is the door to a list: it returns the list if the user may see
+// it, and list.ErrNotFound otherwise (also for a user outside the group).
+// *list.Service satisfies it. Items use it so the membership rules live in
+// one place.
+type ListAccess interface {
+	Get(ctx context.Context, actor, listID uuid.UUID) (list.List, error)
+}
+
+// Service holds the rules for items. Every method takes the acting user
+// (actor) and checks what they may do, so a handler cannot forget it.
+//
+// Every member may create, change, check and delete items, also in an
+// archived list: an offline device may still have changes from before the
+// list was archived (docs/sync.md).
+//
+// The methods take the clock of the change from the caller. The transport
+// decides where it comes from: the server issues it for REST, the device for
+// the WebSocket.
+type Service struct {
+	repo  Repository
+	lists ListAccess
+	// now is the server time; tests replace it.
+	now func() time.Time
+}
+
+// NewService returns a service backed by the given repository.
+func NewService(repo Repository, lists ListAccess) *Service {
+	return &Service{repo: repo, lists: lists, now: time.Now}
+}
+
+// Create adds an item to a list. If an item with this ID already exists in
+// the same list, the request was sent twice (a lost answer, an offline
+// retry), and the stored item is returned unchanged. If the ID belongs to an
+// item elsewhere, it returns ErrIDTaken.
+func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem, clock HLC) (Item, error) {
+	// Access first: an outsider must not learn anything about the rules.
+	if err := s.requireList(ctx, actor, listID); err != nil {
+		return Item{}, err
+	}
+	if n.ID == uuid.Nil {
+		return Item{}, ErrInvalidID
+	}
+	name, quantity, unit, note, err := validateNew(n)
+	if err != nil {
+		return Item{}, err
+	}
+
+	// A new item stamps all its fields with the clock of its creation, so
+	// an edit made before it existed cannot win. Merge also limits a clock
+	// that runs too far ahead.
+	stamps := Clocks{}
+	for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
+		stamps[f] = clock
+	}
+	clocks, err := Merge(nil, stamps, false, s.now())
+	if err != nil {
+		return Item{}, fmt.Errorf("create item: %w", err)
+	}
+
+	created, err := s.repo.Create(ctx, Item{
+		ID:        n.ID,
+		ListID:    listID,
+		Name:      name,
+		Quantity:  quantity,
+		Unit:      unit,
+		Note:      note,
+		CreatedBy: &actor,
+		Clocks:    clocks,
+	})
+	if errors.Is(err, ErrIDTaken) {
+		existing, getErr := s.repo.Get(ctx, n.ID)
+		if getErr == nil && existing.ListID == listID {
+			return existing, nil
+		}
+		return Item{}, ErrIDTaken
+	}
+	if err != nil {
+		return Item{}, fmt.Errorf("create item: %w", err)
+	}
+	return created, nil
+}
+
+// ListForList returns the items of a list that are not deleted, oldest
+// first.
+func (s *Service) ListForList(ctx context.Context, actor, listID uuid.UUID) ([]Item, error) {
+	if err := s.requireList(ctx, actor, listID); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ListForList(ctx, listID)
+	if err != nil {
+		return nil, fmt.Errorf("list items: %w", err)
+	}
+	return items, nil
+}
+
+// Get returns one item, also a deleted one (check Deleted).
+func (s *Service) Get(ctx context.Context, actor, itemID uuid.UUID) (Item, error) {
+	return s.find(ctx, actor, itemID)
+}
+
+// Update applies a change to an item and returns the item as it is stored
+// afterwards. The change is merged per field: a field only changes if the
+// clock is newer than the one stored for it (see Merge). A field that loses
+// keeps its value, the other fields of the same change still apply. If
+// nothing wins, or the item is deleted, the stored item comes back
+// unchanged; check Deleted.
+func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Change, clock HLC) (Item, error) {
+	// Access first: an outsider must not learn anything about the rules.
+	found, err := s.find(ctx, actor, itemID)
+	if err != nil {
+		return Item{}, err
+	}
+	change, err = validateChange(change)
+	if err != nil {
+		return Item{}, err
+	}
+	incoming := change.clocks(clock)
+	if len(incoming) == 0 {
+		return Item{}, ErrEmptyChange
+	}
+
+	var result Item
+	// One transaction with the row locked: another change to this item
+	// waits here until we are done, so it merges against our result.
+	err = s.repo.InTx(ctx, func(tx Repository) error {
+		current, err := tx.GetForUpdate(ctx, found.ID)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		won, err := Merge(current.Clocks, incoming, current.Deleted(), now)
+		if err != nil {
+			return err
+		}
+		if len(won) == 0 {
+			result = current
+			return nil
+		}
+
+		update := Update{Change: change.only(won), Clocks: won}
+		if _, ok := won[FieldChecked]; ok && change.Checked.Value {
+			update.CheckedBy = &actor
+			update.CheckedAt = &now
+		}
+		result, err = tx.Apply(ctx, found.ID, update)
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalidHLC) || errors.Is(err, ErrUnknownField) {
+			return Item{}, err
+		}
+		return Item{}, fmt.Errorf("update item: %w", err)
+	}
+	return result, nil
+}
+
+// Delete turns an item into a tombstone. Deleting always wins over edits,
+// and deleting twice is harmless. It returns the stored item.
+func (s *Service) Delete(ctx context.Context, actor, itemID uuid.UUID) (Item, error) {
+	found, err := s.find(ctx, actor, itemID)
+	if err != nil {
+		return Item{}, err
+	}
+	deleted, err := s.repo.MarkDeleted(ctx, found.ID)
+	if err != nil {
+		return Item{}, fmt.Errorf("delete item: %w", err)
+	}
+	return deleted, nil
+}
+
+// find loads an item and checks that the actor may see its list. It returns
+// ErrNotFound if the item does not exist or the actor is not a member.
+func (s *Service) find(ctx context.Context, actor, itemID uuid.UUID) (Item, error) {
+	it, err := s.repo.Get(ctx, itemID)
+	if errors.Is(err, ErrNotFound) {
+		return Item{}, ErrNotFound
+	}
+	if err != nil {
+		return Item{}, fmt.Errorf("get item: %w", err)
+	}
+	if err := s.requireList(ctx, actor, it.ListID); err != nil {
+		return Item{}, err
+	}
+	return it, nil
+}
+
+func (s *Service) requireList(ctx context.Context, actor, listID uuid.UUID) error {
+	_, err := s.lists.Get(ctx, actor, listID)
+	if errors.Is(err, list.ErrNotFound) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("get list: %w", err)
+	}
+	return nil
+}
+
+// validateNew checks and cleans the fields of a new item.
+func validateNew(n NewItem) (name string, quantity *float64, unit *Unit, note *string, err error) {
+	if name, err = normalizeName(n.Name); err != nil {
+		return "", nil, nil, nil, err
+	}
+	if quantity, err = checkQuantity(n.Quantity); err != nil {
+		return "", nil, nil, nil, err
+	}
+	if unit, err = checkUnit(n.Unit); err != nil {
+		return "", nil, nil, nil, err
+	}
+	if note, err = normalizeNote(n.Note); err != nil {
+		return "", nil, nil, nil, err
+	}
+	return name, quantity, unit, note, nil
+}
+
+// validateChange checks and cleans the fields a change sets.
+func validateChange(c Change) (Change, error) {
+	var err error
+	if c.Name.Set {
+		if c.Name.Value, err = normalizeName(c.Name.Value); err != nil {
+			return Change{}, err
+		}
+	}
+	if c.Quantity.Set {
+		if c.Quantity.Value, err = checkQuantity(c.Quantity.Value); err != nil {
+			return Change{}, err
+		}
+	}
+	if c.Unit.Set {
+		if c.Unit.Value, err = checkUnit(c.Unit.Value); err != nil {
+			return Change{}, err
+		}
+	}
+	if c.Note.Set {
+		if c.Note.Value, err = normalizeNote(c.Note.Value); err != nil {
+			return Change{}, err
+		}
+	}
+	return c, nil
+}
+
+// normalizeName trims the name and checks its length in characters.
+func normalizeName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("%w: name is empty", ErrInvalidName)
+	}
+	if utf8.RuneCountInString(name) > MaxNameLength {
+		return "", fmt.Errorf("%w: name is longer than %d characters", ErrInvalidName, MaxNameLength)
+	}
+	return name, nil
+}
+
+// checkQuantity accepts nil (no quantity) or a finite number above 0.
+func checkQuantity(q *float64) (*float64, error) {
+	if q == nil {
+		return nil, nil
+	}
+	if math.IsNaN(*q) || math.IsInf(*q, 0) || *q <= 0 || *q > MaxQuantity {
+		return nil, fmt.Errorf("%w: must be above 0 and at most %d", ErrInvalidQuantity, MaxQuantity)
+	}
+	v := *q
+	return &v, nil
+}
+
+// checkUnit accepts nil (no unit) or a unit from the fixed set.
+func checkUnit(u *Unit) (*Unit, error) {
+	if u == nil {
+		return nil, nil
+	}
+	if !u.Valid() {
+		return nil, fmt.Errorf("%w: %q", ErrInvalidUnit, *u)
+	}
+	v := *u
+	return &v, nil
+}
+
+// normalizeNote trims the note. An empty note is the same as none.
+func normalizeNote(note *string) (*string, error) {
+	if note == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*note)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if utf8.RuneCountInString(trimmed) > MaxNoteLength {
+		return nil, fmt.Errorf("%w: note is longer than %d characters", ErrInvalidNote, MaxNoteLength)
+	}
+	return &trimmed, nil
+}
