@@ -37,7 +37,8 @@ type GroupService interface {
 }
 
 // newGroupResponse translates the domain group into the Group schema of the
-// API contract.
+// API contract. Timestamps are converted to UTC: pgx reads them in the local
+// zone of the server, which would put that offset into the JSON.
 func newGroupResponse(d group.Details) apigen.Group {
 	members := make([]apigen.GroupMember, len(d.Members))
 	for i, m := range d.Members {
@@ -45,7 +46,7 @@ func newGroupResponse(d group.Details) apigen.Group {
 			UserID:      m.UserID,
 			DisplayName: m.DisplayName,
 			Role:        apigen.Role(m.Role),
-			JoinedAt:    m.JoinedAt,
+			JoinedAt:    m.JoinedAt.UTC(),
 		}
 		if m.AvatarURL != "" {
 			members[i].AvatarURL = &m.AvatarURL
@@ -56,8 +57,8 @@ func newGroupResponse(d group.Details) apigen.Group {
 		Name:      d.Name,
 		Role:      apigen.Role(d.Role),
 		Members:   members,
-		CreatedAt: d.CreatedAt,
-		UpdatedAt: d.UpdatedAt,
+		CreatedAt: d.CreatedAt.UTC(),
+		UpdatedAt: d.UpdatedAt.UTC(),
 	}
 }
 
