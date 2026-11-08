@@ -468,6 +468,177 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /groups/{groupId}/lists:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      operationId: listLists
+      summary: List the lists of a group
+      description: |
+        Oldest first. Archived lists only come along with
+        `includeArchived=true`. A group the user is not a member of looks
+        like a group that does not exist (`LIST_NOT_FOUND`).
+      tags: [lists]
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: includeArchived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: The lists of the group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListList"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createList
+      summary: Create a list in a group
+      description: Every member may do this.
+      tags: [lists]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListNameRequest"
+      responses:
+        "201":
+          description: The new list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/List"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /lists/{listId}:
+    parameters:
+      - $ref: "#/components/parameters/ListId"
+    get:
+      operationId: getList
+      summary: Get a list
+      tags: [lists]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/List"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updateList
+      summary: Rename a list
+      description: Every member may do this.
+      tags: [lists]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListNameRequest"
+      responses:
+        "200":
+          description: The renamed list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/List"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteList
+      summary: Delete a list with all its items
+      description: Owner and admins only.
+      tags: [lists]
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The list is deleted.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /lists/{listId}/archived:
+    parameters:
+      - $ref: "#/components/parameters/ListId"
+    put:
+      operationId: setListArchived
+      summary: Archive a list or bring it back
+      description: |
+        Every member may do this. Archiving an archived list keeps its
+        original `archivedAt`.
+      tags: [lists]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetListArchivedRequest"
+      responses:
+        "200":
+          description: The list in its new state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/List"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
   /invites/{token}:
     parameters:
       - $ref: "#/components/parameters/InviteToken"
@@ -552,6 +723,16 @@ components:
           path: github.com/google/uuid
     UserId:
       name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        x-go-type: uuid.UUID
+        x-go-type-import:
+          path: github.com/google/uuid
+    ListId:
+      name: listId
       in: path
       required: true
       schema:
@@ -702,6 +883,68 @@ components:
         The owner created the group and is the only one. Admins help run
         it; members use it.
       enum: [owner, admin, member]
+
+    List:
+      type: object
+      required: [id, groupId, name, archivedAt, createdAt, updatedAt, serverSeq]
+      properties:
+        id:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        groupId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        name:
+          type: string
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: null for an active list.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        serverSeq:
+          type: integer
+          format: int64
+          description: |
+            Orders changes across lists and items; clients ask for what
+            changed after the last one they saw.
+
+    ListList:
+      type: object
+      required: [lists]
+      properties:
+        lists:
+          type: array
+          items:
+            $ref: "#/components/schemas/List"
+
+    ListNameRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: |
+            1 to 50 characters after trimming whitespace, otherwise
+            `LIST_NAME_INVALID`.
+
+    SetListArchivedRequest:
+      type: object
+      required: [archived]
+      properties:
+        archived:
+          type: boolean
 
     Invite:
       type: object
@@ -860,6 +1103,8 @@ components:
         - INVITE_EXPIRED
         - TOO_MANY_INVITES
         - RATE_LIMITED
+        - LIST_NOT_FOUND
+        - LIST_NAME_INVALID
       # Go constant names; without them oapi-codegen would turn NOT_FOUND
       # into NOTFOUND.
       x-enum-varnames:
@@ -880,3 +1125,5 @@ components:
         - InviteExpired
         - TooManyInvites
         - RateLimited
+        - ListNotFound
+        - ListNameInvalid

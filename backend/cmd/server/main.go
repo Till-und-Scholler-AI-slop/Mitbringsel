@@ -16,6 +16,7 @@ import (
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/group"
 	"mitbringsel/internal/httpapi"
+	"mitbringsel/internal/list"
 	"mitbringsel/internal/platform/db"
 	"mitbringsel/internal/platform/db/sqlcgen"
 	"mitbringsel/internal/user"
@@ -81,6 +82,8 @@ func run() error {
 	groupRepo := group.NewPostgresRepository(pool)
 	groups := group.NewService(groupRepo)
 	invites := group.NewInviteService(groupRepo)
+	// The group repository doubles as the list service's membership lookup.
+	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo)
 
 	// Declared with the interface type and only assigned when configured:
 	// an interface holding a nil *auth.GoogleProvider would not compare
@@ -102,6 +105,7 @@ func run() error {
 			Users:    users,
 			Groups:   groups,
 			Invites:  invites,
+			Lists:    lists,
 			Google:   google,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,

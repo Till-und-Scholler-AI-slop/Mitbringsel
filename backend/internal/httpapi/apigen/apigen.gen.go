@@ -22,6 +22,8 @@ const (
 	ErrorCodeInvalidRole      ErrorCode = "INVALID_ROLE"
 	ErrorCodeInviteExpired    ErrorCode = "INVITE_EXPIRED"
 	ErrorCodeInviteNotFound   ErrorCode = "INVITE_NOT_FOUND"
+	ErrorCodeListNameInvalid  ErrorCode = "LIST_NAME_INVALID"
+	ErrorCodeListNotFound     ErrorCode = "LIST_NOT_FOUND"
 	ErrorCodeMethodNotAllowed ErrorCode = "METHOD_NOT_ALLOWED"
 	ErrorCodeNotFound         ErrorCode = "NOT_FOUND"
 	ErrorCodeOwnerImmutable   ErrorCode = "OWNER_IMMUTABLE"
@@ -54,6 +56,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeInviteExpired:
 		return true
 	case ErrorCodeInviteNotFound:
+		return true
+	case ErrorCodeListNameInvalid:
+		return true
+	case ErrorCodeListNotFound:
 		return true
 	case ErrorCodeMethodNotAllowed:
 		return true
@@ -273,6 +279,33 @@ type InvitePreview struct {
 	Members []InviteMember `json:"members"`
 }
 
+// List defines model for List.
+type List struct {
+	// ArchivedAt null for an active list.
+	ArchivedAt *time.Time `json:"archivedAt"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	GroupID    uuid.UUID  `json:"groupId"`
+	ID         uuid.UUID  `json:"id"`
+	Name       string     `json:"name"`
+
+	// ServerSeq Orders changes across lists and items; clients ask for what
+	// changed after the last one they saw.
+	ServerSeq int64     `json:"serverSeq"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ListList defines model for ListList.
+type ListList struct {
+	Lists []List `json:"lists"`
+}
+
+// ListNameRequest defines model for ListNameRequest.
+type ListNameRequest struct {
+	// Name 1 to 50 characters after trimming whitespace, otherwise
+	// `LIST_NAME_INVALID`.
+	Name string `json:"name"`
+}
+
 // Locale defines model for Locale.
 type Locale string
 
@@ -291,6 +324,11 @@ type Me struct {
 // it; members use it.
 type Role string
 
+// SetListArchivedRequest defines model for SetListArchivedRequest.
+type SetListArchivedRequest struct {
+	Archived bool `json:"archived"`
+}
+
 // SetRoleRequest defines model for SetRoleRequest.
 type SetRoleRequest struct {
 	// Role The owner created the group and is the only one. Admins help run
@@ -306,6 +344,9 @@ type GroupID = uuid.UUID
 
 // InviteToken defines model for InviteToken.
 type InviteToken = string
+
+// ListID defines model for ListId.
+type ListID = uuid.UUID
 
 // UserID defines model for UserId.
 type UserID = uuid.UUID
@@ -331,6 +372,11 @@ type GoogleLoginParams struct {
 	Next *string `form:"next,omitempty" json:"next,omitempty"`
 }
 
+// ListListsParams defines parameters for ListLists.
+type ListListsParams struct {
+	IncludeArchived *bool `form:"includeArchived,omitempty" json:"includeArchived,omitempty"`
+}
+
 // DevLoginJSONRequestBody defines body for DevLogin for application/json ContentType.
 type DevLoginJSONRequestBody = DevLoginRequest
 
@@ -340,5 +386,14 @@ type CreateGroupJSONRequestBody = GroupNameRequest
 // UpdateGroupJSONRequestBody defines body for UpdateGroup for application/json ContentType.
 type UpdateGroupJSONRequestBody = GroupNameRequest
 
+// CreateListJSONRequestBody defines body for CreateList for application/json ContentType.
+type CreateListJSONRequestBody = ListNameRequest
+
 // SetGroupMemberRoleJSONRequestBody defines body for SetGroupMemberRole for application/json ContentType.
 type SetGroupMemberRoleJSONRequestBody = SetRoleRequest
+
+// UpdateListJSONRequestBody defines body for UpdateList for application/json ContentType.
+type UpdateListJSONRequestBody = ListNameRequest
+
+// SetListArchivedJSONRequestBody defines body for SetListArchived for application/json ContentType.
+type SetListArchivedJSONRequestBody = SetListArchivedRequest
