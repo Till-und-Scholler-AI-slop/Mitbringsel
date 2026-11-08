@@ -47,6 +47,7 @@ type Deps struct {
 	Users    UserService
 	Groups   GroupService
 	Invites  InviteService
+	Lists    ListService
 	// Google is nil if the Google login is not configured, which only
 	// development allows; its routes then answer 404.
 	Google GoogleLogin
@@ -94,6 +95,12 @@ func NewRouter(deps Deps) http.Handler {
 	r.handle(http.MethodGet, groupInvitesPath, protect(listInvitesHandler(deps.Invites)))
 	r.handle(http.MethodPost, groupInvitesPath, protect(createInviteHandler(deps.Invites)))
 	r.handle(http.MethodDelete, groupInvitePath, protect(revokeInviteHandler(deps.Invites)))
+	r.handle(http.MethodGet, groupListsPath, protect(listListsHandler(deps.Lists)))
+	r.handle(http.MethodPost, groupListsPath, protect(createListHandler(deps.Lists)))
+	r.handle(http.MethodGet, listPath, protect(getListHandler(deps.Lists)))
+	r.handle(http.MethodPatch, listPath, protect(updateListHandler(deps.Lists)))
+	r.handle(http.MethodDelete, listPath, protect(deleteListHandler(deps.Lists)))
+	r.handle(http.MethodPut, listArchivedPath, protect(setListArchivedHandler(deps.Lists)))
 	r.handle(http.MethodPost, inviteAcceptPath, protect(acceptLimit(acceptInviteHandler(deps.Invites))))
 	// Not behind requireUser: the page behind an invite link shows the
 	// invitation before the visitor has signed in. The token is the secret.
