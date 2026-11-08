@@ -18,6 +18,10 @@ const (
 	// URL to the handler, which reads it with r.PathValue(groupIDParam).
 	groupPath    = groupsPath + "/{groupId}"
 	groupIDParam = "groupId"
+	// Leaving a group is removing oneself, so it is the same route with the
+	// own user ID.
+	memberPath  = groupPath + "/members/{userId}"
+	userIDParam = "userId"
 
 	// A group name is at most 100 characters; anything much larger is not a
 	// request for a group.
@@ -31,6 +35,10 @@ type GroupService interface {
 	List(ctx context.Context, actor uuid.UUID) ([]group.Details, error)
 	Get(ctx context.Context, actor, groupID uuid.UUID) (group.Details, error)
 	Create(ctx context.Context, actor uuid.UUID, name string) (group.Details, error)
+	Rename(ctx context.Context, actor, groupID uuid.UUID, name string) (group.Details, error)
+	Delete(ctx context.Context, actor, groupID uuid.UUID) error
+	SetRole(ctx context.Context, actor, groupID, userID uuid.UUID, role group.Role) error
+	RemoveMember(ctx context.Context, actor, groupID, userID uuid.UUID) error
 }
 
 // newGroupResponse translates the domain group into the Group schema of the
@@ -97,11 +105,11 @@ func actorID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	return userID, true
 }
 
-// groupIDFromPath reads {groupId} from the URL. A value that is no UUID
-// cannot belong to a group, so it answers 404 like an unknown group and
-// returns false.
-func groupIDFromPath(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(r.PathValue(groupIDParam))
+// idFromPath reads the wildcard called param ({groupId} or {userId}) from
+// the URL. A value that is no UUID cannot belong to anything, so it answers
+// 404 like an unknown group or member and returns false.
+func idFromPath(w http.ResponseWriter, r *http.Request, param string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(r.PathValue(param))
 	if err != nil {
 		writeError(w, http.StatusNotFound, apigen.ErrorCodeNotFound)
 		return uuid.Nil, false
@@ -139,7 +147,7 @@ func getGroupHandler(groups GroupService) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		groupID, ok := groupIDFromPath(w, r)
+		groupID, ok := idFromPath(w, r, groupIDParam)
 		if !ok {
 			return
 		}
@@ -172,5 +180,108 @@ func createGroupHandler(groups GroupService) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusCreated, newGroupResponse(d))
+	}
+}
+
+// renameGroupHandler renames a group and returns it. It must run behind
+// requireUser.
+func renameGroupHandler(groups GroupService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := actorID(w, r)
+		if !ok {
+			return
+		}
+		groupID, ok := idFromPath(w, r, groupIDParam)
+		if !ok {
+			return
+		}
+		var req apigen.GroupNameRequest
+		if !decodeJSON(w, r, maxGroupBodyBytes, &req) {
+			return
+		}
+
+		d, err := groups.Rename(r.Context(), actor, groupID, req.Name)
+		if err != nil {
+			writeGroupError(w, "rename group", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, newGroupResponse(d))
+	}
+}
+
+// deleteGroupHandler deletes a group. It must run behind requireUser.
+func deleteGroupHandler(groups GroupService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := actorID(w, r)
+		if !ok {
+			return
+		}
+		groupID, ok := idFromPath(w, r, groupIDParam)
+		if !ok {
+			return
+		}
+
+		if err := groups.Delete(r.Context(), actor, groupID); err != nil {
+			writeGroupError(w, "delete group", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// setMemberRoleHandler changes the role of a member. It must run behind
+// requireUser.
+func setMemberRoleHandler(groups GroupService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := actorID(w, r)
+		if !ok {
+			return
+		}
+		groupID, ok := idFromPath(w, r, groupIDParam)
+		if !ok {
+			return
+		}
+		userID, ok := idFromPath(w, r, userIDParam)
+		if !ok {
+			return
+		}
+		var req apigen.SetMemberRoleRequest
+		if !decodeJSON(w, r, maxGroupBodyBytes, &req) {
+			return
+		}
+
+		// An unknown role is passed on as it is; the service rejects it with
+		// ErrInvalidRole, so the list of valid roles exists only once.
+		err := groups.SetRole(r.Context(), actor, groupID, userID, group.Role(req.Role))
+		if err != nil {
+			writeGroupError(w, "set member role", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// removeMemberHandler removes a member from a group; with the own user ID it
+// is leaving the group. It must run behind requireUser.
+func removeMemberHandler(groups GroupService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := actorID(w, r)
+		if !ok {
+			return
+		}
+		groupID, ok := idFromPath(w, r, groupIDParam)
+		if !ok {
+			return
+		}
+		userID, ok := idFromPath(w, r, userIDParam)
+		if !ok {
+			return
+		}
+
+		if err := groups.RemoveMember(r.Context(), actor, groupID, userID); err != nil {
+			writeGroupError(w, "remove group member", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

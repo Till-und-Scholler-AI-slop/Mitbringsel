@@ -16,6 +16,9 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 - [ ] **Account löschen und letzter Owner:** Löscht der letzte Owner einer Gruppe seinen Account, fällt seine Mitgliedschaft per `ON DELETE CASCADE` weg und die Gruppe hat keinen Owner mehr. Beim Bau der Account-Löschung festlegen: vorher einen Owner bestimmen lassen, das älteste Mitglied automatisch befördern oder leere Gruppen löschen.
 
+- [ ] **Limit für Gruppen pro Nutzer:** `POST /api/v1/groups` legt beliebig viele Gruppen an; jeder angemeldete Nutzer könnte die Tabelle füllen. Vor dem öffentlichen Start eine Obergrenze (z.B. pro Nutzer und Mitglieder pro Gruppe) im Service festlegen, mit eigenem Fehlercode.
+- [ ] **Zeitstempel der API in UTC:** Die Antworten enthalten die Zeitzone der Datenbankverbindung (z.B. `+01:00`), nicht `Z`. Gültiges RFC 3339, aber vom Server-Setup abhängig; im Mapper `.UTC()` aufrufen, wenn das Frontend Zeiten vergleicht oder anzeigt.
+
 ## Komponenten
 
 - [ ] **`BaseButton`:** Varianten `danger` und Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen, im Login-Design noch nicht vorhanden).

@@ -67,8 +67,9 @@ type fakeGroups struct {
 	// list is returned by List, details by Get (keyed by group ID).
 	list    []group.Details
 	details map[uuid.UUID]group.Details
-	// created is returned by Create.
+	// created is returned by Create, renamed by Rename.
 	created group.Details
+	renamed group.Details
 	// err, if set, is returned by every method.
 	err error
 
@@ -76,7 +77,36 @@ type fakeGroups struct {
 	calls      int
 	gotActor   uuid.UUID
 	gotGroupID uuid.UUID
+	gotUserID  uuid.UUID
 	gotName    string
+	gotRole    group.Role
+}
+
+func (f *fakeGroups) Rename(_ context.Context, actor, groupID uuid.UUID, name string) (group.Details, error) {
+	f.calls++
+	f.gotActor, f.gotGroupID, f.gotName = actor, groupID, name
+	if f.err != nil {
+		return group.Details{}, f.err
+	}
+	return f.renamed, nil
+}
+
+func (f *fakeGroups) Delete(_ context.Context, actor, groupID uuid.UUID) error {
+	f.calls++
+	f.gotActor, f.gotGroupID = actor, groupID
+	return f.err
+}
+
+func (f *fakeGroups) SetRole(_ context.Context, actor, groupID, userID uuid.UUID, role group.Role) error {
+	f.calls++
+	f.gotActor, f.gotGroupID, f.gotUserID, f.gotRole = actor, groupID, userID, role
+	return f.err
+}
+
+func (f *fakeGroups) RemoveMember(_ context.Context, actor, groupID, userID uuid.UUID) error {
+	f.calls++
+	f.gotActor, f.gotGroupID, f.gotUserID = actor, groupID, userID
+	return f.err
 }
 
 func (f *fakeGroups) List(_ context.Context, actor uuid.UUID) ([]group.Details, error) {
@@ -146,11 +176,19 @@ func serve(router http.Handler, req *http.Request) *httptest.ResponseRecorder {
 
 func groupPathFor(id uuid.UUID) string { return groupsPath + "/" + id.String() }
 
+func memberPathFor(groupID, userID uuid.UUID) string {
+	return groupPathFor(groupID) + "/members/" + userID.String()
+}
+
 func TestGroupRoutes_requireSession(t *testing.T) {
 	routes := []struct{ method, path string }{
 		{http.MethodGet, groupsPath},
 		{http.MethodPost, groupsPath},
 		{http.MethodGet, groupPathFor(testGroupID)},
+		{http.MethodPatch, groupPathFor(testGroupID)},
+		{http.MethodDelete, groupPathFor(testGroupID)},
+		{http.MethodPatch, memberPathFor(testGroupID, otherUserID)},
+		{http.MethodDelete, memberPathFor(testGroupID, otherUserID)},
 	}
 
 	for _, route := range routes {
@@ -177,7 +215,8 @@ func TestGroupRoutes_wrongMethod(t *testing.T) {
 		wantAllow string
 	}{
 		{"collection", http.MethodPut, groupsPath, "GET, POST"},
-		{"single group", http.MethodPut, groupPathFor(testGroupID), "GET"},
+		{"single group", http.MethodPut, groupPathFor(testGroupID), "GET, PATCH, DELETE"},
+		{"member", http.MethodPost, memberPathFor(testGroupID, otherUserID), "PATCH, DELETE"},
 	}
 
 	for _, tt := range tests {
@@ -396,6 +435,233 @@ func TestCreateGroupHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+// groupCase is one request against the group routes, with what the response
+// and the service call should look like.
+type groupCase struct {
+	name       string
+	method     string
+	path       string
+	body       string
+	groups     *fakeGroups
+	wantStatus int
+	wantBody   string
+	// wantCalled is whether the service is reached at all; requests with a
+	// broken body or ID must be turned away before.
+	wantCalled bool
+	// check inspects what the service was called with. Optional.
+	check func(t *testing.T, f *fakeGroups)
+}
+
+func runGroupCases(t *testing.T, tests []groupCase) {
+	t.Helper()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := serve(newGroupRouter(tt.groups), groupRequest(tt.method, tt.path, tt.body, true))
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if got := strings.TrimSpace(rec.Body.String()); got != tt.wantBody {
+				t.Errorf("body = %s, want %s", got, tt.wantBody)
+			}
+			if called := tt.groups.calls > 0; called != tt.wantCalled {
+				t.Errorf("service called = %t, want %t", called, tt.wantCalled)
+			}
+			if tt.check != nil && tt.wantCalled {
+				tt.check(t, tt.groups)
+			}
+		})
+	}
+}
+
+const (
+	errNotFoundBody  = `{"error":{"code":"NOT_FOUND"}}`
+	errForbiddenBody = `{"error":{"code":"GROUP_OWNER_REQUIRED"}}`
+	errLastOwnerBody = `{"error":{"code":"LAST_OWNER"}}`
+	errInvalidBody   = `{"error":{"code":"INVALID_REQUEST"}}`
+)
+
+func TestRenameGroupHandler(t *testing.T) {
+	path := groupPathFor(testGroupID)
+
+	runGroupCases(t, []groupCase{
+		{
+			name: "renamed", method: http.MethodPatch, path: path, body: `{"name":" WG neu "}`,
+			groups:     &fakeGroups{renamed: testGroupDetails()},
+			wantStatus: http.StatusOK, wantBody: testGroupJSON, wantCalled: true,
+			check: func(t *testing.T, f *fakeGroups) {
+				// Trimming is the service's job; the handler passes the name on.
+				if f.gotActor != testUserID || f.gotGroupID != testGroupID || f.gotName != " WG neu " {
+					t.Errorf("called with actor %s, group %s, name %q", f.gotActor, f.gotGroupID, f.gotName)
+				}
+			},
+		},
+		{
+			name: "member is not an owner", method: http.MethodPatch, path: path, body: `{"name":"x"}`,
+			groups:     &fakeGroups{err: fmt.Errorf("rename: %w", group.ErrForbidden)},
+			wantStatus: http.StatusForbidden, wantBody: errForbiddenBody, wantCalled: true,
+		},
+		{
+			name: "not a member", method: http.MethodPatch, path: path, body: `{"name":"x"}`,
+			groups:     &fakeGroups{err: group.ErrNotFound},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody, wantCalled: true,
+		},
+		{
+			name: "invalid name", method: http.MethodPatch, path: path, body: `{"name":""}`,
+			groups:     &fakeGroups{err: group.ErrInvalidName},
+			wantStatus: http.StatusBadRequest, wantBody: `{"error":{"code":"GROUP_NAME_INVALID"}}`, wantCalled: true,
+		},
+		{
+			name: "not JSON", method: http.MethodPatch, path: path, body: `WG`,
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusBadRequest, wantBody: errInvalidBody,
+		},
+		{
+			name: "group ID is not a UUID", method: http.MethodPatch, path: groupsPath + "/nope", body: `{"name":"x"}`,
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody,
+		},
+	})
+}
+
+func TestDeleteGroupHandler(t *testing.T) {
+	path := groupPathFor(testGroupID)
+
+	runGroupCases(t, []groupCase{
+		{
+			name: "deleted", method: http.MethodDelete, path: path,
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusNoContent, wantBody: "", wantCalled: true,
+			check: func(t *testing.T, f *fakeGroups) {
+				if f.gotActor != testUserID || f.gotGroupID != testGroupID {
+					t.Errorf("called with actor %s, group %s", f.gotActor, f.gotGroupID)
+				}
+			},
+		},
+		{
+			name: "member is not an owner", method: http.MethodDelete, path: path,
+			groups:     &fakeGroups{err: group.ErrForbidden},
+			wantStatus: http.StatusForbidden, wantBody: errForbiddenBody, wantCalled: true,
+		},
+		{
+			name: "not a member", method: http.MethodDelete, path: path,
+			groups:     &fakeGroups{err: group.ErrNotFound},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody, wantCalled: true,
+		},
+		{
+			name: "group ID is not a UUID", method: http.MethodDelete, path: groupsPath + "/nope",
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody,
+		},
+	})
+}
+
+func TestSetMemberRoleHandler(t *testing.T) {
+	path := memberPathFor(testGroupID, otherUserID)
+	wantCall := func(role group.Role) func(t *testing.T, f *fakeGroups) {
+		return func(t *testing.T, f *fakeGroups) {
+			if f.gotActor != testUserID || f.gotGroupID != testGroupID || f.gotUserID != otherUserID || f.gotRole != role {
+				t.Errorf("called with actor %s, group %s, user %s, role %q",
+					f.gotActor, f.gotGroupID, f.gotUserID, f.gotRole)
+			}
+		}
+	}
+
+	runGroupCases(t, []groupCase{
+		{
+			name: "make owner", method: http.MethodPatch, path: path, body: `{"role":"owner"}`,
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusNoContent, wantBody: "", wantCalled: true, check: wantCall(group.RoleOwner),
+		},
+		{
+			name: "make member", method: http.MethodPatch, path: path, body: `{"role":"member"}`,
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusNoContent, wantBody: "", wantCalled: true, check: wantCall(group.RoleMember),
+		},
+		// The handler does not know the valid roles; the service says no.
+		{
+			name: "unknown role", method: http.MethodPatch, path: path, body: `{"role":"admin"}`,
+			groups:     &fakeGroups{err: group.ErrInvalidRole},
+			wantStatus: http.StatusBadRequest, wantBody: errInvalidBody, wantCalled: true, check: wantCall("admin"),
+		},
+		{
+			name: "last owner steps down", method: http.MethodPatch, path: path, body: `{"role":"member"}`,
+			groups:     &fakeGroups{err: group.ErrLastOwner},
+			wantStatus: http.StatusConflict, wantBody: errLastOwnerBody, wantCalled: true,
+		},
+		{
+			name: "member is not an owner", method: http.MethodPatch, path: path, body: `{"role":"owner"}`,
+			groups:     &fakeGroups{err: group.ErrForbidden},
+			wantStatus: http.StatusForbidden, wantBody: errForbiddenBody, wantCalled: true,
+		},
+		{
+			name: "target is not in the group", method: http.MethodPatch, path: path, body: `{"role":"owner"}`,
+			groups:     &fakeGroups{err: group.ErrNotFound},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody, wantCalled: true,
+		},
+		{
+			name: "not JSON", method: http.MethodPatch, path: path, body: `owner`,
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusBadRequest, wantBody: errInvalidBody,
+		},
+		{
+			name: "user ID is not a UUID", method: http.MethodPatch, path: groupPathFor(testGroupID) + "/members/nope",
+			body: `{"role":"owner"}`, groups: &fakeGroups{},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody,
+		},
+		{
+			name: "group ID is not a UUID", method: http.MethodPatch, path: groupsPath + "/nope/members/" + otherUserID.String(),
+			body: `{"role":"owner"}`, groups: &fakeGroups{},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody,
+		},
+	})
+}
+
+func TestRemoveMemberHandler(t *testing.T) {
+	wantCall := func(userID uuid.UUID) func(t *testing.T, f *fakeGroups) {
+		return func(t *testing.T, f *fakeGroups) {
+			if f.gotActor != testUserID || f.gotGroupID != testGroupID || f.gotUserID != userID {
+				t.Errorf("called with actor %s, group %s, user %s", f.gotActor, f.gotGroupID, f.gotUserID)
+			}
+		}
+	}
+	other := memberPathFor(testGroupID, otherUserID)
+
+	runGroupCases(t, []groupCase{
+		{
+			name: "remove someone else", method: http.MethodDelete, path: other,
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusNoContent, wantBody: "", wantCalled: true, check: wantCall(otherUserID),
+		},
+		// Leaving is removing oneself: same route, own ID.
+		{
+			name: "leave", method: http.MethodDelete, path: memberPathFor(testGroupID, testUserID),
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusNoContent, wantBody: "", wantCalled: true, check: wantCall(testUserID),
+		},
+		{
+			name: "last owner", method: http.MethodDelete, path: memberPathFor(testGroupID, testUserID),
+			groups:     &fakeGroups{err: group.ErrLastOwner},
+			wantStatus: http.StatusConflict, wantBody: errLastOwnerBody, wantCalled: true,
+		},
+		{
+			name: "member removes someone else", method: http.MethodDelete, path: other,
+			groups:     &fakeGroups{err: group.ErrForbidden},
+			wantStatus: http.StatusForbidden, wantBody: errForbiddenBody, wantCalled: true,
+		},
+		{
+			name: "target is not in the group", method: http.MethodDelete, path: other,
+			groups:     &fakeGroups{err: group.ErrNotFound},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody, wantCalled: true,
+		},
+		{
+			name: "user ID is not a UUID", method: http.MethodDelete, path: groupPathFor(testGroupID) + "/members/nope",
+			groups:     &fakeGroups{},
+			wantStatus: http.StatusNotFound, wantBody: errNotFoundBody,
+		},
+	})
 }
 
 // TestWriteGroupError checks the mapping of every domain error. Wrapped

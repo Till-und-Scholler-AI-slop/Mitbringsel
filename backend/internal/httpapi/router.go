@@ -72,6 +72,10 @@ func NewRouter(deps Deps) http.Handler {
 	r.handle(http.MethodGet, groupsPath, protect(listGroupsHandler(deps.Groups)))
 	r.handle(http.MethodPost, groupsPath, protect(createGroupHandler(deps.Groups)))
 	r.handle(http.MethodGet, groupPath, protect(getGroupHandler(deps.Groups)))
+	r.handle(http.MethodPatch, groupPath, protect(renameGroupHandler(deps.Groups)))
+	r.handle(http.MethodDelete, groupPath, protect(deleteGroupHandler(deps.Groups)))
+	r.handle(http.MethodPatch, memberPath, protect(setMemberRoleHandler(deps.Groups)))
+	r.handle(http.MethodDelete, memberPath, protect(removeMemberHandler(deps.Groups)))
 	// Not behind requireUser: logging out must work with an expired
 	// session, too.
 	r.handle(http.MethodPost, logoutPath, logoutHandler(deps.Sessions, deps.Env))
