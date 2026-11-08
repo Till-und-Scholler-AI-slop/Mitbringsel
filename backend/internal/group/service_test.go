@@ -302,8 +302,15 @@ func TestService_RenameAndDelete(t *testing.T) {
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Rename() error = %v, want %v", err, tt.wantErr)
 			}
-			if tt.wantErr == nil && got.Name != "WG Kaiserstr. 5" {
+			if tt.wantErr != nil {
+				return
+			}
+			if got.Name != "WG Kaiserstr. 5" {
 				t.Errorf("Name = %q, want trimmed new name", got.Name)
+			}
+			// Like Create, the result is the group as the actor sees it.
+			if got.Role != RoleOwner || len(got.Members) != 2 {
+				t.Errorf("Role = %q with %d members, want owner with 2", got.Role, len(got.Members))
 			}
 		})
 		t.Run(tt.name+" deletes", func(t *testing.T) {

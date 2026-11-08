@@ -90,20 +90,20 @@ func (s *Service) Get(ctx context.Context, actor, groupID uuid.UUID) (Details, e
 	return Details{Group: g, Role: role, Members: members[groupID]}, nil
 }
 
-// Rename changes the group's name. Owners only.
-func (s *Service) Rename(ctx context.Context, actor, groupID uuid.UUID, name string) (Group, error) {
+// Rename changes the group's name and returns the renamed group as the actor
+// sees it, like Create. Owners only.
+func (s *Service) Rename(ctx context.Context, actor, groupID uuid.UUID, name string) (Details, error) {
 	name, err := normalizeName(name)
 	if err != nil {
-		return Group{}, err
+		return Details{}, err
 	}
 	if err := requireOwner(ctx, s.repo, groupID, actor); err != nil {
-		return Group{}, err
+		return Details{}, err
 	}
-	g, err := s.repo.Rename(ctx, groupID, name)
-	if err != nil {
-		return Group{}, fmt.Errorf("rename group: %w", err)
+	if _, err := s.repo.Rename(ctx, groupID, name); err != nil {
+		return Details{}, fmt.Errorf("rename group: %w", err)
 	}
-	return g, nil
+	return s.Get(ctx, actor, groupID)
 }
 
 // Delete removes the group with all its members. Owners only.
