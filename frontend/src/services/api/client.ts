@@ -124,6 +124,12 @@ export async function apiPut(path: string, body: unknown): Promise<void> {
   await request(path, jsonInit('PUT', body))
 }
 
+/** Like apiPut, for endpoints that answer with a JSON body. */
+export async function apiPutJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await request(path, jsonInit('PUT', body))
+  return (await response.json()) as T
+}
+
 /** Sends DELETE. Resolves without a value (204 No Content). */
 export async function apiDelete(path: string): Promise<void> {
   await request(path, jsonInit('DELETE'))

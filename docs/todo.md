@@ -6,7 +6,7 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 - [ ] **Datenschutz und Impressum:** Seiten anlegen und im Login-Footer links neben dem Sprachschalter verlinken (im Design vorgesehen). Hängt an der offenen Entscheidung in der Roadmap.
 - [ ] **Google-App veröffentlichen:** Für den Status "In Produktion" im Google-Zustimmungsbildschirm braucht es einen Link zur Datenschutzerklärung (hängt am Punkt oben); bis dahin können sich nur eingetragene Testnutzer anmelden.
-- [ ] **Stores bei Logout und abgelaufener Sitzung leeren:** Der Gruppen-Store leert sich selbst, sobald sich die Nutzer-ID ändert (`watch` auf die ID in `stores/groups.ts`). Listen-Store (Phase 4) und weitere Stores müssen dasselbe tun.
+- [ ] **Stores bei Logout und abgelaufener Sitzung leeren:** Der Gruppen-Store leert sich selbst, sobald sich die Nutzer-ID ändert (`watch` auf die ID in `stores/groups.ts`). Der Listen-Store (`stores/lists.ts`) tut das auch. Der Artikel-Store (F3) muss dasselbe tun.
 - [ ] **Sprache aus dem Nutzerprofil:** Der Sprachschalter merkt sich die Wahl vorerst nur in `localStorage`. Sobald das Profil die Sprache speichern kann, gewinnt nach dem Login das Profil (siehe [Konventionen](conventions.md), i18n).
 
 ## Gruppen

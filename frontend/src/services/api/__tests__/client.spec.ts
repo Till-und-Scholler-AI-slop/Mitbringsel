@@ -8,6 +8,7 @@ import {
   apiPost,
   apiPostJson,
   apiPut,
+  apiPutJson,
   setUnauthenticatedHandler,
 } from '../client'
 
@@ -94,7 +95,7 @@ describe('apiPost', () => {
   })
 })
 
-describe('apiPostJson, apiPatchJson, apiPut, apiDelete', () => {
+describe('apiPostJson, apiPatchJson, apiPut, apiPutJson, apiDelete', () => {
   it('apiPostJson sends the body and returns the parsed answer', async () => {
     stubFetch(() => Promise.resolve(Response.json({ id: 'g1' }, { status: 201 })))
 
@@ -135,6 +136,20 @@ describe('apiPostJson, apiPatchJson, apiPut, apiDelete', () => {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: '{"role":"admin"}',
+    })
+  })
+
+  it('apiPutJson sends the body and returns the parsed answer', async () => {
+    stubFetch(() => Promise.resolve(Response.json({ id: 'l1', archivedAt: '2026-01-01T10:00:00Z' })))
+
+    await expect(apiPutJson('/lists/l1/archived', { archived: true })).resolves.toEqual({
+      id: 'l1',
+      archivedAt: '2026-01-01T10:00:00Z',
+    })
+    expect(fetch).toHaveBeenCalledWith('/api/v1/lists/l1/archived', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"archived":true}',
     })
   })
 

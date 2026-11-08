@@ -50,6 +50,18 @@ export type InviteCreated = Schemas['InviteCreated']
 /** Response of POST /api/v1/invites/{token}/accept. */
 export type InviteAccepted = Schemas['InviteAccepted']
 
+/** A shopping list of a group (GET /api/v1/lists/{listId}). */
+export type List = Schemas['List']
+
+/** Response of GET /api/v1/groups/{groupId}/lists. */
+export type ListListResponse = Schemas['ListList']
+
+/** Body of POST /api/v1/groups/{groupId}/lists and PATCH /api/v1/lists/{listId}. */
+export type ListNameRequest = Schemas['ListNameRequest']
+
+/** Body of PUT /api/v1/lists/{listId}/archived. */
+export type SetListArchivedRequest = Schemas['SetListArchivedRequest']
+
 /** Error body of every failed API call: the backend sends codes, not texts. */
 export type ApiErrorBody = Schemas['Error']
 
