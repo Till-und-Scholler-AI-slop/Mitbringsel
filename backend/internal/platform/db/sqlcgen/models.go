@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Group struct {
@@ -40,7 +39,7 @@ type Item struct {
 	ID          uuid.UUID
 	ListID      uuid.UUID
 	Name        string
-	Quantity    pgtype.Numeric
+	Quantity    *float64
 	Unit        *string
 	Note        *string
 	Checked     bool
