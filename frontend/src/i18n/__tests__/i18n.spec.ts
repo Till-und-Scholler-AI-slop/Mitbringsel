@@ -49,6 +49,8 @@ const API_ERROR_CODES: Record<ApiErrorCode, true> = {
   INVITE_EXPIRED: true,
   TOO_MANY_INVITES: true,
   RATE_LIMITED: true,
+  LIST_NOT_FOUND: true,
+  LIST_NAME_INVALID: true,
 }
 
 describe('error messages', () => {

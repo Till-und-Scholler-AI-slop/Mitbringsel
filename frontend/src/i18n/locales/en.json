@@ -137,6 +137,8 @@
     "INVALID_IDENTITY": "The sign-in data is incomplete.",
     "INVALID_REQUEST": "The request was invalid.",
     "INVALID_ROLE": "This role is not possible.",
+    "LIST_NAME_INVALID": "The list name must be 1 to 50 characters long.",
+    "LIST_NOT_FOUND": "This list does not exist, or you are not a member of its household.",
     "METHOD_NOT_ALLOWED": "This action is not possible here.",
     "NETWORK": "The server cannot be reached.",
     "NOT_FOUND": "This does not exist (anymore).",

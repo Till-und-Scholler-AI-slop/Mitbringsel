@@ -137,6 +137,8 @@
     "INVALID_IDENTITY": "Die Anmeldedaten sind unvollständig.",
     "INVALID_REQUEST": "Die Anfrage war ungültig.",
     "INVALID_ROLE": "Diese Rolle ist nicht möglich.",
+    "LIST_NAME_INVALID": "Der Name der Liste muss 1 bis 50 Zeichen lang sein.",
+    "LIST_NOT_FOUND": "Diese Liste gibt es nicht, oder du bist kein Mitglied des Haushalts.",
     "METHOD_NOT_ALLOWED": "Diese Aktion ist hier nicht möglich.",
     "NETWORK": "Der Server ist nicht erreichbar.",
     "NOT_FOUND": "Das gibt es nicht (mehr).",
