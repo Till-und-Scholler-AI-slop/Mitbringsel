@@ -29,6 +29,10 @@ Status: entschieden (siehe [ADR 0004](adr/0004-lww-pro-feld.md)).
 
 - **Regel:** LWW pro Feld statt pro Artikel. Hakt Person A einen Artikel ab, während Person B die Menge ändert, bleiben beide Änderungen erhalten. Nur wenn beide dasselbe Feld ändern, gewinnt die spätere Änderung.
 - **Zeitstempel:** Jede Änderung trägt einen Zeitstempel einer Hybrid Logical Clock (HLC) vom Client. Die HLC kombiniert Uhrzeit und Zähler und bleibt auch bei leicht abweichenden Geräteuhren konsistent. Zeitstempel, die mehr als 5 Minuten in der Zukunft liegen, setzt der Server auf seine eigene Zeit.
+- **HLC-Format:** Eine HLC stempelt die Änderung eines einzelnen Feldes, sie identifiziert nicht den Artikel. Sie ist ein Text fester Breite, `<Zeit>-<Zähler>-<Knoten>`, z.B. `0000019a2b3c4d5e-0001-3f2a9c`: Millisekunden seit 1970 (16 Hex-Ziffern, klein), Zähler (4 Hex-Ziffern, klein) und Knoten-ID des Geräts (1 bis 64 Zeichen aus `A-Z a-z 0-9 _ -`). Wegen der festen Breite ist der Textvergleich (`<`, `>`) schon der HLC-Vergleich, in Go wie in TypeScript. Umsetzung: `backend/internal/item/hlc.go`.
+- **Felder mit Uhr:** `name`, `quantity`, `unit`, `note` und `checked`. `checked_by` und `checked_at` gehören zur Uhr von `checked`. Die Uhren stehen in `items.field_clocks`, `Merge` (`backend/internal/item/merge.go`) entscheidet, welche Felder einer Änderung gewinnen.
+- **Gleiche Änderung zweimal:** Eine gleiche HLC gewinnt nicht gegen die gespeicherte; ein erneut gesendetes `mutate` ändert also nichts (zusätzlich zur `opId`).
+- **Archivierte Listen:** Artikel in einer archivierten Liste bleiben änderbar, damit Offline-Änderungen aus der Zeit vor dem Archivieren nicht verloren gehen.
 - **Löschen gewinnt:** Gelöschte Artikel werden als Tombstone (`deleted_at`) markiert und nicht wiederbelebt, auch wenn später eine Offline-Bearbeitung eintrifft. Tombstones werden nach 30 Tagen endgültig entfernt.
 - **Gleichstand:** Bei identischem Zeitstempel entscheidet der lexikografische Vergleich der Client-IDs, damit alle Geräte zum selben Ergebnis kommen.
 
