@@ -9,7 +9,9 @@ import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { GROUP_NAME_MAX_LENGTH, validateGroupName } from '@/services/groupName'
 import { useGroupsStore } from '@/stores/groups'
+import type { Group } from '@/types/api'
 
+const emit = defineEmits<{ created: [group: Group] }>()
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
@@ -46,8 +48,9 @@ async function submit() {
   if (problem.value || submitting.value) return
   submitting.value = true
   try {
-    await groups.create(name.value.trim())
+    const group = await groups.create(name.value.trim())
     open.value = false
+    emit('created', group)
   } catch (err) {
     errorCode.value = err instanceof ApiError ? err.code : ERROR_CODE_UNKNOWN
   } finally {

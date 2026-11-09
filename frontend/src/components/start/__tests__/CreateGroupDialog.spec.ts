@@ -79,6 +79,7 @@ describe('CreateGroupDialog', () => {
 
     expect(service.create).toHaveBeenCalledWith('WG')
     expect(wrapper.props('open')).toBe(false)
+    expect(wrapper.emitted('created')).toEqual([[expect.objectContaining({ name: 'WG' })]])
     wrapper.unmount()
   })
 

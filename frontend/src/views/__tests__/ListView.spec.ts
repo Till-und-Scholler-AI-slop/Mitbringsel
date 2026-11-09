@@ -126,6 +126,11 @@ async function mountView(listId = 'l1', groupId = 'g1') {
     routes: [
       { path: '/', name: 'home', component: { template: '<p />' } },
       { path: '/groups/:groupId', name: 'group', component: { template: '<p />' } },
+      {
+        path: '/groups/:groupId/settings',
+        name: 'group-settings',
+        component: { template: '<p />' },
+      },
       { path: '/groups/:groupId/lists/:listId', name: 'list', component: { template: '<p />' } },
     ],
   })
@@ -153,7 +158,7 @@ describe('ListView: loading', () => {
     expect(listsService.list).toHaveBeenCalledWith('g1', { includeArchived: true })
     expect(itemsService.list).toHaveBeenCalledWith('l1')
     expect(wrapper.get('h1').text()).toBe('Supermarkt')
-    expect(wrapper.get('.group-name').text()).toBe('WG Kaiserstraße')
+    expect(wrapper.get('.switcher .toggle').text()).toBe('WG Kaiserstraße')
     expect(openNames(wrapper)).toEqual(['Milch', 'Brot'])
     wrapper.unmount()
   })
@@ -229,14 +234,39 @@ describe('ListView: loading', () => {
 })
 
 describe('ListView: header', () => {
-  it('links the logo to the start page and the household name to the household', async () => {
+  it('links the logo to the start page', async () => {
+    const { wrapper } = await mountView()
+
+    const home = wrapper.get('a.home')
+    expect(home.attributes('href')).toBe('/')
+    expect(home.attributes('aria-label')).toBe('To the start page')
+    wrapper.unmount()
+  })
+
+  it('switches the household with the menu at its name', async () => {
+    groupsService.list.mockResolvedValue([GROUP, { ...GROUP, id: 'g2', name: 'Familie' }])
     const { wrapper, router } = await mountView()
 
-    expect(wrapper.get('a.home').attributes('href')).toBe('/')
-    await wrapper.get('a[aria-label="Open household WG Kaiserstraße"]').trigger('click')
+    await wrapper.get('.switcher .toggle').trigger('click')
+    await wrapper.findAll('.switcher .group')[1]!.trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.name).toBe('group')
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g2')
+    wrapper.unmount()
+  })
+
+  it('founds a household from the menu and opens it', async () => {
+    groupsService.create.mockResolvedValue({ ...GROUP, id: 'g9', name: 'Familie' })
+    const { wrapper, router } = await mountView()
+
+    await wrapper.get('.switcher .toggle').trigger('click')
+    await wrapper.get('.switcher button.action').trigger('click')
+    await wrapper.get('dialog[open] input').setValue('Familie')
+    await wrapper.get('dialog[open] form').trigger('submit')
+    await flushPromises()
+
+    expect(groupsService.create).toHaveBeenCalledWith('Familie')
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g9')
     wrapper.unmount()
   })
 

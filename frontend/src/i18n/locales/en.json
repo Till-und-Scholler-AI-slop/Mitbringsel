@@ -163,7 +163,15 @@
     "pack": "pack | packs"
   },
   "list": {
-    "groupLink": "Open household {name}",
+    "home": "To the start page",
+    "switcher": {
+      "title": "Your households",
+      "members": "{count} member | {count} members",
+      "manage": "Manage household",
+      "create": "Create household",
+      "join": "Paste invite link",
+      "start": "All households (start)"
+    },
     "membersLabel": "Members: {names}",
     "chips": "Lists",
     "newList": "New list",

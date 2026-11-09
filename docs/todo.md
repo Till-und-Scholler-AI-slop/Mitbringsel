@@ -6,13 +6,12 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
-- [ ] **Haushalt-Wechsler im Kopf der Listenansicht** (`start-4-wechsler`): Haushalte, „Haushalt verwalten“, „Haushalt gründen“, „Einladungslink einfügen“, „Alle Haushalte“. Bis dahin verlinkt der Haushaltsname auf den Haushalt-Screen.
-- [ ] **Haushalt-Screen entfernen:** `/groups/:groupId` öffnet die zuletzt geöffnete Liste (pro Gerät gemerkt), sonst die erste aktive; ohne Liste zeigt die Listenansicht einen Leerzustand mit „Liste anlegen“. `GroupView` und `ListCard` fallen weg.
+- [ ] **Haushalt-Screen entfernen:** Der Wechsler und die Startseite verlinken noch auf `/groups/:groupId`. Künftig öffnet die Route die zuletzt geöffnete Liste (pro Gerät gemerkt), sonst die erste aktive; ohne Liste zeigt die Listenansicht einen Leerzustand mit „Liste anlegen“. `GroupView` und `ListCard` fallen weg.
 - [ ] **Startseite nach Iteration 1** (`start-1-standard`): ganze Karte als Link, Listen als Chips auf der Karte, kein Zahnrad, „Gründen“ und „Beitreten“ in gestrichelter Box unter den Karten.
 - [ ] **Verwalten nach dem Design** (`verwalten-owner-hell`): jeder Abschnitt als Karte mit Rand und Sticker-Schatten, Name als eigene Karte mit „Umbenennen“, kleine graue Überschriften, Mitglieder-Zähler, Austreten/Löschen in Karte mit rotem Rand, Kopf mit rundem Zurück-Button.
 - [ ] **Desktop-Rahmen mit Seitenleiste** für Start und Listenansicht (`start-desktop-*`): Logo, Start, Haushalte mit aufklappbaren Listen, „Haushalt gründen“, Sync-Status, Profil. War für die Listenansicht geplant, ist dort aber nicht umgesetzt worden; Startseite und Listenansicht sind auf dem Desktop bisher nur das gestreckte Smartphone-Layout.
 - [ ] **Desktop-Varianten von Verwalten und Einladung** (`verwalten-desktop-*`, `markt2-einladung-desktop-*`): Verwalten zweispaltig, Einladung mit Kopf und Karte nebeneinander. `GroupSettingsView` und `InviteView` sind vorerst einspaltig.
-- [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): kleines Logo ohne Schatten im Kopf, aktiver Chip mit Innenschatten und Druck-/Rückfeder-Animation, erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
+- [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): aktiver Chip mit Innenschatten und Druck-/Rückfeder-Animation, erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
 
 ## Login
 
