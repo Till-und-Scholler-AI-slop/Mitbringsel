@@ -55,19 +55,21 @@ afterEach(() => {
 })
 
 describe('ListChips', () => {
-  it('links every list', async () => {
+  it('shows every list as a button, not as a link', async () => {
     const { wrapper } = await mountChips()
 
-    expect(wrapper.findAll('a').map((a) => a.attributes('href'))).toEqual([
-      '/groups/g1/lists/l1',
-      '/groups/g1/lists/l2',
+    // A held link opens the browser's own menu on phones.
+    expect(wrapper.find('a').exists()).toBe(false)
+    expect(wrapper.findAll('.chip--list .chip-name').map((b) => b.text())).toEqual([
+      'Supermarkt',
+      'Baumarkt',
     ])
   })
 
   it('marks the current list and shows how many items are open', async () => {
     const { wrapper } = await mountChips({ openCount: 3 })
 
-    const [current, other] = wrapper.findAll('a')
+    const [current, other] = wrapper.findAll('.chip--list')
     expect(current!.classes()).toContain('chip--current')
     expect(current!.attributes('aria-current')).toBe('page')
     expect(current!.find('.count').text()).toBe('3')
@@ -92,7 +94,7 @@ describe('ListChips', () => {
   it('goes to another list on a plain click', async () => {
     const { wrapper, router } = await mountChips()
 
-    await wrapper.findAll('a')[1]!.trigger('click')
+    await wrapper.findAll('.chip--list')[1]!.trigger('click')
     await flushPromises()
 
     expect(router.currentRoute.value.params.listId).toBe('l2')
@@ -102,7 +104,7 @@ describe('ListChips', () => {
   it('opens the actions when the current list is chosen again', async () => {
     const { wrapper, router } = await mountChips()
 
-    await wrapper.findAll('a')[0]!.trigger('click')
+    await wrapper.findAll('.chip--list')[0]!.trigger('click')
 
     expect(wrapper.emitted('actions')).toEqual([[expect.objectContaining({ id: 'l1' })]])
     expect(router.currentRoute.value.params.listId).toBe('l1')
@@ -111,7 +113,7 @@ describe('ListChips', () => {
   it('tells screen readers about that on the current chip', async () => {
     const { wrapper } = await mountChips()
 
-    const [current, other] = wrapper.findAll('a')
+    const [current, other] = wrapper.findAll('.chip--list')
     const hint = wrapper.get(`#${current!.attributes('aria-describedby')}`)
     expect(hint.text()).toBe('Select again to rename, archive or delete')
     expect(other!.attributes('aria-describedby')).toBeUndefined()
@@ -120,7 +122,7 @@ describe('ListChips', () => {
   it('opens the actions of any list on a right click', async () => {
     const { wrapper } = await mountChips()
 
-    await wrapper.findAll('a')[1]!.trigger('contextmenu')
+    await wrapper.findAll('.chip--list')[1]!.trigger('contextmenu')
 
     expect(wrapper.emitted('actions')).toEqual([[expect.objectContaining({ id: 'l2' })]])
   })
@@ -128,7 +130,7 @@ describe('ListChips', () => {
   it('opens the actions on a long press and stays on the list', async () => {
     vi.useFakeTimers()
     const { wrapper, router } = await mountChips()
-    const other = wrapper.findAll('a')[1]!
+    const other = wrapper.findAll('.chip--list')[1]!
 
     await other.trigger('pointerdown', { pointerType: 'touch' })
     vi.advanceTimersByTime(LONG_PRESS_MS)

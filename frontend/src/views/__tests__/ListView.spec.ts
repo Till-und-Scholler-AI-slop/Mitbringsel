@@ -289,7 +289,7 @@ describe('ListView: list actions', () => {
     listsService.rename.mockResolvedValue(list('l1', 'Wocheneinkauf'))
     const { wrapper } = await mountView()
 
-    await wrapper.get('a[aria-current="page"]').trigger('click')
+    await wrapper.get('.chip--list[aria-current="page"]').trigger('click')
     expect(wrapper.get('dialog[open] h2').text()).toBe('Manage list')
     await actionButton(wrapper, 'Rename').trigger('click')
     await wrapper.get('dialog[open] input').setValue('Wocheneinkauf')
@@ -307,7 +307,7 @@ describe('ListView: list actions', () => {
   it('opens the actions of another list on a right click', async () => {
     const { wrapper } = await mountView()
 
-    await wrapper.findAll('a.chip')[1]!.trigger('contextmenu')
+    await wrapper.findAll('.chip--list')[1]!.trigger('contextmenu')
 
     expect(wrapper.get('dialog[open] .question').text()).toBe('What should happen to “Baumarkt”?')
     wrapper.unmount()
@@ -318,7 +318,7 @@ describe('ListView: list actions', () => {
     listsService.remove.mockResolvedValue(undefined)
     const { wrapper, router } = await mountView()
 
-    await wrapper.get('a[aria-current="page"]').trigger('click')
+    await wrapper.get('.chip--list[aria-current="page"]').trigger('click')
     await actionButton(wrapper, 'Delete').trigger('click')
     await wrapper.get('dialog[open] button.delete').trigger('click')
     await flushPromises()
@@ -334,7 +334,7 @@ describe('ListView: list actions', () => {
     listsService.remove.mockResolvedValue(undefined)
     const { wrapper, router } = await mountView()
 
-    await wrapper.get('a[aria-current="page"]').trigger('click')
+    await wrapper.get('.chip--list[aria-current="page"]').trigger('click')
     await actionButton(wrapper, 'Delete').trigger('click')
     await wrapper.get('dialog[open] button.delete').trigger('click')
     await flushPromises()
