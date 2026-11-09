@@ -2,6 +2,19 @@
 
 Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen. Erledigtes wird gestrichen (Zeile löschen), Neues mit kurzem Kontext ergänzt. Grundsätzliche offene Entscheidungen stehen in der [Roadmap](roadmap.md).
 
+## Design-Abgleich
+
+Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
+
+- [ ] **Listen-Aktionen an den Chips:** Gedrückthalten, Rechtsklick und zweiter Klick auf den aktiven Chip öffnen `ListActionsDialog` (zieht nach `components/list/`); Chip „Archiv (n)“ mit Auswahl der archivierten Listen.
+- [ ] **Haushalt-Wechsler im Kopf der Listenansicht** (`start-4-wechsler`): Haushalte, „Haushalt verwalten“, „Haushalt gründen“, „Einladungslink einfügen“, „Alle Haushalte“. Bis dahin verlinkt der Haushaltsname auf den Haushalt-Screen.
+- [ ] **Haushalt-Screen entfernen:** `/groups/:groupId` öffnet die zuletzt geöffnete Liste (pro Gerät gemerkt), sonst die erste aktive; ohne Liste zeigt die Listenansicht einen Leerzustand mit „Liste anlegen“. `GroupView` und `ListCard` fallen weg.
+- [ ] **Startseite nach Iteration 1** (`start-1-standard`): ganze Karte als Link, Listen als Chips auf der Karte, kein Zahnrad, „Gründen“ und „Beitreten“ in gestrichelter Box unter den Karten.
+- [ ] **Verwalten nach dem Design** (`verwalten-owner-hell`): jeder Abschnitt als Karte mit Rand und Sticker-Schatten, Name als eigene Karte mit „Umbenennen“, kleine graue Überschriften, Mitglieder-Zähler, Austreten/Löschen in Karte mit rotem Rand, Kopf mit rundem Zurück-Button.
+- [ ] **Desktop-Rahmen mit Seitenleiste** für Start und Listenansicht (`start-desktop-*`): Logo, Start, Haushalte mit aufklappbaren Listen, „Haushalt gründen“, Sync-Status, Profil. War für die Listenansicht geplant, ist dort aber nicht umgesetzt worden; Startseite und Listenansicht sind auf dem Desktop bisher nur das gestreckte Smartphone-Layout.
+- [ ] **Desktop-Varianten von Verwalten und Einladung** (`verwalten-desktop-*`, `markt2-einladung-desktop-*`): Verwalten zweispaltig, Einladung mit Kopf und Karte nebeneinander. `GroupSettingsView` und `InviteView` sind vorerst einspaltig.
+- [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): kleines Logo ohne Schatten im Kopf, aktiver Chip mit Innenschatten und Druck-/Rückfeder-Animation, erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
+
 ## Login
 
 - [ ] **Datenschutz und Impressum:** Seiten anlegen und im Login-Footer links neben dem Sprachschalter verlinken (im Design vorgesehen). Hängt an der offenen Entscheidung in der Roadmap.
@@ -18,7 +31,7 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 ## Artikel
 
-- [ ] **Haushalt-Wechsler im Kopf der Listenansicht:** Das Design hat dort ein Auswahlmenü (`aria-haspopup="listbox"`) zum Wechseln des Haushalts. Vorerst verlinkt der Haushaltsname auf den Haushalt-Screen, gewechselt wird über die Startseite.
+- [ ] **Symbol und Farbe pro Liste:** Die Chips im Design haben links einen Kreis in der Listenfarbe mit Symbol (🛒, 🧴, 🔨), auch auf den Karten der Startseite und in der Desktop-Seitenleiste. `lists` hat dafür keine Spalten; braucht eine Schema- und API-Änderung.
 - [ ] **Hervorhebung und Uhr-Symbol in der Artikelzeile:** Das Design markiert kürzlich von anderen geänderte Artikel („gerade geändert") und noch nicht synchronisierte mit einer Uhr. Beides braucht den Live-Sync (Phase 5).
 - [ ] **Abgehakte gesammelt entfernen:** Die Übersicht verlangt "abgehakte Artikel können gesammelt entfernt werden". Das erzeugt viele Tombstones auf einmal und gehört zum Sync (Phase 5): als eine Nachricht, die für jeden Artikel einen Tombstone und eine `serverSeq` vergibt.
 - [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Zusammen mit dem Aufräum-Job für Sessions, Einladungen und `processed_ops` (Phase 5) umsetzen; danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
@@ -26,19 +39,16 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 ## Start
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
-- [ ] **Listen-Chips und letzte Aktivität auf den Haushalt-Karten:** Die Listenansicht zeigt die Listen schon als Chips im Kopf. Auf den Karten der Startseite fehlen sie noch, ebenso die letzte Aktivität (braucht den Sync, Phase 5).
-- [ ] **Desktop-Rahmen mit Seitenleiste:** Das Design hat auf dem Desktop eine Navigation links (Start, Haushalte, Listen). Startseite und Haushalt-Screen sind vorerst einspaltig; die Seitenleiste baue ich mit der Listenansicht (Phase 4).
+- [ ] **Zähler und letzte Aktivität auf den Haushalt-Karten:** Die Chips auf den Karten (Iteration 1) zeigen die Zahl offener Artikel; `List` liefert sie nicht, dafür braucht die API ein Feld oder einen eigenen Endpunkt. Die letzte Aktivität („Mehmet hat Hafermilch abgehakt“) braucht den Sync (Phase 5).
 - [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
 ## Verwalten
 
-- [ ] **Desktop-Variante des Verwalten-Screens:** Das Design (`verwalten-desktop-*`) setzt Name und Mitglieder neben Einladung und Austreten. `GroupSettingsView` ist vorerst einspaltig.
 - [ ] **Namensformular teilen:** `RenameGroupDialog` und `CreateGroupDialog` sind fast gleich (Validierung, Fehleranzeige, Buttons). Mit `ListNameDialog` (Anlegen und Umbenennen von Listen) gibt es eine dritte Verwendung: jetzt ein gemeinsames Formular herausziehen.
 
 ## Einladung
 
-- [ ] **Desktop-Variante der Einladungsseite:** Das Design (`markt2-einladung-desktop-*`) setzt Kopf und Karte nebeneinander. `InviteView` ist vorerst einspaltig und zentriert, wie auf dem Handy.
 - [ ] **„Erstellt von dir“ bei offenen Links:** Das Design markiert die eigenen Links. `Invite` liefert nur `createdByName`; Namen sind nicht eindeutig, also steht überall „Erstellt von {Name}“. Mit einer Ersteller-ID im Schema (`api/openapi.yaml`) nachrüsten.
 - [ ] **Ablaufdatum der Einladung anzeigen:** Die Vorschau liefert `expiresAt`, die Seite zeigt es nicht (im Design nicht vorgesehen).
 

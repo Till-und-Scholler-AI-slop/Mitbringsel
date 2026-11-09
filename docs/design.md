@@ -1,6 +1,6 @@
 # Design mit Claude Design
 
-Das visuelle Design entsteht in Claude Design. Gewählt ist die Richtung „Markt bunt“ (Iteration 4 von „Kräftig & farbig“), der Login folgt Iteration 2 mit kompaktem Kopf. Das Frontend übernimmt daraus Design-Tokens und Layouts, schreibt die Komponenten aber selbst in Vue nach. Generiertes HTML wird nie 1:1 kopiert.
+Das visuelle Design entsteht in Claude Design. Gewählt ist die Richtung „Markt bunt“ (Iteration 4 von „Kräftig & farbig“), der Login folgt Iteration 2 mit kompaktem Kopf, die Startseite Iteration 1 (Seite „Start“, `start-*` und `StartApp`). Das Frontend übernimmt daraus Design-Tokens und Layouts, schreibt die Komponenten aber selbst in Vue nach. Generiertes HTML wird nie 1:1 kopiert.
 
 ## Vorgehen
 
@@ -13,13 +13,32 @@ Das visuelle Design entsteht in Claude Design. Gewählt ist die Richtung „Mark
 ## Kern-Screens
 
 - Login
-- Gruppenübersicht
-- Listenübersicht einer Gruppe
+- Startseite mit den Haushalten
 - Listenansicht mit Artikeln (Hauptscreen, Smartphone und Desktop)
-- Artikel hinzufügen und bearbeiten (Bottom Sheet auf dem Smartphone, Dialog auf dem Desktop)
-- Gruppe verwalten und Einladungslink teilen
+- Artikel hinzufügen und bearbeiten (Bottom Sheet auf dem Smartphone, Panel neben der Liste auf dem Desktop)
+- Haushalt verwalten und Einladungslink teilen
 - Einstellungen (Sprache, Theme, Account)
 - Zustände: leere Liste, offline, Synchronisation läuft, Fehler
+
+## Navigation
+
+Es gibt keinen eigenen Screen mit der Listenübersicht eines Haushalts. Wer einen Haushalt öffnet, landet direkt in einer Liste: in der zuletzt geöffneten (pro Gerät gemerkt), sonst in der ersten aktiven. Hat der Haushalt keine Liste, zeigt die Listenansicht einen Leerzustand mit „Liste anlegen“.
+
+- **Listen wechseln:** über die Chips im Kopf der Listenansicht.
+- **Listen-Aktionen** (umbenennen, archivieren, löschen): Chip gedrückt halten (Touch), Rechtsklick (Maus) oder den schon aktiven Chip noch einmal antippen bzw. mit Enter auslösen (Tastatur, Screenreader).
+- **Archivierte Listen:** ein Chip „Archiv (n)“ am Ende der Chip-Reihe.
+- **Haushalt wechseln:** Wechsler-Menü am Haushaltsnamen im Kopf der Listenansicht (`start-4-wechsler`). Es enthält die Haushalte, „Haushalt verwalten“, „Haushalt gründen“, „Einladungslink einfügen“ und „Alle Haushalte“.
+- **Haushalt verwalten:** eigener Screen (`verwalten-*`), erreichbar über das Wechsler-Menü und auf dem Desktop über die Seitenleiste. Die Karten der Startseite haben kein Zahnrad.
+
+## Desktop
+
+Ab `48rem` Breite gilt ein eigenes Layout, nicht das gestreckte Smartphone-Layout:
+
+- **Start und Listenansicht** teilen einen Rahmen mit grüner Seitenleiste links: Logo, Start, die Haushalte mit aufklappbaren Listen, „Haushalt gründen“, Sync-Status und Profil (`start-desktop-*`, `StartApp` mit `layout="desktop"`). Rechts der Inhalt: auf der Startseite die Haushalt-Karten, in der Liste der Haushaltsname groß mit Wechsler und die Chips umbrechend statt scrollend.
+- **Artikel anlegen und bearbeiten** als Panel rechts neben der Liste (`markt2-desktop-*`).
+- **Verwalten** zweispaltig: links Name und Mitglieder, rechts Einladung und Austreten/Löschen (`verwalten-desktop-*`).
+- **Einladung** mit Kopf und Karte nebeneinander (`markt2-einladung-desktop-*`).
+- **Login** nach `login-desktop-*`.
 
 ## Anforderungen an das Design
 
