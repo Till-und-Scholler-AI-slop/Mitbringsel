@@ -100,6 +100,7 @@ async function mountView() {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/', name: 'home', component: { template: '<p />' } },
       { path: '/login', name: 'login', component: { template: '<p />' } },
       { path: '/groups/:groupId', name: 'group', component: { template: '<p />' } },
       {
@@ -107,6 +108,7 @@ async function mountView() {
         name: 'group-settings',
         component: { template: '<p />' },
       },
+      { path: '/groups/:groupId/lists/:listId', name: 'list', component: { template: '<p />' } },
     ],
   })
   await useAuthStore().load()

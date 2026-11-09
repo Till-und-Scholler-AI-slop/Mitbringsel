@@ -5,15 +5,25 @@ import { createAppI18n } from '@/i18n'
 
 import ProfileMenu from '../ProfileMenu.vue'
 
-function mountMenu() {
+function mountMenu(row = false) {
   return mount(ProfileMenu, {
-    props: { name: 'Lena Müller', avatarUrl: null },
+    props: { name: 'Lena Müller', avatarUrl: null, row },
     global: { plugins: [createAppI18n(['en'], null)] },
     attachTo: document.body,
   })
 }
 
 describe('ProfileMenu', () => {
+  it('shows the name in the row variant and is named by it', () => {
+    const wrapper = mountMenu(true)
+
+    const toggle = wrapper.get('.toggle')
+    expect(toggle.get('.row-name').text()).toBe('Lena Müller')
+    expect(toggle.get('.row-you').text()).toBe("That's you")
+    expect(toggle.attributes('aria-label')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('is closed at first and named after the user', () => {
     const wrapper = mountMenu()
 
