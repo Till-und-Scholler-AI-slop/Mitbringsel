@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
@@ -12,15 +11,18 @@ import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import GroupCard from '@/components/start/GroupCard.vue'
 import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import ProfileMenu from '@/components/start/ProfileMenu.vue'
+import StartEmpty from '@/components/start/StartEmpty.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
+import { useListsStore } from '@/stores/lists'
 
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 const groups = useGroupsStore()
+const lists = useListsStore()
 const { online } = useOnlineStatus()
 const loadError = useErrorMessage(() => groups.errorCode)
 
@@ -44,6 +46,18 @@ async function logout() {
 }
 
 onMounted(() => groups.load())
+
+// The cards show the lists of each household: one request per household,
+// once. Opening a household later finds its lists already loaded.
+watch(
+  () => groups.groups,
+  (all) => {
+    for (const group of all) {
+      if (lists.statusOf(group.id) === 'idle') lists.load(group.id)
+    }
+  },
+  { immediate: true },
+)
 
 // The load that failed offline is repeated once the connection is back.
 watch(online, (isOnline) => {
@@ -90,31 +104,24 @@ watch(online, (isOnline) => {
           </BaseButton>
         </div>
 
-        <BaseEmptyState
-          v-else-if="empty"
-          :title="t('start.empty.title')"
-          :description="t('start.empty.description')"
-        >
-          <template #icon><BaseIcon name="home" :size="24" /></template>
-          <BaseButton @click="createOpen = true">
-            <BaseIcon name="plus" /> {{ t('start.create.open') }}
-          </BaseButton>
-          <BaseButton variant="secondary" @click="joinOpen = true">
-            <BaseIcon name="link" /> {{ t('start.join.open') }}
-          </BaseButton>
-        </BaseEmptyState>
+        <StartEmpty v-else-if="empty" @create="createOpen = true" @join="joinOpen = true" />
 
         <template v-else>
           <ul class="cards">
             <li v-for="group in groups.groups" :key="group.id">
-              <GroupCard :group="group" />
+              <GroupCard :group="group" :lists="lists.activeLists(group.id)" />
             </li>
           </ul>
           <div class="create-box">
-            <BaseButton @click="createOpen = true">
+            <BaseButton class="create-button" aria-haspopup="dialog" @click="createOpen = true">
               <BaseIcon name="plus" /> {{ t('start.create.open') }}
             </BaseButton>
-            <BaseButton variant="secondary" @click="joinOpen = true">
+            <BaseButton
+              variant="secondary"
+              class="create-button"
+              aria-haspopup="dialog"
+              @click="joinOpen = true"
+            >
               <BaseIcon name="link" /> {{ t('start.join.open') }}
             </BaseButton>
           </div>
@@ -247,10 +254,14 @@ watch(online, (isOnline) => {
 .create-box {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: 0.625rem;
+  padding: 0.875rem;
   border: var(--border-width-md) dashed var(--color-text-muted);
-  border-radius: var(--radius-lg);
+  border-radius: 1.375rem;
+}
+
+.create-button {
+  min-height: 3.25rem;
 }
 
 @media (min-width: 48rem) {

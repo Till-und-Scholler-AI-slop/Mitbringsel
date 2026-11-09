@@ -21,11 +21,14 @@
       "loading": "Loading households …",
       "loadFailed": "Your households could not be loaded.",
       "members": "{count} member | {count} members",
-      "settings": "Manage {name}"
+      "cardLists": "Lists: {lists}"
     },
     "empty": {
       "title": "No household yet",
-      "description": "Create a household or join one where someone already shops."
+      "description": "Create a household or join one where someone already shops.",
+      "createHint": "Start fresh and invite the others.",
+      "joinHint": "Got a link? Then you're in right away.",
+      "noLink": "You can't join without a link. Ask someone from the household to send you one."
     },
     "create": {
       "open": "Create household",

@@ -5,127 +5,139 @@ import { RouterLink } from 'vue-router'
 
 import BaseAvatar from '@/components/base/BaseAvatar.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
-import type { Group } from '@/types/api'
+import type { Group, List } from '@/types/api'
 
 // More members than this show as the first few only; the count is in the text.
 const MAX_AVATARS = 4
 const AVATAR_SIZE = 26
 
-const props = defineProps<{ group: Group }>()
+// A household on the start page. The whole card is one link to the
+// household, which opens its last or first list. Screen readers hear one
+// summary instead of the parts.
+//
+// lists: the active lists of the household, empty while they load.
+const props = defineProps<{ group: Group; lists: List[] }>()
 
 const { t } = useI18n()
 const avatars = computed(() => props.group.members.slice(0, MAX_AVATARS))
+const membersText = computed(() => t('start.groups.members', props.group.members.length))
+
+const label = computed(() => {
+  const head = `${props.group.name}, ${membersText.value}`
+  if (props.lists.length === 0) return head
+  const names = props.lists.map((list) => list.name).join(', ')
+  return `${head}. ${t('start.groups.cardLists', { lists: names })}`
+})
 </script>
 
 <template>
-  <article class="card">
-    <span class="icon" aria-hidden="true"><BaseIcon name="home" :size="22" /></span>
-    <div class="text">
-      <!-- title: the full name for names too long for the line -->
-      <h3 class="name" :title="group.name">
-        <!-- The link covers the whole card (see .link::after); the settings link stays above it. -->
-        <RouterLink class="link" :to="{ name: 'group', params: { groupId: group.id } }">{{
-          group.name
-        }}</RouterLink>
-      </h3>
-      <p class="members">{{ t('start.groups.members', group.members.length) }}</p>
-    </div>
-    <span class="avatars" aria-hidden="true">
-      <BaseAvatar
-        v-for="member in avatars"
-        :key="member.userId"
-        class="avatar"
-        :name="member.displayName"
-        :src="member.avatarUrl"
-        :size="AVATAR_SIZE"
-      />
+  <RouterLink
+    class="card"
+    :to="{ name: 'group', params: { groupId: group.id } }"
+    :aria-label="label"
+  >
+    <span class="head" aria-hidden="true">
+      <span class="house"><BaseIcon name="home" :size="22" /></span>
+      <span class="text">
+        <span class="name">{{ group.name }}</span>
+        <span class="members">{{ membersText }}</span>
+      </span>
+      <span class="avatars">
+        <BaseAvatar
+          v-for="member in avatars"
+          :key="member.userId"
+          class="avatar"
+          :name="member.displayName"
+          :src="member.avatarUrl"
+          :size="AVATAR_SIZE"
+        />
+      </span>
+      <BaseIcon class="chevron" name="chevronRight" :size="22" :stroke-width="2.75" />
     </span>
-    <RouterLink
-      class="settings"
-      :to="{ name: 'group-settings', params: { groupId: group.id } }"
-      :aria-label="t('start.groups.settings', { name: group.name })"
-    >
-      <BaseIcon name="settings" :size="22" />
-    </RouterLink>
-  </article>
+
+    <span v-if="lists.length > 0" class="lists" aria-hidden="true">
+      <span v-for="list in lists" :key="list.id" class="list">{{ list.name }}</span>
+    </span>
+  </RouterLink>
 </template>
 
 <style scoped>
+/* Lifts under the mouse and sinks onto its shadow when pressed. */
 .card {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: var(--space-4);
+  border: var(--border-width-md) solid var(--color-border);
+  border-radius: 1.375rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  box-shadow: var(--shadow-sticker);
+  transition:
+    transform 0.25s var(--easing-bounce),
+    box-shadow 0.25s;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+}
+
+.card:active {
+  transform: translateY(3px);
+  box-shadow: none;
+  transition-duration: 60ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}
+
+.head {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4);
-  border: var(--border-width-md) solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sticker);
 }
 
-.icon {
+.house {
   flex: none;
   display: grid;
   place-items: center;
   width: 2.75rem;
   height: 2.75rem;
   border-radius: var(--radius-full);
-  background: var(--color-brand);
-  color: var(--color-on-brand);
+  background: var(--color-house-bg);
+  color: var(--color-house-text);
 }
 
 .text {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
-/* One line with "…" instead of wrapping: the name can be up to 30 characters. */
 .name {
-  margin: 0;
-  overflow: hidden;
-  font-size: var(--font-size-xl);
+  font-size: 1.25rem;
   font-weight: var(--font-weight-black);
-  line-height: var(--line-height-heading);
+  line-height: 1.5625rem;
   letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .members {
-  margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+  line-height: 1.1875rem;
 }
 
 .avatars {
   flex: none;
   display: flex;
-}
-
-.link {
-  color: inherit;
-  text-decoration: none;
-}
-
-.link::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-}
-
-/* Looks like BaseIconButton, but it is a link: it leads to another page. */
-.settings {
-  position: relative;
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: var(--size-touch);
-  height: var(--size-touch);
-  border: var(--border-width-md) solid var(--color-border);
-  border-radius: var(--radius-full);
-  background: var(--color-surface);
-  color: var(--color-text);
 }
 
 /* Overlapping, each with a ring in the card color to tell them apart. */
@@ -134,6 +146,32 @@ const avatars = computed(() => props.group.members.slice(0, MAX_AVATARS))
 }
 
 .avatar + .avatar {
-  margin-left: calc(-1 * var(--space-2));
+  margin-left: -7px;
+}
+
+.chevron {
+  flex: none;
+}
+
+.lists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* inline-block, not flex: "…" for a long name works on block boxes only. */
+.list {
+  max-width: 100%;
+  box-sizing: border-box;
+  display: inline-block;
+  padding: 0 var(--space-3);
+  line-height: 2.25rem;
+  border-radius: var(--radius-full);
+  background: var(--color-bg);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
