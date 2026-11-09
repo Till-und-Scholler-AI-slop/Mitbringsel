@@ -21,11 +21,14 @@
       "loading": "Haushalte werden geladen …",
       "loadFailed": "Deine Haushalte konnten nicht geladen werden.",
       "members": "{count} Mitglied | {count} Mitglieder",
-      "settings": "{name} verwalten"
+      "cardLists": "Listen: {lists}"
     },
     "empty": {
       "title": "Noch kein Haushalt",
-      "description": "Lege einen Haushalt an oder tritt einem bei, in dem schon jemand einkauft."
+      "description": "Lege einen Haushalt an oder tritt einem bei, in dem schon jemand einkauft.",
+      "createHint": "Neu anfangen, die anderen lädst du ein.",
+      "joinHint": "Du hast einen Link bekommen? Dann bist du gleich dabei.",
+      "noLink": "Ohne Link kannst du nicht beitreten. Bitte eine Person aus dem Haushalt, dir einen zu schicken."
     },
     "create": {
       "open": "Haushalt gründen",

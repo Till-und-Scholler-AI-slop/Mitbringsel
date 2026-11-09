@@ -6,7 +6,6 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
-- [ ] **Startseite nach Iteration 1** (`start-1-standard`): ganze Karte als Link, Listen als Chips auf der Karte, kein Zahnrad, „Gründen“ und „Beitreten“ in gestrichelter Box unter den Karten.
 - [ ] **Verwalten nach dem Design** (`verwalten-owner-hell`): jeder Abschnitt als Karte mit Rand und Sticker-Schatten, Name als eigene Karte mit „Umbenennen“, kleine graue Überschriften, Mitglieder-Zähler, Austreten/Löschen in Karte mit rotem Rand, Kopf mit rundem Zurück-Button.
 - [ ] **Desktop-Rahmen mit Seitenleiste** für Start und Listenansicht (`start-desktop-*`): Logo, Start, Haushalte mit aufklappbaren Listen, „Haushalt gründen“, Sync-Status, Profil. War für die Listenansicht geplant, ist dort aber nicht umgesetzt worden; Startseite und Listenansicht sind auf dem Desktop bisher nur das gestreckte Smartphone-Layout.
 - [ ] **Desktop-Varianten von Verwalten und Einladung** (`verwalten-desktop-*`, `markt2-einladung-desktop-*`): Verwalten zweispaltig, Einladung mit Kopf und Karte nebeneinander. `GroupSettingsView` und `InviteView` sind vorerst einspaltig.
@@ -36,7 +35,7 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 ## Start
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
-- [ ] **Zähler und letzte Aktivität auf den Haushalt-Karten:** Die Chips auf den Karten (Iteration 1) zeigen die Zahl offener Artikel; `List` liefert sie nicht, dafür braucht die API ein Feld oder einen eigenen Endpunkt. Die letzte Aktivität („Mehmet hat Hafermilch abgehakt“) braucht den Sync (Phase 5).
+- [ ] **Zähler und letzte Aktivität auf den Haushalt-Karten:** Die Chips auf den Karten (Iteration 1) zeigen die Zahl offener Artikel; `List` liefert sie nicht, dafür braucht die API ein Feld oder einen eigenen Endpunkt. Die letzte Aktivität („Mehmet hat Hafermilch abgehakt“) braucht den Sync (Phase 5). Die Listen selbst lädt die Startseite einmal pro Sitzung; Listen, die andere anlegen, erscheinen erst nach dem Neuladen der Seite, bis der Sync sie bringt.
 - [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
