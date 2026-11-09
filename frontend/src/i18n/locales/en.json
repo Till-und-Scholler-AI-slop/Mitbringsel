@@ -167,6 +167,12 @@
     "membersLabel": "Members: {names}",
     "chips": "Lists",
     "newList": "New list",
+    "chipHint": "Select again to rename, archive or delete",
+    "archive": {
+      "chip": "Archive ({count})",
+      "title": "Archived lists",
+      "description": "Open a list to look at it. To restore it, hold its chip or select it again."
+    },
     "archivedBadge": "Archived",
     "loading": "Loading list …",
     "loadFailed": "The list could not be loaded.",

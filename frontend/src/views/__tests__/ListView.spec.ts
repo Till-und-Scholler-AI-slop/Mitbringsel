@@ -281,6 +281,83 @@ describe('ListView: header', () => {
   })
 })
 
+describe('ListView: list actions', () => {
+  const actionButton = (w: Mounted, title: string) =>
+    w.findAll('button.action').find((b) => b.find('.action-title').text() === title)!
+
+  it('opens the actions when the current chip is chosen again and renames from there', async () => {
+    listsService.rename.mockResolvedValue(list('l1', 'Wocheneinkauf'))
+    const { wrapper } = await mountView()
+
+    await wrapper.get('a[aria-current="page"]').trigger('click')
+    expect(wrapper.get('dialog[open] h2').text()).toBe('Manage list')
+    await actionButton(wrapper, 'Rename').trigger('click')
+    await wrapper.get('dialog[open] input').setValue('Wocheneinkauf')
+    await wrapper.get('dialog[open] form').trigger('submit')
+    await flushPromises()
+
+    expect(listsService.rename).toHaveBeenCalledWith('l1', 'Wocheneinkauf')
+    expect(wrapper.findAll('.chip-name').map((e) => e.text())).toEqual([
+      'Wocheneinkauf',
+      'Baumarkt',
+    ])
+    wrapper.unmount()
+  })
+
+  it('opens the actions of another list on a right click', async () => {
+    const { wrapper } = await mountView()
+
+    await wrapper.findAll('a.chip')[1]!.trigger('contextmenu')
+
+    expect(wrapper.get('dialog[open] .question').text()).toBe('What should happen to “Baumarkt”?')
+    wrapper.unmount()
+  })
+
+  it('goes on with the first active list when the open one is deleted', async () => {
+    groupsService.list.mockResolvedValue([{ ...GROUP, role: 'owner' }])
+    listsService.remove.mockResolvedValue(undefined)
+    const { wrapper, router } = await mountView()
+
+    await wrapper.get('a[aria-current="page"]').trigger('click')
+    await actionButton(wrapper, 'Delete').trigger('click')
+    await wrapper.get('dialog[open] button.delete').trigger('click')
+    await flushPromises()
+
+    expect(listsService.remove).toHaveBeenCalledWith('l1')
+    expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l2' })
+    wrapper.unmount()
+  })
+
+  it('goes to the household when the last list is deleted', async () => {
+    groupsService.list.mockResolvedValue([{ ...GROUP, role: 'owner' }])
+    listsService.list.mockResolvedValue([list('l1', 'Supermarkt')])
+    listsService.remove.mockResolvedValue(undefined)
+    const { wrapper, router } = await mountView()
+
+    await wrapper.get('a[aria-current="page"]').trigger('click')
+    await actionButton(wrapper, 'Delete').trigger('click')
+    await wrapper.get('dialog[open] button.delete').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('group')
+    wrapper.unmount()
+  })
+
+  it('shows the archived lists behind the archive chip', async () => {
+    listsService.list.mockResolvedValue([
+      list('l1', 'Supermarkt'),
+      list('l3', 'Grillparty', '2026-02-01T10:00:00Z'),
+    ])
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.chip--archive').trigger('click')
+
+    expect(wrapper.get('dialog[open] h2').text()).toBe('Archived lists')
+    expect(wrapper.findAll('dialog[open] a').map((a) => a.text())).toEqual(['Grillparty'])
+    wrapper.unmount()
+  })
+})
+
 describe('ListView: items', () => {
   // A function: the store changes the items it is given, so tests must not share them.
   const makeItems = () => [

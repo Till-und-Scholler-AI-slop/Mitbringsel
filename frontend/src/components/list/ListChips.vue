@@ -1,32 +1,88 @@
 <script setup lang="ts">
+import { useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import { useLongPress } from '@/composables/useLongPress'
 import type { List } from '@/types/api'
 
 // The lists of a household as chips in the green bar; the current one looks
 // pressed in and shows how many items are still open.
-defineProps<{ groupId: string; lists: List[]; currentId: string; openCount: number }>()
-defineEmits<{ create: [] }>()
+//
+// The actions of a list (rename, archive, delete) open with a long press or
+// right click on its chip, or by choosing the current chip again; the last
+// one is the way for keyboards and screen readers.
+//
+// lists: the active lists. currentArchived: the open list is archived and so
+// not among them; the archive chip looks pressed in instead.
+const props = defineProps<{
+  groupId: string
+  lists: List[]
+  currentId: string
+  openCount: number
+  archivedCount: number
+  currentArchived: boolean
+}>()
+const emit = defineEmits<{ create: []; actions: [list: List]; archive: [] }>()
 
 const { t } = useI18n()
+const hintId = useId()
+const press = useLongPress<List>((list) => emit('actions', list))
+
+// navigate: the RouterLink's own handler, called only for a plain choice of
+// another list.
+function onClick(event: MouseEvent, list: List, navigate: (e: MouseEvent) => unknown) {
+  if (press.consumeClick(event)) {
+    event.preventDefault()
+    return
+  }
+  if (list.id === props.currentId) {
+    event.preventDefault()
+    emit('actions', list)
+    return
+  }
+  navigate(event)
+}
 </script>
 
 <template>
   <nav class="chips" :aria-label="t('list.chips')">
+    <!-- custom: the link is our own <a>, so a long press can stop the
+         navigation before the router sees the click. -->
     <RouterLink
       v-for="list in lists"
       :key="list.id"
+      v-slot="{ href, navigate }"
       :to="{ name: 'list', params: { groupId, listId: list.id } }"
-      :class="['chip', { 'chip--current': list.id === currentId }]"
+      custom
     >
-      <span class="chip-name">{{ list.name }}</span>
-      <span v-if="list.id === currentId && openCount > 0" class="count">{{ openCount }}</span>
+      <a
+        :href="href"
+        :class="['chip', { 'chip--current': list.id === currentId }]"
+        :aria-current="list.id === currentId ? 'page' : undefined"
+        :aria-describedby="list.id === currentId ? hintId : undefined"
+        v-on="press.handlers(list)"
+        @click="onClick($event, list, navigate)"
+      >
+        <span class="chip-name">{{ list.name }}</span>
+        <span v-if="list.id === currentId && openCount > 0" class="count">{{ openCount }}</span>
+      </a>
     </RouterLink>
+    <button
+      v-if="archivedCount > 0"
+      type="button"
+      :class="['chip', 'chip--archive', { 'chip--current': currentArchived }]"
+      aria-haspopup="dialog"
+      @click="$emit('archive')"
+    >
+      <BaseIcon name="archive" :size="18" />
+      {{ t('list.archive.chip', { count: archivedCount }) }}
+    </button>
     <button type="button" class="add" :aria-label="t('list.newList')" @click="$emit('create')">
       <BaseIcon name="plus" :size="20" :stroke-width="2.5" />
     </button>
+    <span :id="hintId" class="sr-only">{{ t('list.chipHint') }}</span>
   </nav>
 </template>
 
@@ -59,6 +115,10 @@ const { t } = useI18n()
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-heavy);
   text-decoration: none;
+  cursor: pointer;
+  /* No link preview or text selection while a finger is held on a chip. */
+  -webkit-touch-callout: none;
+  user-select: none;
   transition:
     transform var(--duration-press) var(--easing-bounce),
     box-shadow var(--duration-press) var(--easing-bounce);
