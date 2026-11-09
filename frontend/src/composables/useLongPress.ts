@@ -6,73 +6,89 @@ export const LONG_PRESS_MS = 500
 export const LONG_PRESS_TOLERANCE_PX = 10
 
 /**
- * Detects a long press on one of several elements, each with its own target
- * (e.g. the list behind a chip).
+ * Detects a long press or right click on one of several elements, each with
+ * its own target (e.g. the list behind a chip).
  *
- * Android and desktop browsers report a long press or right click as a
- * `contextmenu` event. iOS Safari does not, so a touch is timed here as well.
- * Whichever comes first fires; the other one is ignored.
+ * A right click fires at once. A finger fires when it lifts, not while it
+ * still holds: the browser runs its own long press on whatever lies under
+ * the finger by then, and if that is a dialog we just opened, it selects
+ * text in it and shows its copy and share menu.
  *
- * After a long press the browser may still send a click on release, which
- * would follow a link. The click handler asks `consumeClick` and drops it.
+ * A finger counts as held after LONG_PRESS_MS of our own timer (iOS Safari
+ * reports nothing) or once Android reports its long press as a contextmenu
+ * event, whichever comes first.
  */
 export function useLongPress<T>(onPress: (target: T) => void) {
   let timer: ReturnType<typeof setTimeout> | undefined
+  // Where the finger went down; null while no finger is on the element.
   let start: { x: number; y: number } | null = null
-  let fired = false
+  // The finger has stayed long enough; it fires when it lifts.
+  let held = false
 
-  function cancel() {
+  function reset() {
     clearTimeout(timer)
     timer = undefined
     start = null
+    held = false
   }
 
-  function fire(target: T) {
-    cancel()
-    fired = true
-    onPress(target)
+  function hold() {
+    clearTimeout(timer)
+    timer = undefined
+    held = true
   }
 
   /** Event listeners for one element, for `v-on="handlers(target)"`. */
   function handlers(target: T) {
     return {
       pointerdown(event: PointerEvent) {
-        fired = false
         // Mouse and pen use the right click, which arrives as contextmenu.
         if (event.pointerType !== 'touch') return
-        cancel()
+        reset()
         start = { x: event.clientX, y: event.clientY }
-        timer = setTimeout(() => fire(target), LONG_PRESS_MS)
+        timer = setTimeout(hold, LONG_PRESS_MS)
       },
       pointermove(event: PointerEvent) {
         if (!start) return
         const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y)
-        if (distance > LONG_PRESS_TOLERANCE_PX) cancel()
+        if (distance > LONG_PRESS_TOLERANCE_PX) reset()
       },
-      pointerup: cancel,
-      // The browser took the touch over, e.g. to scroll the chip row.
-      pointercancel: cancel,
-      contextmenu(event: MouseEvent) {
-        // No browser menu and no link preview.
+      // The finger lifts; touchend follows and decides.
+      pointerup() {
+        clearTimeout(timer)
+        timer = undefined
+        start = null
+      },
+      // The browser took the touch over. While scrolling the chip row that
+      // happens before the finger counts as held; after that, Android does
+      // not scroll any more and the press still counts.
+      pointercancel() {
+        const fire = held
+        reset()
+        if (fire) onPress(target)
+      },
+      touchend(event: Event) {
+        if (!held) return
+        reset()
+        // No click after the press: it would follow the chip.
         event.preventDefault()
-        if (!fired) fire(target)
+        onPress(target)
+      },
+      contextmenu(event: MouseEvent) {
+        // No browser menu.
+        event.preventDefault()
+        // A finger on the element: Android's long press, it waits for the
+        // finger to lift. Otherwise a right click, it fires at once. This
+        // does not depend on a pointerdown before it, which Firefox does not
+        // always send after a right click that opened a modal dialog.
+        if (start) hold()
+        else onPress(target)
       },
     }
   }
 
-  /**
-   * True if the click belongs to a long press that already fired; true only
-   * once. A click from the keyboard (detail 0) never belongs to one.
-   */
-  function consumeClick(event: MouseEvent): boolean {
-    if (event.detail === 0) return false
-    const belongs = fired
-    fired = false
-    return belongs
-  }
+  // A timer must not outlive the component.
+  if (getCurrentScope()) onScopeDispose(reset)
 
-  // A timer must not fire into a component that is gone.
-  if (getCurrentScope()) onScopeDispose(cancel)
-
-  return { handlers, consumeClick }
+  return { handlers }
 }

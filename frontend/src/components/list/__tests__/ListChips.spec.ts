@@ -127,21 +127,23 @@ describe('ListChips', () => {
     expect(wrapper.emitted('actions')).toEqual([[expect.objectContaining({ id: 'l2' })]])
   })
 
-  it('opens the actions on a long press and stays on the list', async () => {
+  it('opens the actions when a held finger lifts and stays on the list', async () => {
     vi.useFakeTimers()
     const { wrapper, router } = await mountChips()
     const other = wrapper.findAll('.chip--list')[1]!
 
     await other.trigger('pointerdown', { pointerType: 'touch' })
     vi.advanceTimersByTime(LONG_PRESS_MS)
+    expect(wrapper.emitted('actions')).toBeUndefined()
+
     await other.trigger('pointerup', { pointerType: 'touch' })
-    // A click from the finger has detail 1; trigger() cannot set it.
-    other.element.dispatchEvent(
-      new MouseEvent('click', { detail: 1, bubbles: true, cancelable: true }),
-    )
+    const touchend = new Event('touchend', { bubbles: true, cancelable: true })
+    other.element.dispatchEvent(touchend)
     await flushPromises()
 
     expect(wrapper.emitted('actions')).toEqual([[expect.objectContaining({ id: 'l2' })]])
+    // The browser sends no click after a canceled touchend.
+    expect(touchend.defaultPrevented).toBe(true)
     expect(router.currentRoute.value.params.listId).toBe('l1')
   })
 
