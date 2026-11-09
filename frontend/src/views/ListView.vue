@@ -10,17 +10,20 @@ import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
+import HouseholdSwitcher from '@/components/list/HouseholdSwitcher.vue'
 import ItemRow from '@/components/list/ItemRow.vue'
 import ListActionsDialog from '@/components/list/ListActionsDialog.vue'
 import ListChips from '@/components/list/ListChips.vue'
 import ListNameDialog from '@/components/list/ListNameDialog.vue'
+import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
+import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { canManage } from '@/services/groupRoles'
 import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
-import type { Item, List } from '@/types/api'
+import type { Group, Item, List } from '@/types/api'
 
 type ViewState = 'loading' | 'failed' | 'missing' | 'ready'
 
@@ -36,6 +39,8 @@ const lists = useListsStore()
 const items = useItemsStore()
 
 const createOpen = ref(false)
+const createGroupOpen = ref(false)
+const joinOpen = ref(false)
 const archiveOpen = ref(false)
 // The list whose actions are open, and the one being renamed; at most one
 // of the two is set.
@@ -136,6 +141,10 @@ function startRename(listId: string) {
   renamingId.value = listId
 }
 
+function openCreatedGroup(created: Group) {
+  return router.push({ name: 'group', params: { groupId: created.id } })
+}
+
 function openCreated(created: List) {
   return router.push({ name: 'list', params: { groupId: props.groupId, listId: created.id } })
 }
@@ -144,17 +153,18 @@ function openCreated(created: List) {
 <template>
   <div class="page">
     <header class="bar">
-      <RouterLink class="home" :to="{ name: 'home' }"><BrandLogo /></RouterLink>
+      <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
+        <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
+        <BrandLogo small flat aria-hidden="true" />
+      </RouterLink>
 
       <div v-if="group" class="household">
-        <RouterLink
-          class="group-link"
-          :to="{ name: 'group', params: { groupId } }"
-          :aria-label="t('list.groupLink', { name: group.name })"
-        >
-          <span class="group-name">{{ group.name }}</span>
-          <BaseIcon name="chevronRight" :size="24" :stroke-width="2.5" />
-        </RouterLink>
+        <HouseholdSwitcher
+          :current="group"
+          :groups="groups.groups"
+          @create="createGroupOpen = true"
+          @join="joinOpen = true"
+        />
         <span
           class="members"
           role="img"
@@ -303,6 +313,8 @@ function openCreated(created: List) {
       :lists="archived"
       :current-id="listId"
     />
+    <CreateGroupDialog v-model:open="createGroupOpen" @created="openCreatedGroup" />
+    <JoinGroupDialog v-model:open="joinOpen" />
   </div>
 </template>
 
@@ -328,8 +340,20 @@ function openCreated(created: List) {
   align-self: flex-start;
   display: flex;
   align-items: center;
+  gap: var(--space-2);
   min-height: var(--size-touch);
+  color: inherit;
   text-decoration: none;
+}
+
+.home-icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  box-sizing: border-box;
+  border: var(--border-width-sm) solid currentColor;
+  border-radius: var(--radius-full);
 }
 
 .household {
@@ -337,27 +361,6 @@ function openCreated(created: List) {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-.group-link {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: var(--size-touch);
-  color: inherit;
-  text-decoration: none;
-}
-
-.group-name {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 1.6875rem;
-  font-weight: var(--font-weight-display);
-  line-height: 2rem;
-  letter-spacing: -0.025em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .members {

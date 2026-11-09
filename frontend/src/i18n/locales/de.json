@@ -163,7 +163,15 @@
     "pack": "Packung | Packungen"
   },
   "list": {
-    "groupLink": "Haushalt {name} öffnen",
+    "home": "Zur Startseite",
+    "switcher": {
+      "title": "Deine Haushalte",
+      "members": "{count} Mitglied | {count} Mitglieder",
+      "manage": "Haushalt verwalten",
+      "create": "Haushalt gründen",
+      "join": "Einladungslink einfügen",
+      "start": "Alle Haushalte (Start)"
+    },
     "membersLabel": "Mitglieder: {names}",
     "chips": "Listen",
     "newList": "Neue Liste",
