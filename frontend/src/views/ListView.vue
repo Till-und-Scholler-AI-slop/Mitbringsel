@@ -9,6 +9,7 @@ import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
+import AppFrame from '@/components/layout/AppFrame.vue'
 import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
 import HouseholdSwitcher from '@/components/list/HouseholdSwitcher.vue'
 import ItemRow from '@/components/list/ItemRow.vue'
@@ -173,183 +174,187 @@ function openCreated(created: List) {
 </script>
 
 <template>
-  <div class="page">
-    <header class="bar">
-      <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
-        <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
-        <BrandLogo small flat aria-hidden="true" />
-      </RouterLink>
+  <AppFrame :group-id="groupId" :list-id="listId">
+    <div class="page">
+      <!-- On the phone a green header; on the desktop the plain top of the
+         page, as the sidebar holds the way back to the start page. -->
+      <header class="bar">
+        <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
+          <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
+          <BrandLogo small flat aria-hidden="true" />
+        </RouterLink>
 
-      <div v-if="group" class="household">
-        <HouseholdSwitcher
-          :current="group"
-          :groups="groups.groups"
-          @create="createGroupOpen = true"
-          @join="joinOpen = true"
-        />
-        <span
-          class="members"
-          role="img"
-          :aria-label="t('list.membersLabel', { names: memberNames })"
-        >
-          <BaseAvatar
-            v-for="member in shownMembers"
-            :key="member.userId"
-            class="member"
-            :name="member.displayName"
-            :src="member.avatarUrl"
-            :size="AVATAR_SIZE"
+        <div v-if="group" class="household">
+          <HouseholdSwitcher
+            :current="group"
+            :groups="groups.groups"
+            @create="createGroupOpen = true"
+            @join="joinOpen = true"
           />
-        </span>
-      </div>
+          <span
+            class="members"
+            role="img"
+            :aria-label="t('list.membersLabel', { names: memberNames })"
+          >
+            <BaseAvatar
+              v-for="member in shownMembers"
+              :key="member.userId"
+              class="member"
+              :name="member.displayName"
+              :src="member.avatarUrl"
+              :size="AVATAR_SIZE"
+            />
+          </span>
+        </div>
 
-      <ListChips
-        v-if="list || state === 'noLists'"
-        :group-id="groupId"
-        :lists="active"
-        :current-id="listKey"
-        :open-count="open.length"
-        :archived-count="archived.length"
-        :current-archived="list?.archivedAt != null"
-        @create="createOpen = true"
-        @actions="actionsId = $event.id"
-        @archive="archiveOpen = true"
-      />
-    </header>
+        <ListChips
+          v-if="list || state === 'noLists'"
+          :group-id="groupId"
+          :lists="active"
+          :current-id="listKey"
+          :open-count="open.length"
+          :archived-count="archived.length"
+          :current-archived="list?.archivedAt != null"
+          @create="createOpen = true"
+          @actions="actionsId = $event.id"
+          @archive="archiveOpen = true"
+        />
+      </header>
 
-    <main class="content">
-      <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
-      <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
+      <main class="content">
+        <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
+        <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
 
-      <p v-if="state === 'loading'" class="loading" role="status">
-        <BaseSpinner /> {{ t('list.loading') }}
-      </p>
-
-      <div v-else-if="state === 'failed'" class="failed" role="alert">
-        <p class="failed-title">{{ t('list.loadFailed') }}</p>
-        <p>{{ listsError }}</p>
-        <BaseButton variant="secondary" @click="lists.load(groupId)">
-          <BaseIcon name="retry" /> {{ t('common.retry') }}
-        </BaseButton>
-      </div>
-
-      <BaseEmptyState
-        v-else-if="state === 'missing'"
-        :title="t('list.missing.title')"
-        :description="t('list.missing.description')"
-      >
-        <template #icon><BaseIcon name="linkOff" :size="24" /></template>
-        <BaseButton @click="router.push({ name: 'group', params: { groupId } })">
-          {{ t('list.missing.home') }}
-        </BaseButton>
-      </BaseEmptyState>
-
-      <BaseEmptyState
-        v-else-if="state === 'noLists'"
-        :title="t('list.noLists.title')"
-        :description="t('list.noLists.description')"
-      >
-        <template #icon><BaseIcon name="list" :size="24" /></template>
-        <BaseButton aria-haspopup="dialog" @click="createOpen = true">
-          <BaseIcon name="plus" /> {{ t('list.noLists.create') }}
-        </BaseButton>
-      </BaseEmptyState>
-
-      <template v-else>
-        <p v-if="list?.archivedAt" class="archived">
-          <BaseIcon name="archive" :size="18" /> {{ t('list.archivedBadge') }}
+        <p v-if="state === 'loading'" class="loading" role="status">
+          <BaseSpinner /> {{ t('list.loading') }}
         </p>
 
-        <p v-if="checkErrorCode" class="failed failed--inline" role="alert">
-          <span class="failed-title">{{ t('list.checkFailed') }}</span>
-          {{ checkError }}
-        </p>
-
-        <p v-if="itemsLoading" class="loading" role="status">
-          <BaseSpinner /> {{ t('list.items.loading') }}
-        </p>
-
-        <div v-else-if="itemsFailed" class="failed" role="alert">
-          <p class="failed-title">{{ t('list.items.loadFailed') }}</p>
-          <p>{{ itemsError }}</p>
-          <BaseButton variant="secondary" @click="items.load(listKey)">
+        <div v-else-if="state === 'failed'" class="failed" role="alert">
+          <p class="failed-title">{{ t('list.loadFailed') }}</p>
+          <p>{{ listsError }}</p>
+          <BaseButton variant="secondary" @click="lists.load(groupId)">
             <BaseIcon name="retry" /> {{ t('common.retry') }}
           </BaseButton>
         </div>
 
         <BaseEmptyState
-          v-else-if="isEmpty"
-          :title="t('list.empty.title')"
-          :description="t('list.empty.description')"
+          v-else-if="state === 'missing'"
+          :title="t('list.missing.title')"
+          :description="t('list.missing.description')"
         >
-          <template #icon><BaseIcon name="cart" :size="24" /></template>
+          <template #icon><BaseIcon name="linkOff" :size="24" /></template>
+          <BaseButton @click="router.push({ name: 'group', params: { groupId } })">
+            {{ t('list.missing.home') }}
+          </BaseButton>
+        </BaseEmptyState>
+
+        <BaseEmptyState
+          v-else-if="state === 'noLists'"
+          :title="t('list.noLists.title')"
+          :description="t('list.noLists.description')"
+        >
+          <template #icon><BaseIcon name="list" :size="24" /></template>
+          <BaseButton aria-haspopup="dialog" @click="createOpen = true">
+            <BaseIcon name="plus" /> {{ t('list.noLists.create') }}
+          </BaseButton>
         </BaseEmptyState>
 
         <template v-else>
-          <ul v-if="open.length > 0" class="open">
-            <ItemRow
-              v-for="item in open"
-              :key="item.id"
-              :item="item"
-              :person="personOf(item)"
-              @toggle="toggle(item)"
-            />
-          </ul>
+          <p v-if="list?.archivedAt" class="archived">
+            <BaseIcon name="archive" :size="18" /> {{ t('list.archivedBadge') }}
+          </p>
 
-          <section
-            v-if="done.length > 0"
-            class="done"
-            :aria-label="t('list.done.title', { count: done.length })"
+          <p v-if="checkErrorCode" class="failed failed--inline" role="alert">
+            <span class="failed-title">{{ t('list.checkFailed') }}</span>
+            {{ checkError }}
+          </p>
+
+          <p v-if="itemsLoading" class="loading" role="status">
+            <BaseSpinner /> {{ t('list.items.loading') }}
+          </p>
+
+          <div v-else-if="itemsFailed" class="failed" role="alert">
+            <p class="failed-title">{{ t('list.items.loadFailed') }}</p>
+            <p>{{ itemsError }}</p>
+            <BaseButton variant="secondary" @click="items.load(listKey)">
+              <BaseIcon name="retry" /> {{ t('common.retry') }}
+            </BaseButton>
+          </div>
+
+          <BaseEmptyState
+            v-else-if="isEmpty"
+            :title="t('list.empty.title')"
+            :description="t('list.empty.description')"
           >
-            <button
-              type="button"
-              class="done-toggle"
-              :aria-expanded="doneOpen"
-              aria-controls="done-items"
-              @click="doneOpen = !doneOpen"
-            >
-              <BaseIcon :name="doneOpen ? 'chevronUp' : 'chevronDown'" :size="20" />
-              {{ t('list.done.title', { count: done.length }) }}
-            </button>
-            <ul v-show="doneOpen" id="done-items" class="done-items">
+            <template #icon><BaseIcon name="cart" :size="24" /></template>
+          </BaseEmptyState>
+
+          <template v-else>
+            <ul v-if="open.length > 0" class="open">
               <ItemRow
-                v-for="item in done"
+                v-for="item in open"
                 :key="item.id"
                 :item="item"
                 :person="personOf(item)"
                 @toggle="toggle(item)"
               />
             </ul>
-          </section>
-        </template>
-      </template>
-    </main>
 
-    <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />
-    <ListNameDialog
-      v-if="renaming"
-      :open="true"
-      :group-id="groupId"
-      :list="renaming"
-      @update:open="renamingId = null"
-    />
-    <ListActionsDialog
-      v-if="actionsFor"
-      :open="true"
-      :list="actionsFor"
-      :can-delete="canDelete"
-      @update:open="actionsId = null"
-      @rename="startRename(actionsFor.id)"
-    />
-    <ArchivedListsDialog
-      v-model:open="archiveOpen"
-      :group-id="groupId"
-      :lists="archived"
-      :current-id="listKey"
-    />
-    <CreateGroupDialog v-model:open="createGroupOpen" @created="openCreatedGroup" />
-    <JoinGroupDialog v-model:open="joinOpen" />
-  </div>
+            <section
+              v-if="done.length > 0"
+              class="done"
+              :aria-label="t('list.done.title', { count: done.length })"
+            >
+              <button
+                type="button"
+                class="done-toggle"
+                :aria-expanded="doneOpen"
+                aria-controls="done-items"
+                @click="doneOpen = !doneOpen"
+              >
+                <BaseIcon :name="doneOpen ? 'chevronUp' : 'chevronDown'" :size="20" />
+                {{ t('list.done.title', { count: done.length }) }}
+              </button>
+              <ul v-show="doneOpen" id="done-items" class="done-items">
+                <ItemRow
+                  v-for="item in done"
+                  :key="item.id"
+                  :item="item"
+                  :person="personOf(item)"
+                  @toggle="toggle(item)"
+                />
+              </ul>
+            </section>
+          </template>
+        </template>
+      </main>
+
+      <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />
+      <ListNameDialog
+        v-if="renaming"
+        :open="true"
+        :group-id="groupId"
+        :list="renaming"
+        @update:open="renamingId = null"
+      />
+      <ListActionsDialog
+        v-if="actionsFor"
+        :open="true"
+        :list="actionsFor"
+        :can-delete="canDelete"
+        @update:open="actionsId = null"
+        @rename="startRename(actionsFor.id)"
+      />
+      <ArchivedListsDialog
+        v-model:open="archiveOpen"
+        :group-id="groupId"
+        :lists="archived"
+        :current-id="listKey"
+      />
+      <CreateGroupDialog v-model:open="createGroupOpen" @created="openCreatedGroup" />
+      <JoinGroupDialog v-model:open="joinOpen" />
+    </div>
+  </AppFrame>
 </template>
 
 <style scoped>
@@ -500,5 +505,34 @@ function openCreated(created: List) {
 
 .failed-title {
   font-weight: var(--font-weight-black);
+}
+
+/* Desktop: no green header; the household name stands large on the page,
+   above the chips and the items, all at most 820px wide. */
+@media (min-width: 48rem) {
+  .bar {
+    gap: var(--space-5);
+    width: 100%;
+    max-width: 51.25rem;
+    box-sizing: border-box;
+    margin: 0 auto;
+    padding: 2.25rem var(--space-6) 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-text);
+  }
+
+  .home {
+    display: none;
+  }
+
+  .member {
+    box-shadow: 0 0 0 2.5px var(--color-bg);
+  }
+
+  .content {
+    max-width: 51.25rem;
+    padding: var(--space-5) var(--space-6) 3.5rem;
+  }
 }
 </style>

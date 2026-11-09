@@ -154,6 +154,29 @@ function onClick(list: List) {
   cursor: pointer;
 }
 
+/* Desktop: there is room, so the chips wrap instead of scrolling, and the
+   plus sits on the page instead of the green header. */
+@media (min-width: 48rem) {
+  .chips {
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 2px 0 var(--space-1);
+    overflow-x: visible;
+  }
+
+  .chip {
+    min-height: 3.125rem;
+  }
+
+  .add {
+    width: 3.125rem;
+    height: 3.125rem;
+    border-color: var(--color-text);
+    color: var(--color-text);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chip {
     transition: none;

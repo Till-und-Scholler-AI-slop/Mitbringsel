@@ -318,6 +318,15 @@ describe('ListView: opening the household', () => {
 })
 
 describe('ListView: header', () => {
+  it('stands in the frame with the sidebar, which shows the lists of the household', async () => {
+    const { wrapper } = await mountView('l2')
+
+    const sidebarLists = wrapper.findAll('.side .lists a')
+    expect(sidebarLists.map((a) => a.text())).toEqual(['Supermarkt', 'Baumarkt'])
+    expect(sidebarLists.map((a) => a.attributes('aria-current'))).toEqual([undefined, 'page'])
+    wrapper.unmount()
+  })
+
   it('links the logo to the start page', async () => {
     const { wrapper } = await mountView()
 
