@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createAppI18n } from '@/i18n'
 import type { List } from '@/types/api'
@@ -19,7 +20,14 @@ function list(name: string, archivedAt: string | null = null): List {
 }
 
 function mountCard(l: List) {
-  return mount(ListCard, { props: { list: l }, global: { plugins: [createAppI18n(['en'], null)] } })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/groups/:groupId/lists/:listId', name: 'list', component: {} }],
+  })
+  return mount(ListCard, {
+    props: { list: l },
+    global: { plugins: [createAppI18n(['en'], null), router] },
+  })
 }
 
 describe('ListCard', () => {
@@ -28,6 +36,12 @@ describe('ListCard', () => {
 
     expect(name.text()).toBe('Weekly shopping')
     expect(name.attributes('title')).toBe('Weekly shopping')
+  })
+
+  it('links the name to the list', () => {
+    expect(mountCard(list('Weekly shopping')).get('h3 a').attributes('href')).toBe(
+      '/groups/g1/lists/l1',
+    )
   })
 
   it('asks for the actions with a button named after the list', async () => {

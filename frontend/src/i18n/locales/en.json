@@ -154,6 +154,46 @@
     "UNAUTHENTICATED": "You are not signed in.",
     "UNKNOWN": "Something went wrong."
   },
+  "units": {
+    "piece": "piece | pieces",
+    "g": "g",
+    "kg": "kg",
+    "ml": "ml",
+    "l": "l",
+    "pack": "pack | packs"
+  },
+  "list": {
+    "groupLink": "Open household {name}",
+    "membersLabel": "Members: {names}",
+    "chips": "Lists",
+    "newList": "New list",
+    "archivedBadge": "Archived",
+    "loading": "Loading list …",
+    "loadFailed": "The list could not be loaded.",
+    "missing": {
+      "title": "List not found",
+      "description": "It no longer exists, or you are not a member of the household.",
+      "home": "To the household"
+    },
+    "items": {
+      "loading": "Loading items …",
+      "loadFailed": "The items could not be loaded."
+    },
+    "empty": {
+      "title": "Nothing on the list yet",
+      "description": "Everything you want to buy will show up here."
+    },
+    "checkFailed": "Checking the item did not work.",
+    "row": {
+      "check": "check off",
+      "uncheck": "bring back",
+      "addedBy": "by {name}",
+      "checkedBy": "checked by {name}"
+    },
+    "done": {
+      "title": "Done ({count})"
+    }
+  },
   "group": {
     "back": "Back to the start page",
     "settings": "Manage household",

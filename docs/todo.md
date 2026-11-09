@@ -18,13 +18,15 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 ## Artikel
 
+- [ ] **Haushalt-Wechsler im Kopf der Listenansicht:** Das Design hat dort ein Auswahlmenü (`aria-haspopup="listbox"`) zum Wechseln des Haushalts. Vorerst verlinkt der Haushaltsname auf den Haushalt-Screen, gewechselt wird über die Startseite.
+- [ ] **Hervorhebung und Uhr-Symbol in der Artikelzeile:** Das Design markiert kürzlich von anderen geänderte Artikel („gerade geändert") und noch nicht synchronisierte mit einer Uhr. Beides braucht den Live-Sync (Phase 5).
 - [ ] **Abgehakte gesammelt entfernen:** Die Übersicht verlangt "abgehakte Artikel können gesammelt entfernt werden". Das erzeugt viele Tombstones auf einmal und gehört zum Sync (Phase 5): als eine Nachricht, die für jeden Artikel einen Tombstone und eine `serverSeq` vergibt.
 - [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Zusammen mit dem Aufräum-Job für Sessions, Einladungen und `processed_ops` (Phase 5) umsetzen; danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
 
 ## Start
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
-- [ ] **Listen-Chips und letzte Aktivität auf den Haushalt-Karten:** Das Design zeigt sie, sie brauchen Listen und Artikel (Phase 4).
+- [ ] **Listen-Chips und letzte Aktivität auf den Haushalt-Karten:** Die Listenansicht zeigt die Listen schon als Chips im Kopf. Auf den Karten der Startseite fehlen sie noch, ebenso die letzte Aktivität (braucht den Sync, Phase 5).
 - [ ] **Desktop-Rahmen mit Seitenleiste:** Das Design hat auf dem Desktop eine Navigation links (Start, Haushalte, Listen). Startseite und Haushalt-Screen sind vorerst einspaltig; die Seitenleiste baue ich mit der Listenansicht (Phase 4).
 - [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.

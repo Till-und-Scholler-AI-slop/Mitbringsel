@@ -102,6 +102,7 @@ export const ICONS = {
   ],
   list: ['M3 12h.01', 'M3 18h.01', 'M3 6h.01', 'M8 12h13', 'M8 18h13', 'M8 6h13'],
   chevronDown: ['m6 9 6 6 6-6'],
+  chevronUp: ['m18 15-6-6-6 6'],
   share: [
     'M15 5a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
     'M3 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
