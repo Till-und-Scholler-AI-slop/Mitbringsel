@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
+import { LONG_PRESS_MS } from '@/composables/useLongPress'
 import { createAppI18n } from '@/i18n'
 import type { List } from '@/types/api'
 
@@ -19,26 +20,43 @@ function list(id: string, name: string): List {
   }
 }
 
-async function mountChips(openCount = 3) {
+interface Options {
+  openCount?: number
+  archivedCount?: number
+  currentArchived?: boolean
+}
+
+async function mountChips({
+  openCount = 3,
+  archivedCount = 0,
+  currentArchived = false,
+}: Options = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/groups/:groupId/lists/:listId', name: 'list', component: {} }],
   })
   await router.push('/groups/g1/lists/l1')
-  return mount(ListChips, {
+  const wrapper = mount(ListChips, {
     props: {
       groupId: 'g1',
       lists: [list('l1', 'Supermarkt'), list('l2', 'Baumarkt')],
       currentId: 'l1',
       openCount,
+      archivedCount,
+      currentArchived,
     },
     global: { plugins: [createAppI18n(['en'], null), router] },
   })
+  return { wrapper, router }
 }
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('ListChips', () => {
   it('links every list', async () => {
-    const wrapper = await mountChips()
+    const { wrapper } = await mountChips()
 
     expect(wrapper.findAll('a').map((a) => a.attributes('href'))).toEqual([
       '/groups/g1/lists/l1',
@@ -47,7 +65,7 @@ describe('ListChips', () => {
   })
 
   it('marks the current list and shows how many items are open', async () => {
-    const wrapper = await mountChips(3)
+    const { wrapper } = await mountChips({ openCount: 3 })
 
     const [current, other] = wrapper.findAll('a')
     expect(current!.classes()).toContain('chip--current')
@@ -58,16 +76,93 @@ describe('ListChips', () => {
   })
 
   it('shows no count when nothing is open', async () => {
-    const wrapper = await mountChips(0)
+    const { wrapper } = await mountChips({ openCount: 0 })
 
     expect(wrapper.find('.count').exists()).toBe(false)
   })
 
   it('asks for a new list with the plus button', async () => {
-    const wrapper = await mountChips()
+    const { wrapper } = await mountChips()
 
     await wrapper.get('button[aria-label="New list"]').trigger('click')
 
     expect(wrapper.emitted('create')).toHaveLength(1)
+  })
+
+  it('goes to another list on a plain click', async () => {
+    const { wrapper, router } = await mountChips()
+
+    await wrapper.findAll('a')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.params.listId).toBe('l2')
+    expect(wrapper.emitted('actions')).toBeUndefined()
+  })
+
+  it('opens the actions when the current list is chosen again', async () => {
+    const { wrapper, router } = await mountChips()
+
+    await wrapper.findAll('a')[0]!.trigger('click')
+
+    expect(wrapper.emitted('actions')).toEqual([[expect.objectContaining({ id: 'l1' })]])
+    expect(router.currentRoute.value.params.listId).toBe('l1')
+  })
+
+  it('tells screen readers about that on the current chip', async () => {
+    const { wrapper } = await mountChips()
+
+    const [current, other] = wrapper.findAll('a')
+    const hint = wrapper.get(`#${current!.attributes('aria-describedby')}`)
+    expect(hint.text()).toBe('Select again to rename, archive or delete')
+    expect(other!.attributes('aria-describedby')).toBeUndefined()
+  })
+
+  it('opens the actions of any list on a right click', async () => {
+    const { wrapper } = await mountChips()
+
+    await wrapper.findAll('a')[1]!.trigger('contextmenu')
+
+    expect(wrapper.emitted('actions')).toEqual([[expect.objectContaining({ id: 'l2' })]])
+  })
+
+  it('opens the actions on a long press and stays on the list', async () => {
+    vi.useFakeTimers()
+    const { wrapper, router } = await mountChips()
+    const other = wrapper.findAll('a')[1]!
+
+    await other.trigger('pointerdown', { pointerType: 'touch' })
+    vi.advanceTimersByTime(LONG_PRESS_MS)
+    await other.trigger('pointerup', { pointerType: 'touch' })
+    // A click from the finger has detail 1; trigger() cannot set it.
+    other.element.dispatchEvent(
+      new MouseEvent('click', { detail: 1, bubbles: true, cancelable: true }),
+    )
+    await flushPromises()
+
+    expect(wrapper.emitted('actions')).toEqual([[expect.objectContaining({ id: 'l2' })]])
+    expect(router.currentRoute.value.params.listId).toBe('l1')
+  })
+
+  it('shows the archive chip only when there are archived lists', async () => {
+    const { wrapper } = await mountChips()
+
+    expect(wrapper.find('.chip--archive').exists()).toBe(false)
+  })
+
+  it('asks for the archived lists with the archive chip', async () => {
+    const { wrapper } = await mountChips({ archivedCount: 2 })
+
+    const chip = wrapper.get('.chip--archive')
+    expect(chip.text()).toBe('Archive (2)')
+    expect(chip.classes()).not.toContain('chip--current')
+    await chip.trigger('click')
+
+    expect(wrapper.emitted('archive')).toHaveLength(1)
+  })
+
+  it('presses the archive chip in while an archived list is open', async () => {
+    const { wrapper } = await mountChips({ archivedCount: 1, currentArchived: true })
+
+    expect(wrapper.get('.chip--archive').classes()).toContain('chip--current')
   })
 })

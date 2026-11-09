@@ -6,7 +6,6 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
-- [ ] **Listen-Aktionen an den Chips:** Gedrückthalten, Rechtsklick und zweiter Klick auf den aktiven Chip öffnen `ListActionsDialog` (zieht nach `components/list/`); Chip „Archiv (n)“ mit Auswahl der archivierten Listen.
 - [ ] **Haushalt-Wechsler im Kopf der Listenansicht** (`start-4-wechsler`): Haushalte, „Haushalt verwalten“, „Haushalt gründen“, „Einladungslink einfügen“, „Alle Haushalte“. Bis dahin verlinkt der Haushaltsname auf den Haushalt-Screen.
 - [ ] **Haushalt-Screen entfernen:** `/groups/:groupId` öffnet die zuletzt geöffnete Liste (pro Gerät gemerkt), sonst die erste aktive; ohne Liste zeigt die Listenansicht einen Leerzustand mit „Liste anlegen“. `GroupView` und `ListCard` fallen weg.
 - [ ] **Startseite nach Iteration 1** (`start-1-standard`): ganze Karte als Link, Listen als Chips auf der Karte, kein Zahnrad, „Gründen“ und „Beitreten“ in gestrichelter Box unter den Karten.

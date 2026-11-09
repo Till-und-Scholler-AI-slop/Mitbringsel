@@ -167,6 +167,12 @@
     "membersLabel": "Mitglieder: {names}",
     "chips": "Listen",
     "newList": "Neue Liste",
+    "chipHint": "Nochmal auswählen zum Umbenennen, Archivieren oder Löschen",
+    "archive": {
+      "chip": "Archiv ({count})",
+      "title": "Archivierte Listen",
+      "description": "Öffne eine Liste, um sie anzusehen. Wiederherstellen kannst du sie, wenn du ihren Chip gedrückt hältst oder nochmal auswählst."
+    },
     "archivedBadge": "Archiviert",
     "loading": "Liste wird geladen …",
     "loadFailed": "Die Liste konnte nicht geladen werden.",

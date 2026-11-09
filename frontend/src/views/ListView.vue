@@ -9,11 +9,14 @@ import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
-import ListNameDialog from '@/components/group/ListNameDialog.vue'
+import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
 import ItemRow from '@/components/list/ItemRow.vue'
+import ListActionsDialog from '@/components/list/ListActionsDialog.vue'
 import ListChips from '@/components/list/ListChips.vue'
+import ListNameDialog from '@/components/list/ListNameDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
+import { canManage } from '@/services/groupRoles'
 import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
@@ -33,6 +36,11 @@ const lists = useListsStore()
 const items = useItemsStore()
 
 const createOpen = ref(false)
+const archiveOpen = ref(false)
+// The list whose actions are open, and the one being renamed; at most one
+// of the two is set.
+const actionsId = ref<string | null>(null)
+const renamingId = ref<string | null>(null)
 const doneOpen = ref(true)
 // The error of the last tap on a checkbox that failed; the tap itself has
 // been undone by the store.
@@ -47,6 +55,11 @@ const list = computed<List | undefined>(() => {
   const found = lists.byId(props.listId)
   return found?.groupId === props.groupId ? found : undefined
 })
+
+const actionsFor = computed(() => lists.byId(actionsId.value ?? ''))
+const renaming = computed(() => lists.byId(renamingId.value ?? ''))
+const canDelete = computed(() => group.value !== undefined && canManage(group.value.role))
+const archived = computed(() => lists.archivedLists(props.groupId))
 
 const state = computed<ViewState>(() => {
   if (list.value) return 'ready'
@@ -86,6 +99,9 @@ watch(
   [() => props.groupId, () => props.listId],
   ([groupId, listId]) => {
     checkErrorCode.value = null
+    actionsId.value = null
+    renamingId.value = null
+    archiveOpen.value = false
     if (groups.status === 'idle') groups.load()
     if (lists.statusOf(groupId) === 'idle') lists.load(groupId)
     items.load(listId)
@@ -100,6 +116,24 @@ async function toggle(item: Item) {
   } catch (err) {
     checkErrorCode.value = err instanceof ApiError ? err.code : ERROR_CODE_UNKNOWN
   }
+}
+
+// The open list was deleted: go on with the first active list, or with the
+// household if none is left. A new URL with an unknown list is not a
+// deletion; that one shows "not found".
+watch([() => props.listId, list], ([listId, now], [listIdBefore, before]) => {
+  if (!before || now || listId !== listIdBefore) return
+  const next = lists.activeLists(props.groupId)[0]
+  router.replace(
+    next
+      ? { name: 'list', params: { groupId: props.groupId, listId: next.id } }
+      : { name: 'group', params: { groupId: props.groupId } },
+  )
+})
+
+function startRename(listId: string) {
+  actionsId.value = null
+  renamingId.value = listId
 }
 
 function openCreated(created: List) {
@@ -143,7 +177,11 @@ function openCreated(created: List) {
         :lists="lists.activeLists(groupId)"
         :current-id="listId"
         :open-count="open.length"
+        :archived-count="archived.length"
+        :current-archived="list.archivedAt !== null"
         @create="createOpen = true"
+        @actions="actionsId = $event.id"
+        @archive="archiveOpen = true"
       />
     </header>
 
@@ -244,6 +282,27 @@ function openCreated(created: List) {
     </main>
 
     <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />
+    <ListNameDialog
+      v-if="renaming"
+      :open="true"
+      :group-id="groupId"
+      :list="renaming"
+      @update:open="renamingId = null"
+    />
+    <ListActionsDialog
+      v-if="actionsFor"
+      :open="true"
+      :list="actionsFor"
+      :can-delete="canDelete"
+      @update:open="actionsId = null"
+      @rename="startRename(actionsFor.id)"
+    />
+    <ArchivedListsDialog
+      v-model:open="archiveOpen"
+      :group-id="groupId"
+      :lists="archived"
+      :current-id="listId"
+    />
   </div>
 </template>
 
