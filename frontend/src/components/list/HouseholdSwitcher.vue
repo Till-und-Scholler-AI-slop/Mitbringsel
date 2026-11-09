@@ -128,7 +128,8 @@ const isCurrent = (group: Group) => group.id === props.current.id
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-on-brand);
+  /* White on the green phone header, ink on the desktop page. */
+  color: inherit;
   text-align: left;
   cursor: pointer;
 }
@@ -256,5 +257,20 @@ const isCurrent = (group: Group) => group.id === props.current.id
 .action {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
+}
+
+@media (min-width: 48rem) {
+  .name {
+    font-size: 2.375rem;
+    font-weight: var(--font-weight-black);
+    line-height: 2.75rem;
+    letter-spacing: -0.03em;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .panel {
+    width: min(23.75rem, 100%);
+  }
 }
 </style>
