@@ -111,12 +111,12 @@ describe('GroupInvitesSection', () => {
     const wrapper = await mountSection()
     await wrapper.get('button').trigger('click')
     await flushPromises()
-    expect(wrapper.find('.section > .problem').exists()).toBe(true)
+    expect(wrapper.find('.invites > .problem').exists()).toBe(true)
 
     await wrapper.get('.revoke').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.section > .problem').exists()).toBe(false)
+    expect(wrapper.find('.invites > .problem').exists()).toBe(false)
   })
 
   it('says that 10 links are open when the limit is reached', async () => {

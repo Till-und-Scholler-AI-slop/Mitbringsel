@@ -183,7 +183,9 @@ describe('GroupSettingsView', () => {
 
     const { wrapper } = await mountView()
 
-    expect(wrapper.get('[aria-labelledby="members-title"] .count').text()).toBe('3 members')
+    const count = wrapper.get('.members-card .count')
+    expect(count.text()).toBe('3')
+    expect(count.attributes('aria-label')).toBe('3 members')
     expect(wrapper.findAll('.member .name').map((e) => e.text())).toEqual([
       'Lena',
       'Jonas (You)',
@@ -252,7 +254,7 @@ describe('GroupSettingsView', () => {
 
     const { wrapper } = await mountView()
 
-    expect(wrapper.get('#danger-title').text()).toBe(title)
+    expect(wrapper.get('.card--danger h2').text()).toBe(title)
     wrapper.unmount()
   })
 
@@ -265,7 +267,7 @@ describe('GroupSettingsView', () => {
 
     const { wrapper } = await mountView()
 
-    expect(wrapper.find('#invites-title').exists()).toBe(sees)
+    expect(wrapper.find('.invites').exists()).toBe(sees)
     expect(invitesService.list).toHaveBeenCalledTimes(sees ? 1 : 0)
     wrapper.unmount()
   })

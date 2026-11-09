@@ -2,8 +2,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import { timeAgo, timeLeft } from '@/services/relativeTime'
 import type { Invite } from '@/types/api'
 
@@ -39,20 +39,22 @@ const revokeLabel = computed(() =>
 
 <template>
   <li class="row">
-    <span class="icon" aria-hidden="true"><BaseIcon name="link" /></span>
+    <span class="icon" aria-hidden="true"><BaseIcon name="link" :size="18" /></span>
     <span class="text">
       <span class="created-by">{{ createdBy }}</span>
       <span class="details">{{ details }}</span>
     </span>
-    <BaseButton
-      variant="ghost"
+    <button
+      type="button"
       class="revoke"
-      :loading="busy"
+      :disabled="busy"
+      :aria-busy="busy || undefined"
       :aria-label="revokeLabel"
       @click="$emit('revoke')"
     >
+      <BaseSpinner v-if="busy" :size="16" />
       {{ t('settings.invites.open.revoke') }}
-    </BaseButton>
+    </button>
     <p v-if="error" class="problem" role="alert"><BaseIcon name="alert" /> {{ error }}</p>
   </li>
 </template>
@@ -62,12 +64,11 @@ const revokeLabel = computed(() =>
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-}
-
-.row + .row {
-  border-top: var(--border-width-sm) dashed var(--color-text-muted);
+  gap: 0.625rem;
+  min-height: 3.75rem;
+  padding: var(--space-1-5) var(--space-1-5) var(--space-1-5) 0.625rem;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
 }
 
 .icon {
@@ -77,7 +78,8 @@ const revokeLabel = computed(() =>
   width: 2.25rem;
   height: 2.25rem;
   border-radius: var(--radius-full);
-  background: var(--color-bg);
+  background: var(--color-muted-bg);
+  color: var(--color-text);
 }
 
 .text {
@@ -88,21 +90,38 @@ const revokeLabel = computed(() =>
 }
 
 .created-by {
-  font-weight: var(--font-weight-black);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.25rem;
   overflow-wrap: anywhere;
 }
 
 .details {
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.125rem;
 }
 
 .revoke {
   flex: none;
-  min-height: var(--size-touch);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-height: 2.75rem;
+  padding: 0 var(--space-3);
+  border: var(--border-width-sm) solid var(--color-danger);
+  border-radius: var(--radius-full);
+  background: transparent;
   color: var(--color-danger-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
+  cursor: pointer;
+}
+
+.revoke:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .problem {

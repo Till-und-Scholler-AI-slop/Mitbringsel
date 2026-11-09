@@ -6,6 +6,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import OpenInvitesList from '@/components/settings/OpenInvitesList.vue'
 import InviteLinkBox from '@/components/settings/InviteLinkBox.vue'
+import SettingsCard from '@/components/settings/SettingsCard.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { buildInviteLink } from '@/services/inviteLink'
@@ -46,14 +47,11 @@ async function create() {
 </script>
 
 <template>
-  <section class="section" aria-labelledby="invites-title">
-    <div class="head">
-      <h2 id="invites-title" class="title">{{ t('settings.invites.title') }}</h2>
-      <p class="description">{{ t('settings.invites.description') }}</p>
-    </div>
+  <SettingsCard class="invites" :title="t('settings.invites.title')">
+    <p class="description">{{ t('settings.invites.description') }}</p>
 
     <InviteLinkBox v-if="link" :link="link" :group-name="group.name" />
-    <BaseButton v-else :loading="creating" @click="create">
+    <BaseButton v-else class="create" :loading="creating" @click="create">
       <BaseIcon name="plus" /> {{ t('settings.invites.create') }}
     </BaseButton>
 
@@ -63,41 +61,44 @@ async function create() {
     </p>
 
     <OpenInvitesList :group-id="group.id" @revoked="errorCode = null" />
-  </section>
+  </SettingsCard>
 </template>
 
 <style scoped>
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+.invites {
+  gap: 0.875rem;
 }
 
-.head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.title {
-  margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-black);
-}
-
+/* Pulled up to the heading, as one block with it. */
 .description {
-  margin: 0;
+  margin: calc(-1 * var(--space-2)) 0 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3125rem;
+}
+
+.create {
+  min-height: 3.5rem;
+  font-size: 1.0625rem;
 }
 
 .problem {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: 0.625rem;
   margin: 0;
+  padding: var(--space-3);
+  border: var(--border-width-md) solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-surface);
   color: var(--color-danger-text);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
+  line-height: 1.3125rem;
+}
+
+.problem :deep(svg) {
+  flex: none;
 }
 </style>

@@ -6,7 +6,7 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
-- [ ] **Verwalten nach dem Design** (`verwalten-owner-hell`): jeder Abschnitt als Karte mit Rand und Sticker-Schatten, Name als eigene Karte mit „Umbenennen“, kleine graue Überschriften, Mitglieder-Zähler, Austreten/Löschen in Karte mit rotem Rand, Kopf mit rundem Zurück-Button.
+- [ ] **Dialoge von Verwalten nach dem Design** (`verwalten-aktionen-hell`, `verwalten-entfernen-hell`, `verwalten-umbenennen-hell`, `verwalten-umbenennen-zulang-*`): Mitglied-Aktionen, Entfernen-Bestätigung und Umbenennen angleichen; die Seite selbst ist angeglichen, die Dialoge noch im alten Stil. Den Sync-Chip „Alles synchron“ im Kopf gibt es erst mit dem Sync.
 - [ ] **Desktop-Rahmen mit Seitenleiste** für Start und Listenansicht (`start-desktop-*`): Logo, Start, Haushalte mit aufklappbaren Listen, „Haushalt gründen“, Sync-Status, Profil. War für die Listenansicht geplant, ist dort aber nicht umgesetzt worden; Startseite und Listenansicht sind auf dem Desktop bisher nur das gestreckte Smartphone-Layout.
 - [ ] **Desktop-Varianten von Verwalten und Einladung** (`verwalten-desktop-*`, `markt2-einladung-desktop-*`): Verwalten zweispaltig, Einladung mit Kopf und Karte nebeneinander. `GroupSettingsView` und `InviteView` sind vorerst einspaltig.
 - [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): aktiver Chip mit Innenschatten und Druck-/Rückfeder-Animation, erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.

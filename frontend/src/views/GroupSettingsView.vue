@@ -6,13 +6,13 @@ import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
-import BaseIconButton from '@/components/base/BaseIconButton.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import GroupInvitesSection from '@/components/settings/GroupInvitesSection.vue'
 import GroupDangerSection from '@/components/settings/GroupDangerSection.vue'
 import MemberActionsDialog from '@/components/settings/MemberActionsDialog.vue'
 import MemberRow from '@/components/settings/MemberRow.vue'
 import RenameGroupDialog from '@/components/settings/RenameGroupDialog.vue'
+import SettingsCard from '@/components/settings/SettingsCard.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { canManage, memberActions, sortMembers } from '@/services/groupRoles'
 import { useAuthStore } from '@/stores/auth'
@@ -70,7 +70,9 @@ function goBack() {
 <template>
   <div class="settings">
     <header class="bar">
-      <BaseIconButton icon="arrowLeft" :label="t('settings.back')" @click="goBack" />
+      <button type="button" class="back" :aria-label="t('settings.back')" @click="goBack">
+        <BaseIcon name="arrowLeft" :size="24" :stroke-width="2.75" />
+      </button>
       <h1 class="title">{{ t('settings.title') }}</h1>
     </header>
 
@@ -97,24 +99,34 @@ function goBack() {
       </BaseEmptyState>
 
       <template v-else-if="group">
-        <section class="section" aria-labelledby="name-title">
-          <div class="section-head">
-            <h2 id="name-title" class="section-title">{{ t('settings.name.title') }}</h2>
-            <BaseButton v-if="isManager" variant="secondary" @click="renameOpen = true">
-              <BaseIcon name="pencil" /> {{ t('settings.name.rename') }}
-            </BaseButton>
-          </div>
-          <div class="name-card">
+        <SettingsCard :title="t('settings.name.title')">
+          <template #aside>
+            <button
+              v-if="isManager"
+              type="button"
+              class="rename"
+              aria-haspopup="dialog"
+              @click="renameOpen = true"
+            >
+              <BaseIcon name="pencil" :size="18" /> {{ t('settings.name.rename') }}
+            </button>
+          </template>
+          <div class="name-row">
             <span class="name-icon" aria-hidden="true"><BaseIcon name="home" :size="22" /></span>
             <p class="name">{{ group.name }}</p>
           </div>
-        </section>
+        </SettingsCard>
 
-        <section class="section" aria-labelledby="members-title">
-          <div class="section-head">
-            <h2 id="members-title" class="section-title">{{ t('settings.members.title') }}</h2>
-            <span class="count">{{ t('settings.members.count', members.length) }}</span>
-          </div>
+        <SettingsCard class="members-card" :title="t('settings.members.title')">
+          <template #aside>
+            <span
+              class="count"
+              role="img"
+              :aria-label="t('settings.members.count', members.length)"
+            >
+              {{ members.length }}
+            </span>
+          </template>
           <ul class="members">
             <MemberRow
               v-for="member in members"
@@ -126,7 +138,7 @@ function goBack() {
             />
           </ul>
           <p class="explain">{{ t('settings.members.explain') }}</p>
-        </section>
+        </SettingsCard>
 
         <GroupInvitesSection v-if="isManager" :group="group" />
 
@@ -157,18 +169,33 @@ function goBack() {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4) var(--space-6);
+  gap: 0.625rem;
+  padding: 0.625rem var(--space-4) 1.375rem;
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   background: var(--color-brand);
   color: var(--color-on-brand);
 }
 
+/* White in both themes, like the header it sits on. */
+.back {
+  display: grid;
+  place-items: center;
+  width: var(--size-touch);
+  height: var(--size-touch);
+  padding: 0;
+  border: var(--border-width-md) solid var(--color-on-accent);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-white);
+  color: var(--color-on-accent);
+  cursor: pointer;
+}
+
 .title {
   margin: 0;
-  font-size: var(--font-size-3xl);
+  padding-left: var(--space-1);
+  font-size: 1.875rem;
   font-weight: var(--font-weight-black);
-  line-height: var(--line-height-heading);
+  line-height: 2.125rem;
   letter-spacing: -0.03em;
   overflow-wrap: break-word;
 }
@@ -176,11 +203,11 @@ function goBack() {
 .content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
   width: 100%;
   max-width: 40rem;
   margin: 0 auto;
-  padding: var(--space-5) var(--space-4) var(--space-8);
+  padding: 1.125rem var(--space-4) var(--space-8);
 }
 
 .loading {
@@ -211,58 +238,26 @@ function goBack() {
   font-weight: var(--font-weight-black);
 }
 
-.section {
+.rename {
+  flex: none;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.section-head {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.section-title {
-  margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-black);
-}
-
-.count {
-  color: var(--color-text-muted);
+  gap: var(--space-1-5);
+  min-height: 2.75rem;
+  padding: 0 0.875rem;
+  border: var(--border-width-md) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-heavy);
+  cursor: pointer;
 }
 
-.members {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: var(--border-width-md) solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sticker);
-}
-
-.explain {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-}
-
-.name-card {
+.name-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4);
-  border: var(--border-width-md) solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sticker);
 }
 
 .name-icon {
@@ -272,16 +267,59 @@ function goBack() {
   width: 2.75rem;
   height: 2.75rem;
   border-radius: var(--radius-full);
-  background: var(--color-brand);
-  color: var(--color-on-brand);
+  background: var(--color-house-bg);
+  color: var(--color-house-text);
 }
 
 .name {
   min-width: 0;
   margin: 0;
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-black);
-  line-height: var(--line-height-heading);
+  font-size: 1.6875rem;
+  font-weight: var(--font-weight-display);
+  line-height: 2rem;
+  letter-spacing: -0.025em;
   overflow-wrap: anywhere;
+}
+
+/* The rows bring their own inner space; the card keeps less. */
+.members-card {
+  padding-inline: var(--space-3);
+}
+
+.members-card :deep(.head) {
+  padding-inline: var(--space-1-5);
+}
+
+.count {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  box-sizing: border-box;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  /* Ink and tomato in both themes, as in the design. */
+  background: var(--color-on-accent);
+  color: var(--color-accent-tomato);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-heavy);
+}
+
+.members {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explain {
+  margin: 2px var(--space-1-5) 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.125rem;
 }
 </style>
