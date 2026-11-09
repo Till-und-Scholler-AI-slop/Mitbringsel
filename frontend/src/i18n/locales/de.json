@@ -154,6 +154,46 @@
     "UNAUTHENTICATED": "Du bist nicht angemeldet.",
     "UNKNOWN": "Etwas ist schiefgelaufen."
   },
+  "units": {
+    "piece": "Stück",
+    "g": "g",
+    "kg": "kg",
+    "ml": "ml",
+    "l": "l",
+    "pack": "Packung | Packungen"
+  },
+  "list": {
+    "groupLink": "Haushalt {name} öffnen",
+    "membersLabel": "Mitglieder: {names}",
+    "chips": "Listen",
+    "newList": "Neue Liste",
+    "archivedBadge": "Archiviert",
+    "loading": "Liste wird geladen …",
+    "loadFailed": "Die Liste konnte nicht geladen werden.",
+    "missing": {
+      "title": "Liste nicht gefunden",
+      "description": "Sie existiert nicht mehr, oder du bist kein Mitglied des Haushalts.",
+      "home": "Zum Haushalt"
+    },
+    "items": {
+      "loading": "Artikel werden geladen …",
+      "loadFailed": "Die Artikel konnten nicht geladen werden."
+    },
+    "empty": {
+      "title": "Noch nichts auf der Liste",
+      "description": "Hier erscheint alles, was ihr einkaufen wollt."
+    },
+    "checkFailed": "Das Abhaken hat nicht geklappt.",
+    "row": {
+      "check": "abhaken",
+      "uncheck": "zurückholen",
+      "addedBy": "von {name}",
+      "checkedBy": "abgehakt von {name}"
+    },
+    "done": {
+      "title": "Erledigt ({count})"
+    }
+  },
   "group": {
     "back": "Zurück zur Startseite",
     "settings": "Haushalt verwalten",

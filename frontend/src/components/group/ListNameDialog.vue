@@ -14,6 +14,7 @@ import type { List } from '@/types/api'
 // One form for both cases: with `list` it renames that list, without it
 // creates a new list in the group.
 const props = defineProps<{ groupId: string; list?: List }>()
+const emit = defineEmits<{ created: [list: List] }>()
 const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
@@ -64,7 +65,7 @@ async function submit() {
     if (props.list) {
       await lists.rename(props.list.id, trimmed)
     } else {
-      await lists.create(props.groupId, trimmed)
+      emit('created', await lists.create(props.groupId, trimmed))
     }
     open.value = false
   } catch (err) {

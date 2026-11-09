@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import type { List } from '@/types/api'
 
-// The card only shows the list and reports the click on "more"; what
-// happens then is the parent's business. The list view it leads to comes
-// with the items (F4).
+// The card links to the list and reports the click on "more"; what happens
+// then is the parent's business.
 defineProps<{ list: List }>()
 defineEmits<{ act: [] }>()
 
@@ -17,7 +17,14 @@ const { t } = useI18n()
   <article :class="['card', { 'card--archived': list.archivedAt !== null }]">
     <span class="icon" aria-hidden="true"><BaseIcon name="list" :size="20" /></span>
     <!-- title: the full name for names too long for the line -->
-    <h3 class="name" :title="list.name">{{ list.name }}</h3>
+    <h3 class="name" :title="list.name">
+      <!-- The link covers the whole card (see .link::after); the menu button stays above it. -->
+      <RouterLink
+        class="link"
+        :to="{ name: 'list', params: { groupId: list.groupId, listId: list.id } }"
+        >{{ list.name }}</RouterLink
+      >
+    </h3>
     <button
       type="button"
       class="act"
@@ -32,6 +39,7 @@ const { t } = useI18n()
 
 <style scoped>
 .card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -76,7 +84,19 @@ const { t } = useI18n()
   white-space: nowrap;
 }
 
+.link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
 .act {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;

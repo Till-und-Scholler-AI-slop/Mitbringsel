@@ -81,6 +81,7 @@ async function mountView(groupId = 'g1') {
     routes: [
       { path: '/', name: 'home', component: { template: '<p />' } },
       { path: '/groups/:groupId', name: 'group', component: {} },
+      { path: '/groups/:groupId/lists/:listId', name: 'list', component: {} },
       { path: '/groups/:groupId/settings', name: 'group-settings', component: {} },
     ],
   })

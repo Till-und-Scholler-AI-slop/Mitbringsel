@@ -5,6 +5,7 @@ import { useAuthStore, type AuthStatus } from '@/stores/auth'
 import GroupSettingsView from '../views/GroupSettingsView.vue'
 import GroupView from '../views/GroupView.vue'
 import InviteView from '../views/InviteView.vue'
+import ListView from '../views/ListView.vue'
 import StartView from '../views/StartView.vue'
 import LoginView from '../views/LoginView.vue'
 import { loginNext, loginRoute } from './loginQuery'
@@ -43,6 +44,13 @@ export function createAppRouter(
         path: '/groups/:groupId',
         name: 'group',
         component: GroupView,
+        props: true,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/groups/:groupId/lists/:listId',
+        name: 'list',
+        component: ListView,
         props: true,
         meta: { requiresAuth: true },
       },
