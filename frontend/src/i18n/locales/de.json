@@ -206,31 +206,11 @@
     },
     "done": {
       "title": "Erledigt ({count})"
-    }
-  },
-  "group": {
-    "back": "Zurück zur Startseite",
-    "settings": "Haushalt verwalten",
-    "loading": "Haushalt wird geladen …",
-    "loadFailed": "Der Haushalt konnte nicht geladen werden.",
-    "missing": {
-      "title": "Haushalt nicht gefunden",
-      "description": "Er existiert nicht mehr, oder du bist kein Mitglied.",
-      "home": "Zur Startseite"
     },
-    "lists": {
-      "title": "Listen",
-      "loading": "Listen werden geladen …",
-      "loadFailed": "Die Listen konnten nicht geladen werden.",
-      "empty": {
-        "title": "Noch keine Liste",
-        "description": "Lege eine Liste an, zum Beispiel für den Wocheneinkauf."
-      },
-      "new": "Neue Liste",
-      "actionsFor": "Aktionen für {name}",
-      "archived": {
-        "toggle": "Archiviert ({count})"
-      }
+    "noLists": {
+      "title": "Noch keine Liste",
+      "description": "Lege eine Liste an, zum Beispiel für den Wocheneinkauf.",
+      "create": "Liste anlegen"
     },
     "name": {
       "createTitle": "Neue Liste",
