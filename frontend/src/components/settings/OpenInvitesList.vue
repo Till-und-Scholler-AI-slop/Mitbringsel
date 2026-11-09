@@ -87,25 +87,30 @@ async function revoke(inviteId: string) {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  padding-top: var(--space-1);
+  border-top: 1.5px solid var(--color-divider);
 }
 
 .head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  padding-top: 0.625rem;
 }
 
 .title {
   margin: 0;
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-black);
+  line-height: 1.3125rem;
 }
 
 .count {
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-heavy);
+  font-variant-numeric: tabular-nums;
 }
 
 .status {
@@ -136,11 +141,11 @@ async function revoke(inviteId: string) {
 }
 
 .rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
   margin: 0;
   padding: 0;
   list-style: none;
-  border: var(--border-width-md) solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
 }
 </style>

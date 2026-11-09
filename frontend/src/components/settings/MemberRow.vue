@@ -16,7 +16,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <li class="member">
+  <li :class="['member', { 'member--me': isMe }]">
     <BaseAvatar :name="member.displayName" :src="member.avatarUrl" :size="AVATAR_SIZE" />
     <div class="text">
       <span class="name">
@@ -42,14 +42,18 @@ const { t } = useI18n()
 
 <style scoped>
 .member {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  min-height: 4.25rem;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
 }
 
-.member + .member {
-  border-top: var(--border-width-sm) dashed var(--color-text-muted);
+/* The own row stands out a little. */
+.member--me {
+  background: var(--color-bg);
 }
 
 .text {
@@ -62,22 +66,27 @@ const { t } = useI18n()
 }
 
 .name {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-black);
+  max-width: 100%;
+  font-size: 1.0625rem;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.375rem;
   overflow-wrap: anywhere;
 }
 
 .you {
+  margin-left: var(--space-1);
   color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
 }
 
 .role {
-  padding: 0 var(--space-2);
-  border: var(--border-width-sm) solid var(--color-border);
+  padding: 1px 0.625rem;
+  border: var(--border-width-sm) solid var(--color-on-accent);
   border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
+  font-size: 0.8125rem;
   font-weight: var(--font-weight-heavy);
+  line-height: 1.125rem;
 }
 
 .role--owner {
@@ -91,6 +100,7 @@ const { t } = useI18n()
 }
 
 .role--member {
+  border-color: var(--color-divider);
   background: var(--color-bg);
   color: var(--color-text);
 }

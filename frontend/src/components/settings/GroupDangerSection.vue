@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import ConfirmDialog from '@/components/settings/ConfirmDialog.vue'
+import SettingsCard from '@/components/settings/SettingsCard.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { useGroupsStore } from '@/stores/groups'
@@ -51,8 +52,7 @@ async function confirm() {
 </script>
 
 <template>
-  <section class="section" aria-labelledby="danger-title">
-    <h2 id="danger-title" class="title">{{ t(`settings.danger.${kind}.title`) }}</h2>
+  <SettingsCard class="danger" :title="t(`settings.danger.${kind}.title`)" danger>
     <p class="description">{{ t(`settings.danger.${kind}.description`) }}</p>
     <BaseButton variant="danger" class="open" @click="ask">
       <BaseIcon :name="kind === 'delete' ? 'trash' : 'logOut'" />
@@ -69,27 +69,24 @@ async function confirm() {
       :error="errorCode ? errorMessage : null"
       @confirm="confirm"
     />
-  </section>
+  </SettingsCard>
 </template>
 
 <style scoped>
-.section {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+.danger {
   gap: var(--space-3);
-}
-
-.title {
-  margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-black);
 }
 
 .description {
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3125rem;
+}
+
+.open {
+  min-height: 3.5rem;
+  font-size: 1.0625rem;
 }
 </style>

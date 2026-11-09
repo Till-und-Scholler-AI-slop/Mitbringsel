@@ -81,23 +81,27 @@ async function share() {
 /* One tap or click selects all of it, for copying by hand. */
 .link {
   margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border: var(--border-width-md) dashed var(--color-border);
-  border-radius: var(--radius-lg);
+  padding: var(--space-3) 0.875rem;
+  border: var(--border-width-md) solid var(--color-border);
+  border-radius: var(--radius-md);
   background: var(--color-bg);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.25rem;
   overflow-wrap: anywhere;
   user-select: all;
 }
 
 .buttons {
   display: flex;
-  gap: var(--space-3);
+  gap: 0.625rem;
 }
 
 .button {
   flex: 1;
+  min-height: 3.5rem;
+  font-size: 1.0625rem;
 }
 
 .problem {
@@ -114,8 +118,15 @@ async function share() {
   align-items: flex-start;
   gap: var(--space-2);
   margin: 0;
-  color: var(--color-text-muted);
+  padding: 0.625rem var(--space-3);
+  border-radius: 0.875rem;
+  background: var(--color-bg);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+  line-height: 1.1875rem;
+}
+
+.only-now :deep(svg) {
+  flex: none;
 }
 </style>
