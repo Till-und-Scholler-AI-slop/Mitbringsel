@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useId } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import { useLongPress } from '@/composables/useLongPress'
@@ -13,6 +13,9 @@ import type { List } from '@/types/api'
 // The actions of a list (rename, archive, delete) open with a long press or
 // right click on its chip, or by choosing the current chip again; the last
 // one is the way for keyboards and screen readers.
+//
+// The chips are buttons, not links: a held link makes mobile browsers show
+// their own menu (open in new tab, share) on top of ours.
 //
 // lists: the active lists. currentArchived: the open list is archived and so
 // not among them; the archive chip looks pressed in instead.
@@ -27,48 +30,35 @@ const props = defineProps<{
 const emit = defineEmits<{ create: []; actions: [list: List]; archive: [] }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const hintId = useId()
 const press = useLongPress<List>((list) => emit('actions', list))
 
-// navigate: the RouterLink's own handler, called only for a plain choice of
-// another list.
-function onClick(event: MouseEvent, list: List, navigate: (e: MouseEvent) => unknown) {
-  if (press.consumeClick(event)) {
-    event.preventDefault()
-    return
-  }
+function onClick(event: MouseEvent, list: List) {
+  if (press.consumeClick(event)) return
   if (list.id === props.currentId) {
-    event.preventDefault()
     emit('actions', list)
     return
   }
-  navigate(event)
+  router.push({ name: 'list', params: { groupId: props.groupId, listId: list.id } })
 }
 </script>
 
 <template>
   <nav class="chips" :aria-label="t('list.chips')">
-    <!-- custom: the link is our own <a>, so a long press can stop the
-         navigation before the router sees the click. -->
-    <RouterLink
+    <button
       v-for="list in lists"
       :key="list.id"
-      v-slot="{ href, navigate }"
-      :to="{ name: 'list', params: { groupId, listId: list.id } }"
-      custom
+      type="button"
+      :class="['chip', 'chip--list', { 'chip--current': list.id === currentId }]"
+      :aria-current="list.id === currentId ? 'page' : undefined"
+      :aria-describedby="list.id === currentId ? hintId : undefined"
+      v-on="press.handlers(list)"
+      @click="onClick($event, list)"
     >
-      <a
-        :href="href"
-        :class="['chip', { 'chip--current': list.id === currentId }]"
-        :aria-current="list.id === currentId ? 'page' : undefined"
-        :aria-describedby="list.id === currentId ? hintId : undefined"
-        v-on="press.handlers(list)"
-        @click="onClick($event, list, navigate)"
-      >
-        <span class="chip-name">{{ list.name }}</span>
-        <span v-if="list.id === currentId && openCount > 0" class="count">{{ openCount }}</span>
-      </a>
-    </RouterLink>
+      <span class="chip-name">{{ list.name }}</span>
+      <span v-if="list.id === currentId && openCount > 0" class="count">{{ openCount }}</span>
+    </button>
     <button
       v-if="archivedCount > 0"
       type="button"
@@ -116,7 +106,7 @@ function onClick(event: MouseEvent, list: List, navigate: (e: MouseEvent) => unk
   font-weight: var(--font-weight-heavy);
   text-decoration: none;
   cursor: pointer;
-  /* No link preview or text selection while a finger is held on a chip. */
+  /* No text selection or callout while a finger is held on a chip. */
   -webkit-touch-callout: none;
   user-select: none;
   transition:
