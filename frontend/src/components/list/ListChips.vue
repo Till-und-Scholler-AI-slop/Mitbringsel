@@ -34,8 +34,7 @@ const router = useRouter()
 const hintId = useId()
 const press = useLongPress<List>((list) => emit('actions', list))
 
-function onClick(event: MouseEvent, list: List) {
-  if (press.consumeClick(event)) return
+function onClick(list: List) {
   if (list.id === props.currentId) {
     emit('actions', list)
     return
@@ -54,7 +53,7 @@ function onClick(event: MouseEvent, list: List) {
       :aria-current="list.id === currentId ? 'page' : undefined"
       :aria-describedby="list.id === currentId ? hintId : undefined"
       v-on="press.handlers(list)"
-      @click="onClick($event, list)"
+      @click="onClick(list)"
     >
       <span class="chip-name">{{ list.name }}</span>
       <span v-if="list.id === currentId && openCount > 0" class="count">{{ openCount }}</span>
