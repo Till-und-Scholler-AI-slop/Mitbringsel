@@ -73,9 +73,9 @@ async function run(action: ListAction) {
 </script>
 
 <template>
-  <BaseDialog v-model:open="open" :title="t('group.actions.title')">
+  <BaseDialog v-model:open="open" :title="t('list.actions.title')">
     <div class="body">
-      <p class="question">{{ t('group.actions.question', { name: list.name }) }}</p>
+      <p class="question">{{ t('list.actions.question', { name: list.name }) }}</p>
 
       <p v-if="errorCode" class="problem" role="alert">
         <BaseIcon name="alert" /> {{ errorMessage }}
@@ -94,14 +94,14 @@ async function run(action: ListAction) {
             <BaseIcon :name="ACTION_ICONS[action]" :size="20" />
           </span>
           <span class="action-text">
-            <span class="action-title">{{ t(`group.actions.${action}.title`) }}</span>
-            <span class="action-description">{{ t(`group.actions.${action}.description`) }}</span>
+            <span class="action-title">{{ t(`list.actions.${action}.title`) }}</span>
+            <span class="action-description">{{ t(`list.actions.${action}.description`) }}</span>
           </span>
         </button>
       </template>
 
       <template v-else>
-        <p class="confirm">{{ t('group.actions.confirm.body', { name: list.name }) }}</p>
+        <p class="confirm">{{ t('list.actions.confirm.body', { name: list.name }) }}</p>
         <div class="buttons">
           <BaseButton
             variant="secondary"
@@ -109,10 +109,10 @@ async function run(action: ListAction) {
             :disabled="busy"
             @click="confirmingDelete = false"
           >
-            {{ t('group.actions.confirm.back') }}
+            {{ t('list.actions.confirm.back') }}
           </BaseButton>
           <BaseButton variant="danger" class="delete" :loading="busy" @click="run('delete')">
-            {{ t('group.actions.confirm.delete') }}
+            {{ t('list.actions.confirm.delete') }}
           </BaseButton>
         </div>
       </template>

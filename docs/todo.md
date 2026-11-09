@@ -6,7 +6,6 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
-- [ ] **Haushalt-Screen entfernen:** Der Wechsler und die Startseite verlinken noch auf `/groups/:groupId`. Künftig öffnet die Route die zuletzt geöffnete Liste (pro Gerät gemerkt), sonst die erste aktive; ohne Liste zeigt die Listenansicht einen Leerzustand mit „Liste anlegen“. `GroupView` und `ListCard` fallen weg.
 - [ ] **Startseite nach Iteration 1** (`start-1-standard`): ganze Karte als Link, Listen als Chips auf der Karte, kein Zahnrad, „Gründen“ und „Beitreten“ in gestrichelter Box unter den Karten.
 - [ ] **Verwalten nach dem Design** (`verwalten-owner-hell`): jeder Abschnitt als Karte mit Rand und Sticker-Schatten, Name als eigene Karte mit „Umbenennen“, kleine graue Überschriften, Mitglieder-Zähler, Austreten/Löschen in Karte mit rotem Rand, Kopf mit rundem Zurück-Button.
 - [ ] **Desktop-Rahmen mit Seitenleiste** für Start und Listenansicht (`start-desktop-*`): Logo, Start, Haushalte mit aufklappbaren Listen, „Haushalt gründen“, Sync-Status, Profil. War für die Listenansicht geplant, ist dort aber nicht umgesetzt worden; Startseite und Listenansicht sind auf dem Desktop bisher nur das gestreckte Smartphone-Layout.

@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { h } from 'vue'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 
 import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
 import type { GroupsService } from '@/services/api/groups'
 import type { ItemsService } from '@/services/api/items'
 import type { ListsService } from '@/services/api/lists'
+import { rememberLastList } from '@/services/lastList'
 import type { Group, Item, List } from '@/types/api'
 
 import ListView from '../ListView.vue'
@@ -107,6 +109,7 @@ function item(id: string, name: string, overrides: Partial<Item> = {}): Item {
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  localStorage.clear()
   groupsService.list.mockResolvedValue([GROUP])
   listsService.list.mockResolvedValue([list('l1', 'Supermarkt'), list('l2', 'Baumarkt')])
   itemsService.list.mockResolvedValue([])
@@ -120,28 +123,36 @@ beforeEach(() => {
   }
 })
 
-async function mountView(listId = 'l1', groupId = 'g1') {
+// Mounted behind a real RouterView, so a new URL renders the view again
+// with its props, as in the app.
+async function mountAt(path: string) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<p />' } },
-      { path: '/groups/:groupId', name: 'group', component: { template: '<p />' } },
+      { path: '/groups/:groupId', name: 'group', component: ListView, props: true },
       {
         path: '/groups/:groupId/settings',
         name: 'group-settings',
         component: { template: '<p />' },
       },
-      { path: '/groups/:groupId/lists/:listId', name: 'list', component: { template: '<p />' } },
+      { path: '/groups/:groupId/lists/:listId', name: 'list', component: ListView, props: true },
     ],
   })
-  await router.push(`/groups/${groupId}/lists/${listId}`)
-  const wrapper = mount(ListView, {
-    props: { groupId, listId },
-    global: { plugins: [createAppI18n(['en'], null), router] },
-    attachTo: document.body,
-  })
+  await router.push(path)
+  const wrapper = mount(
+    { render: () => h(RouterView) },
+    {
+      global: { plugins: [createAppI18n(['en'], null), router] },
+      attachTo: document.body,
+    },
+  )
   await flushPromises()
   return { wrapper, router }
+}
+
+function mountView(listId = 'l1', groupId = 'g1') {
+  return mountAt(`/groups/${groupId}/lists/${listId}`)
 }
 
 type Mounted = Awaited<ReturnType<typeof mountView>>['wrapper']
@@ -194,7 +205,7 @@ describe('ListView: loading', () => {
     await wrapper.get('main button').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.name).toBe('group')
+    expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l1' })
     wrapper.unmount()
   })
 
@@ -233,6 +244,79 @@ describe('ListView: loading', () => {
   })
 })
 
+describe('ListView: opening the household', () => {
+  it('opens the first active list', async () => {
+    listsService.list.mockResolvedValue([
+      list('l0', 'Alt', '2026-01-02T10:00:00Z'),
+      list('l1', 'Supermarkt'),
+      list('l2', 'Baumarkt'),
+    ])
+
+    const { wrapper, router } = await mountAt('/groups/g1')
+
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l1')
+    expect(wrapper.get('h1').text()).toBe('Supermarkt')
+    wrapper.unmount()
+  })
+
+  it('opens the list that was open last, without a way back to the household', async () => {
+    const { wrapper, router } = await mountView('l2')
+    await router.push('/')
+    await router.push('/groups/g1')
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l2')
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/')
+    wrapper.unmount()
+  })
+
+  it('skips the last list once it is archived', async () => {
+    rememberLastList('g1', 'l2')
+    listsService.list.mockResolvedValue([
+      list('l1', 'Supermarkt'),
+      list('l2', 'Baumarkt', '2026-01-02T10:00:00Z'),
+    ])
+
+    const { wrapper, router } = await mountAt('/groups/g1')
+
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l1')
+    wrapper.unmount()
+  })
+
+  it('offers to create the first list, and the archive', async () => {
+    listsService.list.mockResolvedValue([list('l2', 'Baumarkt', '2026-01-02T10:00:00Z')])
+    listsService.create.mockResolvedValue(list('l3', 'Drogerie'))
+
+    const { wrapper, router } = await mountAt('/groups/g1')
+
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g1')
+    expect(wrapper.get('h1').text()).toBe('WG Kaiserstraße')
+    expect(wrapper.text()).toContain('No list yet')
+    expect(wrapper.findAll('.chip--list')).toHaveLength(0)
+    expect(wrapper.get('.chip--archive').text()).toBe('Archive (1)')
+
+    await wrapper.get('main button').trigger('click')
+    await wrapper.get('dialog[open] input').setValue('Drogerie')
+    await wrapper.get('dialog[open] form').trigger('submit')
+    await flushPromises()
+
+    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie')
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l3')
+    wrapper.unmount()
+  })
+
+  it('says so and offers a retry when the lists cannot be loaded', async () => {
+    listsService.list.mockRejectedValue(new ApiError('NETWORK'))
+
+    const { wrapper } = await mountAt('/groups/g1')
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('The list could not be loaded.')
+    wrapper.unmount()
+  })
+})
+
 describe('ListView: header', () => {
   it('links the logo to the start page', async () => {
     const { wrapper } = await mountView()
@@ -245,18 +329,27 @@ describe('ListView: header', () => {
 
   it('switches the household with the menu at its name', async () => {
     groupsService.list.mockResolvedValue([GROUP, { ...GROUP, id: 'g2', name: 'Familie' }])
+    listsService.list.mockImplementation(async (groupId) =>
+      groupId === 'g2'
+        ? [{ ...list('l5', 'Drogerie'), groupId: 'g2' }]
+        : [list('l1', 'Supermarkt'), list('l2', 'Baumarkt')],
+    )
     const { wrapper, router } = await mountView()
 
     await wrapper.get('.switcher .toggle').trigger('click')
     await wrapper.findAll('.switcher .group')[1]!.trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.fullPath).toBe('/groups/g2')
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g2/lists/l5')
+    expect(wrapper.get('.switcher .toggle').text()).toBe('Familie')
     wrapper.unmount()
   })
 
   it('founds a household from the menu and opens it', async () => {
     groupsService.create.mockResolvedValue({ ...GROUP, id: 'g9', name: 'Familie' })
+    listsService.list.mockImplementation(async (groupId) =>
+      groupId === 'g9' ? [] : [list('l1', 'Supermarkt'), list('l2', 'Baumarkt')],
+    )
     const { wrapper, router } = await mountView()
 
     await wrapper.get('.switcher .toggle').trigger('click')
@@ -267,6 +360,7 @@ describe('ListView: header', () => {
 
     expect(groupsService.create).toHaveBeenCalledWith('Familie')
     expect(router.currentRoute.value.fullPath).toBe('/groups/g9')
+    expect(wrapper.text()).toContain('No list yet')
     wrapper.unmount()
   })
 
@@ -358,7 +452,7 @@ describe('ListView: list actions', () => {
     wrapper.unmount()
   })
 
-  it('goes to the household when the last list is deleted', async () => {
+  it('offers a new list when the last one is deleted', async () => {
     groupsService.list.mockResolvedValue([{ ...GROUP, role: 'owner' }])
     listsService.list.mockResolvedValue([list('l1', 'Supermarkt')])
     listsService.remove.mockResolvedValue(undefined)
@@ -370,6 +464,7 @@ describe('ListView: list actions', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe('group')
+    expect(wrapper.text()).toContain('No list yet')
     wrapper.unmount()
   })
 

@@ -20,17 +20,21 @@ import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { canManage } from '@/services/groupRoles'
+import { listToOpen, rememberLastList } from '@/services/lastList'
 import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
 import type { Group, Item, List } from '@/types/api'
 
-type ViewState = 'loading' | 'failed' | 'missing' | 'ready'
+// noLists: the household has no active list to open.
+type ViewState = 'loading' | 'failed' | 'missing' | 'noLists' | 'ready'
 
 const MAX_AVATARS = 4
 const AVATAR_SIZE = 30
 
-const props = defineProps<{ groupId: string; listId: string }>()
+// Without listId (the route of the household) the view opens the last or
+// first active list, or offers to create one.
+const props = defineProps<{ groupId: string; listId?: string }>()
 
 const { t } = useI18n()
 const router = useRouter()
@@ -52,11 +56,14 @@ const doneOpen = ref(true)
 const checkErrorCode = ref<string | null>(null)
 const checkError = useErrorMessage(checkErrorCode)
 const listsError = useErrorMessage(() => lists.errorCodeOf(props.groupId))
-const itemsError = useErrorMessage(() => items.errorCodeOf(props.listId))
+// The items below belong to no list while there is none.
+const listKey = computed(() => props.listId ?? '')
+const itemsError = useErrorMessage(() => items.errorCodeOf(listKey.value))
 
 const group = computed(() => groups.byId(props.groupId))
 // A list of another household under this URL counts as not found.
 const list = computed<List | undefined>(() => {
+  if (!props.listId) return undefined
   const found = lists.byId(props.listId)
   return found?.groupId === props.groupId ? found : undefined
 })
@@ -64,27 +71,31 @@ const list = computed<List | undefined>(() => {
 const actionsFor = computed(() => lists.byId(actionsId.value ?? ''))
 const renaming = computed(() => lists.byId(renamingId.value ?? ''))
 const canDelete = computed(() => group.value !== undefined && canManage(group.value.role))
+const active = computed(() => lists.activeLists(props.groupId))
 const archived = computed(() => lists.archivedLists(props.groupId))
 
 const state = computed<ViewState>(() => {
   if (list.value) return 'ready'
+  // Without a list the view moves on as soon as there is one to open.
+  if (!props.listId && active.value.length > 0) return 'loading'
   const status = lists.statusOf(props.groupId)
   if (status === 'error') return 'failed'
-  return status === 'ready' ? 'missing' : 'loading'
+  if (status !== 'ready') return 'loading'
+  return props.listId ? 'missing' : 'noLists'
 })
 
-const open = computed(() => items.openItems(props.listId))
-const done = computed(() => items.checkedItems(props.listId))
+const open = computed(() => items.openItems(listKey.value))
+const done = computed(() => items.checkedItems(listKey.value))
 const itemsLoading = computed(
   () =>
-    ['idle', 'loading'].includes(items.statusOf(props.listId)) &&
-    items.itemsOf(props.listId).length === 0,
+    ['idle', 'loading'].includes(items.statusOf(listKey.value)) &&
+    items.itemsOf(listKey.value).length === 0,
 )
 const itemsFailed = computed(
-  () => items.statusOf(props.listId) === 'error' && items.itemsOf(props.listId).length === 0,
+  () => items.statusOf(listKey.value) === 'error' && items.itemsOf(listKey.value).length === 0,
 )
 const isEmpty = computed(
-  () => items.statusOf(props.listId) === 'ready' && items.itemsOf(props.listId).length === 0,
+  () => items.statusOf(listKey.value) === 'ready' && items.itemsOf(listKey.value).length === 0,
 )
 
 const members = computed(() => group.value?.members ?? [])
@@ -109,10 +120,26 @@ watch(
     archiveOpen.value = false
     if (groups.status === 'idle') groups.load()
     if (lists.statusOf(groupId) === 'idle') lists.load(groupId)
-    items.load(listId)
+    if (listId) items.load(listId)
   },
   { immediate: true },
 )
+
+// The household without a list in the URL: open the last or first active
+// list. replace, so the back button does not land here and bounce again.
+watch(
+  [() => props.listId, active],
+  ([listId, activeLists]) => {
+    if (listId) return
+    const next = listToOpen(props.groupId, activeLists)
+    if (next) router.replace({ name: 'list', params: { groupId: props.groupId, listId: next.id } })
+  },
+  { immediate: true },
+)
+
+watch(list, (now) => {
+  if (now) rememberLastList(props.groupId, now.id)
+})
 
 async function toggle(item: Item) {
   try {
@@ -123,17 +150,12 @@ async function toggle(item: Item) {
   }
 }
 
-// The open list was deleted: go on with the first active list, or with the
-// household if none is left. A new URL with an unknown list is not a
-// deletion; that one shows "not found".
+// The open list was deleted: go on with the household, which opens the
+// first active list or offers to create one. A new URL with an unknown list
+// is not a deletion; that one shows "not found".
 watch([() => props.listId, list], ([listId, now], [listIdBefore, before]) => {
   if (!before || now || listId !== listIdBefore) return
-  const next = lists.activeLists(props.groupId)[0]
-  router.replace(
-    next
-      ? { name: 'list', params: { groupId: props.groupId, listId: next.id } }
-      : { name: 'group', params: { groupId: props.groupId } },
-  )
+  router.replace({ name: 'group', params: { groupId: props.groupId } })
 })
 
 function startRename(listId: string) {
@@ -182,13 +204,13 @@ function openCreated(created: List) {
       </div>
 
       <ListChips
-        v-if="list"
+        v-if="list || state === 'noLists'"
         :group-id="groupId"
-        :lists="lists.activeLists(groupId)"
-        :current-id="listId"
+        :lists="active"
+        :current-id="listKey"
         :open-count="open.length"
         :archived-count="archived.length"
-        :current-archived="list.archivedAt !== null"
+        :current-archived="list?.archivedAt != null"
         @create="createOpen = true"
         @actions="actionsId = $event.id"
         @archive="archiveOpen = true"
@@ -197,6 +219,7 @@ function openCreated(created: List) {
 
     <main class="content">
       <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
+      <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
 
       <p v-if="state === 'loading'" class="loading" role="status">
         <BaseSpinner /> {{ t('list.loading') }}
@@ -221,6 +244,17 @@ function openCreated(created: List) {
         </BaseButton>
       </BaseEmptyState>
 
+      <BaseEmptyState
+        v-else-if="state === 'noLists'"
+        :title="t('list.noLists.title')"
+        :description="t('list.noLists.description')"
+      >
+        <template #icon><BaseIcon name="list" :size="24" /></template>
+        <BaseButton aria-haspopup="dialog" @click="createOpen = true">
+          <BaseIcon name="plus" /> {{ t('list.noLists.create') }}
+        </BaseButton>
+      </BaseEmptyState>
+
       <template v-else>
         <p v-if="list?.archivedAt" class="archived">
           <BaseIcon name="archive" :size="18" /> {{ t('list.archivedBadge') }}
@@ -238,7 +272,7 @@ function openCreated(created: List) {
         <div v-else-if="itemsFailed" class="failed" role="alert">
           <p class="failed-title">{{ t('list.items.loadFailed') }}</p>
           <p>{{ itemsError }}</p>
-          <BaseButton variant="secondary" @click="items.load(listId)">
+          <BaseButton variant="secondary" @click="items.load(listKey)">
             <BaseIcon name="retry" /> {{ t('common.retry') }}
           </BaseButton>
         </div>
@@ -311,7 +345,7 @@ function openCreated(created: List) {
       v-model:open="archiveOpen"
       :group-id="groupId"
       :lists="archived"
-      :current-id="listId"
+      :current-id="listKey"
     />
     <CreateGroupDialog v-model:open="createGroupOpen" @created="openCreatedGroup" />
     <JoinGroupDialog v-model:open="joinOpen" />

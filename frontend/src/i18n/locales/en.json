@@ -206,31 +206,11 @@
     },
     "done": {
       "title": "Done ({count})"
-    }
-  },
-  "group": {
-    "back": "Back to the start page",
-    "settings": "Manage household",
-    "loading": "Loading household …",
-    "loadFailed": "The household could not be loaded.",
-    "missing": {
-      "title": "Household not found",
-      "description": "It no longer exists, or you are not a member.",
-      "home": "To the start page"
     },
-    "lists": {
-      "title": "Lists",
-      "loading": "Loading lists …",
-      "loadFailed": "The lists could not be loaded.",
-      "empty": {
-        "title": "No list yet",
-        "description": "Create a list, for example for the weekly shopping."
-      },
-      "new": "New list",
-      "actionsFor": "Actions for {name}",
-      "archived": {
-        "toggle": "Archived ({count})"
-      }
+    "noLists": {
+      "title": "No list yet",
+      "description": "Create a list, for example for the weekly shopping.",
+      "create": "Create list"
     },
     "name": {
       "createTitle": "New list",

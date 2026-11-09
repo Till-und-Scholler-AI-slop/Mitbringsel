@@ -3,7 +3,6 @@ import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 import { useAuthStore, type AuthStatus } from '@/stores/auth'
 
 import GroupSettingsView from '../views/GroupSettingsView.vue'
-import GroupView from '../views/GroupView.vue'
 import InviteView from '../views/InviteView.vue'
 import ListView from '../views/ListView.vue'
 import StartView from '../views/StartView.vue'
@@ -41,9 +40,11 @@ export function createAppRouter(
         // Open to everyone: the page shows the invite and asks to sign in.
       },
       {
+        // The household itself has no screen: the list view opens its last
+        // or first list, or offers to create one.
         path: '/groups/:groupId',
         name: 'group',
-        component: GroupView,
+        component: ListView,
         props: true,
         meta: { requiresAuth: true },
       },

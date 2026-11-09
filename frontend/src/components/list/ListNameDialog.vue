@@ -79,13 +79,13 @@ async function submit() {
 <template>
   <BaseDialog
     v-model:open="open"
-    :title="list ? t('group.name.renameTitle') : t('group.name.createTitle')"
+    :title="list ? t('list.name.renameTitle') : t('list.name.createTitle')"
   >
     <form class="form" novalidate @submit.prevent="submit">
       <BaseInput
         v-model="name"
-        :label="t('group.name.label')"
-        :placeholder="t('group.name.placeholder')"
+        :label="t('list.name.label')"
+        :placeholder="t('list.name.placeholder')"
         :error="error"
         :max-length="LIST_NAME_MAX_LENGTH"
         autocomplete="off"
@@ -93,10 +93,10 @@ async function submit() {
       />
       <div class="actions">
         <BaseButton variant="secondary" class="cancel" @click="open = false">
-          {{ t('group.name.cancel') }}
+          {{ t('list.name.cancel') }}
         </BaseButton>
         <BaseButton type="submit" class="submit" :loading="submitting" :disabled="problem !== null">
-          {{ list ? t('group.name.save') : t('group.name.create') }}
+          {{ list ? t('list.name.save') : t('list.name.create') }}
         </BaseButton>
       </div>
     </form>
