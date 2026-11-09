@@ -237,4 +237,86 @@ const { t } = useI18n()
 .option--join .option-hint {
   color: var(--color-text-muted);
 }
+
+/* Desktop: two columns, the text on the left, the options on the right. The
+   grid areas move the hint about the link under the text. */
+@media (min-width: 48rem) {
+  .start-empty {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    grid-template-areas:
+      'badges options'
+      'intro options'
+      'note options';
+    grid-template-rows: auto auto 1fr;
+    align-items: start;
+    justify-items: start;
+    gap: var(--space-4) var(--space-8);
+    padding: 2.25rem;
+    text-align: left;
+  }
+
+  .badges {
+    grid-area: badges;
+  }
+
+  .badge {
+    width: 3.75rem;
+    height: 3.75rem;
+  }
+
+  .badge + .badge {
+    margin-left: -12px;
+  }
+
+  .intro {
+    grid-area: intro;
+    gap: var(--space-4);
+  }
+
+  .title {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .description {
+    font-size: 1.0625rem;
+    line-height: 1.5rem;
+  }
+
+  .no-link {
+    grid-area: note;
+  }
+
+  .options {
+    grid-area: options;
+    align-self: center;
+    justify-self: stretch;
+    gap: 0.875rem;
+    padding-top: 0;
+  }
+
+  .option {
+    gap: 0.875rem;
+    min-height: 5.25rem;
+    padding: 0.625rem 1.125rem 0.625rem var(--space-3);
+    border-radius: var(--radius-2xl);
+  }
+
+  .option-icon {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
+  .option-title {
+    font-size: 1.25rem;
+    line-height: 1.5625rem;
+  }
+
+  .option-hint {
+    font-size: var(--font-size-sm);
+    line-height: 1.25rem;
+  }
+}
 </style>

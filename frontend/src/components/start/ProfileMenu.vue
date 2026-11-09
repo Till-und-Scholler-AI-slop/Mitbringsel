@@ -7,8 +7,13 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 
 const AVATAR_SIZE = 40
+const ROW_AVATAR_SIZE = 34
 
-defineProps<{ name: string; avatarUrl: string | null }>()
+// row: the profile at the bottom of the desktop sidebar, with the name next
+// to the avatar; its panel opens upwards.
+withDefaults(defineProps<{ name: string; avatarUrl: string | null; row?: boolean }>(), {
+  row: false,
+})
 const emit = defineEmits<{ logout: [] }>()
 
 const { t } = useI18n()
@@ -47,17 +52,27 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown)
 </script>
 
 <template>
-  <div ref="root" class="profile" @keydown.esc="onEscape">
+  <div ref="root" :class="['profile', { 'profile--row': row }]" @keydown.esc="onEscape">
+    <!-- The row shows the name, so it is the button's name too. -->
     <button
       ref="toggle"
       type="button"
       class="toggle"
-      :aria-label="t('start.profile.label', { name })"
+      :aria-label="row ? undefined : t('start.profile.label', { name })"
       :aria-expanded="open"
       :aria-controls="panelId"
       @click="open = !open"
     >
-      <BaseAvatar class="avatar" :name="name" :src="avatarUrl" :size="AVATAR_SIZE" />
+      <BaseAvatar
+        class="avatar"
+        :name="name"
+        :src="avatarUrl"
+        :size="row ? ROW_AVATAR_SIZE : AVATAR_SIZE"
+      />
+      <span v-if="row" class="row-text">
+        <span class="row-name">{{ name }}</span>
+        <span class="row-you">{{ t('start.profile.you') }}</span>
+      </span>
     </button>
 
     <div v-if="open" :id="panelId" class="panel">
@@ -106,6 +121,48 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown)
   background: var(--color-surface);
   color: var(--color-text);
   box-shadow: var(--shadow-sticker);
+}
+
+.profile--row .toggle {
+  width: 100%;
+  height: auto;
+  min-height: var(--size-touch);
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  color: var(--color-on-brand);
+  text-align: left;
+}
+
+.profile--row .avatar {
+  flex: none;
+  box-shadow: none;
+}
+
+.row-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+  overflow-wrap: anywhere;
+}
+
+.row-you {
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+}
+
+.profile--row .panel {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
 }
 
 .name {

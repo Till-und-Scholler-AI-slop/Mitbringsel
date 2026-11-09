@@ -14,7 +14,8 @@
     },
     "profile": {
       "label": "Profile of {name}",
-      "logout": "Sign out"
+      "logout": "Sign out",
+      "you": "That's you"
     },
     "groups": {
       "title": "Your households",
@@ -354,5 +355,11 @@
         "revokeAriaUnknown": "Revoke the link of a deleted account"
       }
     }
+  },
+  "nav": {
+    "label": "Navigation",
+    "start": "Start",
+    "households": "Households",
+    "lists": "Lists of {name}"
   }
 }

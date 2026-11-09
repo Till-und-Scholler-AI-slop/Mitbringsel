@@ -174,4 +174,26 @@ const label = computed(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Desktop: a little larger, as the cards stand in a grid with more room. */
+@media (min-width: 48rem) {
+  .card {
+    padding: 1.125rem;
+  }
+
+  .house {
+    width: var(--size-touch);
+    height: var(--size-touch);
+  }
+
+  .name {
+    font-size: 1.375rem;
+    line-height: 1.6875rem;
+  }
+
+  .list {
+    font-size: var(--font-size-sm);
+    line-height: 2.375rem;
+  }
+}
 </style>

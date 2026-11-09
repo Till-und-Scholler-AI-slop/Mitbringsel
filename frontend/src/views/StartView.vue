@@ -1,25 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
+import AppFrame from '@/components/layout/AppFrame.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import GroupCard from '@/components/start/GroupCard.vue'
 import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import ProfileMenu from '@/components/start/ProfileMenu.vue'
 import StartEmpty from '@/components/start/StartEmpty.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useLogout } from '@/composables/useLogout'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import { useListsStore } from '@/stores/lists'
 
 const { t } = useI18n()
-const router = useRouter()
 const auth = useAuthStore()
 const groups = useGroupsStore()
 const lists = useListsStore()
@@ -36,14 +36,7 @@ const loading = computed(() => groups.status === 'loading' && groups.groups.leng
 const failed = computed(() => groups.status === 'error' && groups.groups.length === 0)
 const empty = computed(() => groups.status === 'ready' && groups.groups.length === 0)
 
-async function logout() {
-  try {
-    await auth.logout()
-  } finally {
-    // The store is logged out even if the request failed, so leave anyway.
-    await router.push({ name: 'login' })
-  }
-}
+const logout = useLogout()
 
 onMounted(() => groups.load())
 
@@ -68,70 +61,77 @@ watch(online, (isOnline) => {
 </script>
 
 <template>
-  <div class="start">
-    <header class="bar">
-      <BrandLogo />
-      <ProfileMenu
-        v-if="auth.user"
-        :name="auth.user.displayName"
-        :avatar-url="auth.user.avatarUrl"
-        @logout="logout"
-      />
-    </header>
+  <AppFrame>
+    <div class="start">
+      <!-- The phone header; on the desktop the sidebar takes its place. -->
+      <header class="bar">
+        <BrandLogo />
+        <ProfileMenu
+          v-if="auth.user"
+          :name="auth.user.displayName"
+          :avatar-url="auth.user.avatarUrl"
+          @logout="logout"
+        />
+      </header>
 
-    <main class="content">
-      <h1 v-if="firstName" class="greeting">{{ t('start.greeting', { name: firstName }) }}</h1>
+      <main class="content">
+        <h1 v-if="firstName" class="greeting">{{ t('start.greeting', { name: firstName }) }}</h1>
 
-      <p v-if="!online" class="offline" role="status">
-        <span class="offline-badge"
-          ><BaseIcon name="cloudOff" /> {{ t('start.offline.badge') }}</span
-        >
-        {{ t('start.offline.body') }}
-      </p>
-
-      <section class="groups" aria-labelledby="groups-title">
-        <h2 id="groups-title" class="section-title">{{ t('start.groups.title') }}</h2>
-
-        <p v-if="loading" class="loading" role="status">
-          <BaseSpinner /> {{ t('start.groups.loading') }}
+        <p v-if="!online" class="offline" role="status">
+          <span class="offline-badge"
+            ><BaseIcon name="cloudOff" /> {{ t('start.offline.badge') }}</span
+          >
+          {{ t('start.offline.body') }}
         </p>
 
-        <div v-else-if="failed" class="failed" role="alert">
-          <p class="failed-title">{{ t('start.groups.loadFailed') }}</p>
-          <p>{{ loadError }}</p>
-          <BaseButton variant="secondary" @click="groups.load()">
-            <BaseIcon name="retry" /> {{ t('common.retry') }}
-          </BaseButton>
-        </div>
+        <section class="groups" aria-labelledby="groups-title">
+          <h2 id="groups-title" class="section-title">{{ t('start.groups.title') }}</h2>
 
-        <StartEmpty v-else-if="empty" @create="createOpen = true" @join="joinOpen = true" />
+          <p v-if="loading" class="loading" role="status">
+            <BaseSpinner /> {{ t('start.groups.loading') }}
+          </p>
 
-        <template v-else>
-          <ul class="cards">
-            <li v-for="group in groups.groups" :key="group.id">
-              <GroupCard :group="group" :lists="lists.activeLists(group.id)" />
-            </li>
-          </ul>
-          <div class="create-box">
-            <BaseButton class="create-button" aria-haspopup="dialog" @click="createOpen = true">
-              <BaseIcon name="plus" /> {{ t('start.create.open') }}
-            </BaseButton>
-            <BaseButton
-              variant="secondary"
-              class="create-button"
-              aria-haspopup="dialog"
-              @click="joinOpen = true"
-            >
-              <BaseIcon name="link" /> {{ t('start.join.open') }}
+          <div v-else-if="failed" class="failed" role="alert">
+            <p class="failed-title">{{ t('start.groups.loadFailed') }}</p>
+            <p>{{ loadError }}</p>
+            <BaseButton variant="secondary" @click="groups.load()">
+              <BaseIcon name="retry" /> {{ t('common.retry') }}
             </BaseButton>
           </div>
-        </template>
-      </section>
-    </main>
 
-    <CreateGroupDialog v-model:open="createOpen" />
-    <JoinGroupDialog v-model:open="joinOpen" />
-  </div>
+          <StartEmpty v-else-if="empty" @create="createOpen = true" @join="joinOpen = true" />
+
+          <template v-else>
+            <!-- One grid for the cards and the box: on the desktop the box is a
+               tile next to the cards. -->
+            <div class="grid">
+              <ul class="cards">
+                <li v-for="group in groups.groups" :key="group.id">
+                  <GroupCard :group="group" :lists="lists.activeLists(group.id)" />
+                </li>
+              </ul>
+              <div class="create-box">
+                <BaseButton class="create-button" aria-haspopup="dialog" @click="createOpen = true">
+                  <BaseIcon name="plus" /> {{ t('start.create.open') }}
+                </BaseButton>
+                <BaseButton
+                  variant="secondary"
+                  class="create-button"
+                  aria-haspopup="dialog"
+                  @click="joinOpen = true"
+                >
+                  <BaseIcon name="link" /> {{ t('start.join.open') }}
+                </BaseButton>
+              </div>
+            </div>
+          </template>
+        </section>
+      </main>
+
+      <CreateGroupDialog v-model:open="createOpen" />
+      <JoinGroupDialog v-model:open="joinOpen" />
+    </div>
+  </AppFrame>
 </template>
 
 <style scoped>
@@ -240,12 +240,17 @@ watch(online, (isOnline) => {
 }
 
 /* minmax(0, 1fr), not the default auto column: an auto column is at least as
-   wide as its widest content, so a long household name (which does not wrap)
-   would push the cards out of the screen on a phone. */
-.cards {
+   wide as its widest content, so a long word in a name would push the cards
+   out of the screen on a phone. */
+.grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
+}
+
+/* The cards take part in the grid directly, next to the box. */
+.cards {
+  display: contents;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -265,12 +270,40 @@ watch(online, (isOnline) => {
 }
 
 @media (min-width: 48rem) {
-  .cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .bar {
+    display: none;
+  }
+
+  .content {
+    gap: 1.875rem;
+    max-width: 67.5rem;
+    padding: 2.25rem var(--space-6) 3.5rem;
+  }
+
+  .greeting {
+    font-size: 2.75rem;
+    line-height: 3.125rem;
+  }
+
+  .groups {
+    gap: var(--space-4);
+  }
+
+  .section-title {
+    font-size: 1.375rem;
+    line-height: 1.75rem;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(22.5rem, 100%), 1fr));
+    align-items: start;
+    gap: var(--space-5);
   }
 
   .create-box {
-    align-self: flex-start;
+    justify-content: center;
+    min-height: 11.25rem;
+    padding: 1.125rem;
   }
 }
 </style>

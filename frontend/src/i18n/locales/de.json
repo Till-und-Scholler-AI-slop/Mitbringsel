@@ -14,7 +14,8 @@
     },
     "profile": {
       "label": "Profil von {name}",
-      "logout": "Abmelden"
+      "logout": "Abmelden",
+      "you": "Das bist du"
     },
     "groups": {
       "title": "Deine Haushalte",
@@ -354,5 +355,11 @@
         "revokeAriaUnknown": "Link eines gelöschten Kontos widerrufen"
       }
     }
+  },
+  "nav": {
+    "label": "Navigation",
+    "start": "Start",
+    "households": "Haushalte",
+    "lists": "Listen von {name}"
   }
 }
