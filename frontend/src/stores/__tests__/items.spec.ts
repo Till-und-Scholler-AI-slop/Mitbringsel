@@ -1126,3 +1126,66 @@ describe('items store: ready', () => {
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
   })
 })
+
+describe('items store: forgetList', () => {
+  it('drops the list and its items', async () => {
+    const { store } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Nägel', 'l2')]))
+    await store.load('l1')
+    await store.load('l2')
+
+    store.forgetList('l1')
+
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.statusOf('l1')).toBe('idle')
+    expect(store.byId('i1')).toBeUndefined()
+    expect(names(store.itemsOf('l2'))).toEqual(['Nägel'])
+  })
+
+  it('does not reload a forgotten list after ready', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const { store, events } = setup(service)
+    await store.load('l1')
+    store.forgetList('l1')
+    service.list.mockClear()
+
+    events.emit(READY)
+    await flushPromises()
+
+    expect(service.list).not.toHaveBeenCalled()
+  })
+
+  it('drops events for a forgotten list', async () => {
+    const { store, events } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+    store.forgetList('l1')
+
+    events.emit(changed(later(item('i1', 'Hafermilch'), 2)))
+
+    expect(store.itemsOf('l1')).toEqual([])
+  })
+
+  it('ignores a load of the list that answers after it was forgotten', async () => {
+    const service = fakeService()
+    const answer = deferred<Item[]>()
+    service.list.mockReturnValueOnce(answer.promise)
+    const { store } = setup(service)
+
+    const loading = store.load('l1')
+    store.forgetList('l1')
+    answer.resolve([item('i1', 'Milch')])
+    await loading
+
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.statusOf('l1')).toBe('idle')
+  })
+
+  it('loads the list again when it is opened again', async () => {
+    const { store } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+    store.forgetList('l1')
+
+    await store.load('l1')
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+})

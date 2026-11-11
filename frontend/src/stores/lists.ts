@@ -1,9 +1,11 @@
-import { ref, watch } from 'vue'
+import { onScopeDispose, ref, toRaw, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { listsService, type ListsService } from '@/services/api/lists'
+import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
+import { useItemsStore } from '@/stores/items'
 import type { List } from '@/types/api'
 
 /** idle: not loaded yet. error: the last load failed (lists may still be shown). */
@@ -17,10 +19,12 @@ interface GroupLists {
 }
 
 /**
- * Builds the store around a service and a getter for the ID of the signed-in
- * user, like defineGroupsStore. The store forgets everything when that ID
- * changes (logout, expired session, another user), so nobody ever sees the
- * lists of the previous user.
+ * Builds the store around a service, a getter for the ID of the signed-in
+ * user, the source of server events (the live socket; tests pass a fake) and
+ * a function that drops the items of a list that is gone, like
+ * defineItemsStore. The store forgets everything when that ID changes
+ * (logout, expired session, another user), so nobody ever sees the lists of
+ * the previous user.
  *
  * The store keeps the lists of each group apart, as a screen shows one group
  * at a time. It always loads archived lists, too, and tells them apart
@@ -29,18 +33,50 @@ interface GroupLists {
  * Reading never throws: load() sets the status and error code of the group.
  * The writing actions reject with the ApiError instead, so the dialog that
  * started them can show the message next to its form.
+ *
+ * States of a list arrive from several places (load, the answer to a write,
+ * events of other members) and in any order. They follow the rules of the
+ * items store: a state applies only if its serverSeq is not older than the
+ * one we hold, and a deleted list stays deleted. This store knows which
+ * lists belong to a group, so it is the one that tells the items store when
+ * a list is gone (deleted, or its group left). See docs/sync.md.
  */
-export function defineListsStore(service: ListsService, currentUserId: () => string | null) {
+export function defineListsStore(
+  service: ListsService,
+  currentUserId: () => string | null,
+  events: ServerEvents = liveSocket,
+  forgetItems: (listId: string) => void = (listId) => useItemsStore().forgetList(listId),
+) {
   return defineStore('lists', () => {
     const byGroup = ref<Record<string, GroupLists>>({})
+
+    // Bookkeeping for the rules above, not shown, so plain Maps and Sets next
+    // to the reactive state; reset() empties them.
 
     // Bumped by reset(). A load that started before it is outdated when it
     // answers and must not put the old user's lists back.
     let generation = 0
 
+    // IDs of lists known to be deleted. Lists are deleted for good, so a late
+    // state of such a list (e.g. a rename event that overtook the deletion)
+    // is dropped whatever its serverSeq.
+    const tombstones = new Set<string>()
+
+    // A logical clock, as in the items store: touchedAt says when a list last
+    // got a state from the server, a load remembers the clock at its start.
+    // A list touched after that start may be missing from the answer only
+    // because the answer is older than the list.
+    let clock = 0
+    const touchedAt = new Map<string, number>()
+    // The start of the newest load whose answer was applied, per group.
+    const appliedLoadStart = new Map<string, number>()
+
     function reset() {
       generation++
       byGroup.value = {}
+      tombstones.clear()
+      touchedAt.clear()
+      appliedLoadStart.clear()
     }
 
     watch(currentUserId, reset)
@@ -86,25 +122,148 @@ export function defineListsStore(service: ListsService, currentUserId: () => str
       return undefined
     }
 
+    // The order of the server: oldest first, ties by ID. Dates are compared
+    // as instants, not as text (see compareItems in the items store).
+    function compareLists(a: List, b: List): number {
+      const byTime = Date.parse(a.createdAt) - Date.parse(b.createdAt)
+      if (byTime !== 0) {
+        return byTime
+      }
+      if (a.id === b.id) {
+        return 0
+      }
+      return a.id < b.id ? -1 : 1
+    }
+
     /**
-     * Loads the lists of a group, archived ones included. If this fails, the
-     * lists loaded before stay: an unreachable server should not empty the
-     * screen.
+     * The one place where a state of a list from the server (event or
+     * answer) enters the store. An event must have a greater serverSeq than
+     * the list we hold; an answer may be equal, because it can be the very
+     * state we hold (e.g. the answer to create after the event of the same
+     * create).
+     */
+    function takeServerList(list: List, mode: 'event' | 'answer') {
+      const entry = byGroup.value[list.groupId]
+      // A group we do not show: loading it later gets the current state.
+      if (!entry || tombstones.has(list.id)) {
+        return
+      }
+      const index = entry.lists.findIndex((l) => l.id === list.id)
+      const local = entry.lists[index]
+      if (local) {
+        const outdated =
+          mode === 'event' ? list.serverSeq <= local.serverSeq : list.serverSeq < local.serverSeq
+        if (outdated) {
+          return
+        }
+      }
+      touchedAt.set(list.id, ++clock)
+
+      if (local) {
+        entry.lists[index] = list
+        return
+      }
+      const after = entry.lists.findIndex((other) => compareLists(other, list) > 0)
+      if (after === -1) {
+        entry.lists.push(list)
+      } else {
+        entry.lists.splice(after, 0, list)
+      }
+    }
+
+    // A list is deleted on the server, by us or someone else. Its items go
+    // with it.
+    function takeDeletion(groupId: string | undefined, listId: string) {
+      tombstones.add(listId)
+      const entry = groupId === undefined ? undefined : byGroup.value[groupId]
+      if (entry) {
+        entry.lists = entry.lists.filter((list) => list.id !== listId)
+      }
+      forgetItems(listId)
+    }
+
+    // We are no longer in the group (left, removed, or it was deleted). No
+    // tombstones: we may be invited again, and then its lists are back.
+    function forgetGroup(groupId: string) {
+      const entry = byGroup.value[groupId]
+      if (!entry) {
+        return
+      }
+      for (const list of entry.lists) {
+        forgetItems(list.id)
+      }
+      delete byGroup.value[groupId]
+      appliedLoadStart.delete(groupId)
+    }
+
+    // False if the user changed since `started`, or if the answer of a load
+    // that started later was applied already. Otherwise this load is now the
+    // newest one applied.
+    function isCurrentLoad(started: number, groupId: string, startedAt: number): boolean {
+      if (started !== generation || startedAt < (appliedLoadStart.get(groupId) ?? 0)) {
+        return false
+      }
+      appliedLoadStart.set(groupId, startedAt)
+      return true
+    }
+
+    // Puts the answer of a load into the group; see load().
+    function mergeLoaded(entry: GroupLists, loaded: List[], startedAt: number) {
+      // The raw array: its lists are the plain objects, not the reactive
+      // proxies around them, which must not end up inside the new array.
+      const local = new Map(toRaw(entry.lists).map((list) => [list.id, list]))
+      const merged: List[] = []
+
+      for (const server of loaded) {
+        if (tombstones.has(server.id)) {
+          continue
+        }
+        const held = local.get(server.id)
+        local.delete(server.id)
+        // The answer may be older than what we have.
+        merged.push(held && held.serverSeq > server.serverSeq ? held : server)
+      }
+
+      // What the answer does not list is deleted on the server (it lists
+      // archived lists too), unless it came to us after this load started:
+      // then the answer may predate it.
+      for (const [id, held] of local) {
+        if ((touchedAt.get(id) ?? 0) > startedAt) {
+          merged.push(held)
+        } else {
+          tombstones.add(id)
+          forgetItems(id)
+        }
+      }
+
+      entry.lists = merged.sort(compareLists)
+    }
+
+    /**
+     * Loads the lists of a group, archived ones included, and merges them
+     * into what the store has, instead of replacing it: the answer may be
+     * older than an event that came while the request was on its way. A group
+     * that is loaded already keeps its status `ready` meanwhile, so reloading
+     * shows no spinner. If this fails, the lists loaded before stay: an
+     * unreachable server should not empty the screen.
      */
     async function load(groupId: string) {
       const started = generation
+      const startedAt = ++clock
       const entry = ensure(groupId)
-      entry.status = 'loading'
+      if (entry.status !== 'ready') {
+        entry.status = 'loading'
+      }
       entry.errorCode = null
       try {
         const loaded = await service.list(groupId, { includeArchived: true })
-        if (started !== generation) {
+        if (!isCurrentLoad(started, groupId, startedAt)) {
           return
         }
-        entry.lists = loaded
+        mergeLoaded(entry, loaded, startedAt)
         entry.status = 'ready'
       } catch (err) {
-        if (started !== generation) {
+        if (!isCurrentLoad(started, groupId, startedAt)) {
           return
         }
         entry.status = 'error'
@@ -114,42 +273,73 @@ export function defineListsStore(service: ListsService, currentUserId: () => str
 
     /** Creates a list and returns it, so the caller can open it. */
     async function create(groupId: string, name: string): Promise<List> {
+      const started = generation
       const list = await service.create(groupId, name)
-      ensure(groupId).lists.push(list)
+      // After a reset the old user's list must not come back: ensure() would
+      // create the group anew.
+      if (started === generation) {
+        ensure(groupId)
+        takeServerList(list, 'answer')
+      }
       return list
     }
 
     async function rename(listId: string, name: string) {
-      replace(await service.rename(listId, name))
+      await takeAnswer(service.rename(listId, name))
     }
 
     async function archive(listId: string) {
-      replace(await service.setArchived(listId, true))
+      await takeAnswer(service.setArchived(listId, true))
     }
 
     async function unarchive(listId: string) {
-      replace(await service.setArchived(listId, false))
+      await takeAnswer(service.setArchived(listId, false))
+    }
+
+    // Waits for the answer to a write that was just sent and applies it,
+    // unless the user changed meanwhile: the old user's list must not come
+    // back after a reset (a later load of the same group would show it).
+    async function takeAnswer(request: Promise<List>) {
+      const started = generation
+      const list = await request
+      if (started === generation) {
+        takeServerList(list, 'answer')
+      }
     }
 
     async function remove(listId: string) {
+      const started = generation
       // Looked up first: the list is gone from the answer, and the group is
       // needed to drop it from the right place.
       const groupId = byId(listId)?.groupId
       await service.remove(listId)
-      if (groupId !== undefined) {
-        const entry = ensure(groupId)
-        entry.lists = entry.lists.filter((list) => list.id !== listId)
+      if (started === generation) {
+        takeDeletion(groupId, listId)
       }
     }
 
-    // The answer of the server is the truth, so it replaces the local copy.
-    function replace(list: List) {
-      const entry = byGroup.value[list.groupId]
-      const index = entry?.lists.findIndex((l) => l.id === list.id) ?? -1
-      if (entry && index !== -1) {
-        entry.lists[index] = list
+    // The setup function runs in the effect scope of the store, so
+    // onScopeDispose() runs at $dispose(): the handlers must not outlive the
+    // store, as the socket outlives it.
+    const unsubscribes = [
+      events.on('listChanged', ({ payload }) => takeServerList(payload.list, 'event')),
+      events.on('listDeleted', ({ payload }) => takeDeletion(payload.groupId, payload.listId)),
+      events.on('groupRemoved', ({ payload }) => forgetGroup(payload.groupId)),
+      // Events are best effort and the connection may have been down:
+      // every group we have loaded (or are loading) may be outdated.
+      events.on('ready', () => {
+        for (const [groupId, entry] of Object.entries(byGroup.value)) {
+          if (entry.status !== 'idle') {
+            void load(groupId)
+          }
+        }
+      }),
+    ]
+    onScopeDispose(() => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
       }
-    }
+    })
 
     return {
       listsOf,

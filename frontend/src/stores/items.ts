@@ -453,6 +453,18 @@ export function defineItemsStore(
       }
     }
 
+    /**
+     * Drops a list that is gone for us: deleted, or its group was left. The
+     * lists store calls this, as it knows which lists belong to a group.
+     * Without the entry, ready() does not load the list again and events for
+     * it are dropped. A load still on its way writes into the dropped entry,
+     * which nobody sees.
+     */
+    function forgetList(listId: string) {
+      delete byList.value[listId]
+      appliedLoadStart.delete(listId)
+    }
+
     // The setup function runs in the effect scope of the store, so
     // onScopeDispose() runs at $dispose(): the handlers must not outlive the
     // store, as the socket outlives it.
@@ -495,6 +507,7 @@ export function defineItemsStore(
       update,
       setChecked,
       remove,
+      forgetList,
     }
   })
 }
