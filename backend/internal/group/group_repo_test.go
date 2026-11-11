@@ -3,6 +3,7 @@ package group
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -36,12 +37,67 @@ func newTestUser(t *testing.T, pool *pgxpool.Pool, name string) uuid.UUID {
 	return u.ID
 }
 
+// storedStatePublisher looks at the database, over a connection of its own,
+// at the moment the service publishes. A publish before the commit would
+// still see the old state there.
+type storedStatePublisher struct {
+	repo *PostgresRepository
+
+	mu sync.Mutex
+	// seen has one entry per event: what the database showed about the
+	// member (or the group) it is about, e.g. "joined: owner".
+	seen []string
+}
+
+func (p *storedStatePublisher) GroupChanged(context.Context, uuid.UUID, uuid.UUID) {}
+
+func (p *storedStatePublisher) MemberJoined(ctx context.Context, groupID, userID uuid.UUID) {
+	p.recordRole(ctx, "joined", groupID, userID)
+}
+
+func (p *storedStatePublisher) MemberRemoved(ctx context.Context, groupID, _, userID uuid.UUID) {
+	p.recordRole(ctx, "removed", groupID, userID)
+}
+
+func (p *storedStatePublisher) GroupDeleted(ctx context.Context, groupID, _ uuid.UUID) {
+	_, err := p.repo.Get(ctx, groupID)
+	p.record("deleted: " + describe(err))
+}
+
+func (p *storedStatePublisher) recordRole(ctx context.Context, kind string, groupID, userID uuid.UUID) {
+	role, err := p.repo.MemberRole(ctx, groupID, userID)
+	if err != nil {
+		p.record(kind + ": " + describe(err))
+		return
+	}
+	p.record(kind + ": " + string(role))
+}
+
+func (p *storedStatePublisher) record(s string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.seen = append(p.seen, s)
+}
+
+// describe names what a lookup returned, so a failed read does not look like
+// a missing row.
+func describe(err error) string {
+	switch {
+	case err == nil:
+		return "found"
+	case errors.Is(err, ErrNotFound):
+		return "not found"
+	default:
+		return "error " + err.Error()
+	}
+}
+
 // TestPostgresRepository shares one container across its subtests; each
 // subtest creates its own users and groups.
 func TestPostgresRepository(t *testing.T) {
 	pool := dbtest.NewPool(t)
 	repo := NewPostgresRepository(pool)
-	svc := NewService(repo)
+	svc := NewService(repo, nil)
 	ctx := context.Background()
 
 	t.Run("create, list and get", func(t *testing.T) {
@@ -291,6 +347,39 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("publishes only after the commit", func(t *testing.T) {
+		anna := newTestUser(t, pool, "publish-anna")
+		ben := newTestUser(t, pool, "publish-ben")
+		pub := &storedStatePublisher{repo: NewPostgresRepository(pool)}
+		pubSvc := NewService(repo, pub)
+		pubInvites := NewInviteService(repo, pub)
+
+		created, err := pubSvc.Create(ctx, anna, "Publish")
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		token, _, err := pubInvites.Create(ctx, anna, created.ID)
+		if err != nil {
+			t.Fatalf("invite Create() error = %v", err)
+		}
+		if _, err := pubInvites.Accept(ctx, ben, token); err != nil {
+			t.Fatalf("Accept() error = %v", err)
+		}
+		if err := pubSvc.RemoveMember(ctx, anna, created.ID, ben); err != nil {
+			t.Fatalf("RemoveMember() error = %v", err)
+		}
+		if err := pubSvc.Delete(ctx, anna, created.ID); err != nil {
+			t.Fatalf("Delete() error = %v", err)
+		}
+
+		pub.mu.Lock()
+		defer pub.mu.Unlock()
+		want := []string{"joined: owner", "joined: member", "removed: not found", "deleted: not found"}
+		if !slices.Equal(pub.seen, want) {
+			t.Errorf("database state at publishing = %q, want %q", pub.seen, want)
+		}
+	})
+
 	t.Run("AddMemberIfAbsent reports whether it added someone", func(t *testing.T) {
 		anna := newTestUser(t, pool, "absent-anna")
 		ben := newTestUser(t, pool, "absent-ben")
@@ -329,7 +418,7 @@ func TestPostgresRepository(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Create() other error = %v", err)
 		}
-		invites := NewInviteService(repo)
+		invites := NewInviteService(repo, nil)
 
 		token, invite, err := invites.Create(ctx, anna, created.ID)
 		if err != nil {
@@ -391,7 +480,7 @@ func TestPostgresRepository(t *testing.T) {
 		}
 
 		// Expiry is decided in SQL against the service's clock.
-		later := NewInviteService(repo)
+		later := NewInviteService(repo, nil)
 		later.now = func() time.Time { return time.Now().Add(8 * 24 * time.Hour) }
 		fresh, _, err := invites.Create(ctx, anna, created.ID)
 		if err != nil {

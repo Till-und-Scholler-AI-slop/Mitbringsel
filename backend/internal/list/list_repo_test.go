@@ -35,7 +35,7 @@ func newTestUser(t *testing.T, pool *pgxpool.Pool, name string) uuid.UUID {
 func TestPostgresRepository(t *testing.T) {
 	pool := dbtest.NewPool(t)
 	groupRepo := group.NewPostgresRepository(pool)
-	groups := group.NewService(groupRepo)
+	groups := group.NewService(groupRepo, nil)
 	repo := NewPostgresRepository(sqlcgen.New(pool))
 	svc := NewService(repo, groupRepo, nil)
 	ctx := context.Background()

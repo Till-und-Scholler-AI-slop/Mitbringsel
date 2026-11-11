@@ -81,7 +81,7 @@ func TestPostgresRepository(t *testing.T) {
 	pool := dbtest.NewPool(t)
 	ctx := context.Background()
 	groupRepo := group.NewPostgresRepository(pool)
-	groups := group.NewService(groupRepo)
+	groups := group.NewService(groupRepo, nil)
 	lists := list.NewService(list.NewPostgresRepository(sqlcgen.New(pool)), groupRepo, nil)
 	repo := NewPostgresRepository(pool)
 	svc := NewService(repo, lists, nil)

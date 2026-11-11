@@ -84,8 +84,8 @@ func run() error {
 	// Unlike the other repositories, this one takes the pool: it starts the
 	// transactions that keep a group and its owner together.
 	groupRepo := group.NewPostgresRepository(pool)
-	groups := group.NewService(groupRepo)
-	invites := group.NewInviteService(groupRepo)
+	groups := group.NewService(groupRepo, nil)
+	invites := group.NewInviteService(groupRepo, nil)
 	// The group repository doubles as the list service's membership lookup.
 	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo, nil)
 	// The hub comes first: the broadcaster hands the events of the services

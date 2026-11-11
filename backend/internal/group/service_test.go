@@ -3,6 +3,7 @@ package group
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -138,10 +139,33 @@ func (r *fakeRepo) SetRole(_ context.Context, groupID, userID uuid.UUID, role Ro
 	return nil
 }
 
+// fakePublisher records what the service publishes, as short strings like
+// "joined <group> <user>", so a test can compare a whole sequence.
+type fakePublisher struct {
+	events []string
+}
+
+func (p *fakePublisher) GroupChanged(_ context.Context, groupID, actor uuid.UUID) {
+	p.events = append(p.events, fmt.Sprintf("changed %v %v", groupID, actor))
+}
+
+func (p *fakePublisher) MemberJoined(_ context.Context, groupID, userID uuid.UUID) {
+	p.events = append(p.events, fmt.Sprintf("joined %v %v", groupID, userID))
+}
+
+func (p *fakePublisher) MemberRemoved(_ context.Context, groupID, actor, userID uuid.UUID) {
+	p.events = append(p.events, fmt.Sprintf("removed %v %v %v", groupID, actor, userID))
+}
+
+func (p *fakePublisher) GroupDeleted(_ context.Context, groupID, actor uuid.UUID) {
+	p.events = append(p.events, fmt.Sprintf("deleted %v %v", groupID, actor))
+}
+
 // fixture is one group with an owner, an admin and a member, plus an
 // outsider who is in no group at all.
 type fixture struct {
 	repo                           *fakeRepo
+	pub                            *fakePublisher
 	svc                            *Service
 	group                          uuid.UUID
 	owner, admin, member, outsider uuid.UUID
@@ -151,12 +175,13 @@ func newFixture(t *testing.T) fixture {
 	t.Helper()
 	f := fixture{
 		repo:     newFakeRepo(),
+		pub:      &fakePublisher{},
 		owner:    uuid.New(),
 		admin:    uuid.New(),
 		member:   uuid.New(),
 		outsider: uuid.New(),
 	}
-	f.svc = NewService(f.repo)
+	f.svc = NewService(f.repo, f.pub)
 	d, err := f.svc.Create(context.Background(), f.owner, "WG Kaiserstraße")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -164,6 +189,8 @@ func newFixture(t *testing.T) fixture {
 	f.group = d.ID
 	f.repo.roles[f.group][f.admin] = RoleAdmin
 	f.repo.roles[f.group][f.member] = RoleMember
+	// The events of setting up do not belong to the test.
+	f.pub.events = nil
 	return f
 }
 
@@ -197,7 +224,7 @@ func TestService_Create(t *testing.T) {
 			repo := newFakeRepo()
 			actor := uuid.New()
 
-			got, err := NewService(repo).Create(context.Background(), actor, tt.input)
+			got, err := NewService(repo, nil).Create(context.Background(), actor, tt.input)
 
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
@@ -228,13 +255,18 @@ func TestService_CreateStoresNothingWithoutOwner(t *testing.T) {
 	repo := newFakeRepo()
 	repo.failAddMember = true
 
-	_, err := NewService(repo).Create(context.Background(), uuid.New(), "WG")
+	pub := &fakePublisher{}
+
+	_, err := NewService(repo, pub).Create(context.Background(), uuid.New(), "WG")
 
 	if !errors.Is(err, errRepo) {
 		t.Fatalf("Create() error = %v, want %v", err, errRepo)
 	}
 	if len(repo.groups) != 0 {
 		t.Error("group without owner was stored")
+	}
+	if len(pub.events) != 0 {
+		t.Errorf("published %v for a rolled-back group, want nothing", pub.events)
 	}
 }
 
@@ -447,5 +479,185 @@ func TestService_SetRole(t *testing.T) {
 				t.Errorf("role = %q, want %q", got, tt.wantRole)
 			}
 		})
+	}
+}
+
+func TestService_publishes(t *testing.T) {
+	ctx := context.Background()
+	line := func(kind string, ids ...uuid.UUID) string {
+		s := kind
+		for _, id := range ids {
+			s += " " + id.String()
+		}
+		return s
+	}
+
+	tests := []struct {
+		name string
+		// act runs one service call; the fixture has no events yet.
+		act func(f fixture) error
+		// want lists the expected events; nil means none. It is built from
+		// the fixture, because the IDs are random.
+		want    func(f fixture) []string
+		wantErr error
+	}{
+		{
+			name: "rename",
+			act: func(f fixture) error {
+				_, err := f.svc.Rename(ctx, f.admin, f.group, "Neuer Name")
+				return err
+			},
+			want: func(f fixture) []string { return []string{line("changed", f.group, f.admin)} },
+		},
+		{
+			name: "rename to the same name",
+			act: func(f fixture) error {
+				_, err := f.svc.Rename(ctx, f.admin, f.group, " WG Kaiserstraße ")
+				return err
+			},
+		},
+		{
+			name: "rename by a member",
+			act: func(f fixture) error {
+				_, err := f.svc.Rename(ctx, f.member, f.group, "Neuer Name")
+				return err
+			},
+			wantErr: ErrForbidden,
+		},
+		{
+			name: "rename by an outsider to the current name",
+			act: func(f fixture) error {
+				_, err := f.svc.Rename(ctx, f.outsider, f.group, "WG Kaiserstraße")
+				return err
+			},
+			wantErr: ErrNotFound,
+		},
+		{
+			name: "rename with an invalid name",
+			act: func(f fixture) error {
+				_, err := f.svc.Rename(ctx, f.owner, f.group, " ")
+				return err
+			},
+			wantErr: ErrInvalidName,
+		},
+		{
+			name: "delete",
+			act:  func(f fixture) error { return f.svc.Delete(ctx, f.owner, f.group) },
+			want: func(f fixture) []string { return []string{line("deleted", f.group, f.owner)} },
+		},
+		{
+			name:    "delete by an admin",
+			act:     func(f fixture) error { return f.svc.Delete(ctx, f.admin, f.group) },
+			wantErr: ErrForbidden,
+		},
+		{
+			name: "remove a member as admin",
+			act:  func(f fixture) error { return f.svc.RemoveMember(ctx, f.admin, f.group, f.member) },
+			want: func(f fixture) []string { return []string{line("removed", f.group, f.admin, f.member)} },
+		},
+		{
+			name: "leave",
+			act:  func(f fixture) error { return f.svc.RemoveMember(ctx, f.member, f.group, f.member) },
+			want: func(f fixture) []string { return []string{line("removed", f.group, f.member, f.member)} },
+		},
+		{
+			name:    "the owner cannot leave",
+			act:     func(f fixture) error { return f.svc.RemoveMember(ctx, f.owner, f.group, f.owner) },
+			wantErr: ErrOwnerImmutable,
+		},
+		{
+			name:    "a member cannot remove an admin",
+			act:     func(f fixture) error { return f.svc.RemoveMember(ctx, f.member, f.group, f.admin) },
+			wantErr: ErrForbidden,
+		},
+		{
+			name:    "remove someone who is not a member",
+			act:     func(f fixture) error { return f.svc.RemoveMember(ctx, f.owner, f.group, f.outsider) },
+			wantErr: ErrNotFound,
+		},
+		{
+			name: "set a role",
+			act:  func(f fixture) error { return f.svc.SetRole(ctx, f.owner, f.group, f.member, RoleAdmin) },
+			want: func(f fixture) []string { return []string{line("changed", f.group, f.owner)} },
+		},
+		{
+			name: "set the role a member has already",
+			act:  func(f fixture) error { return f.svc.SetRole(ctx, f.owner, f.group, f.admin, RoleAdmin) },
+		},
+		{
+			name:    "set a role as admin",
+			act:     func(f fixture) error { return f.svc.SetRole(ctx, f.admin, f.group, f.member, RoleAdmin) },
+			wantErr: ErrForbidden,
+		},
+		{
+			name:    "set an invalid role",
+			act:     func(f fixture) error { return f.svc.SetRole(ctx, f.owner, f.group, f.member, RoleOwner) },
+			wantErr: ErrInvalidRole,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+
+			err := tt.act(f)
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tt.wantErr)
+			}
+			var want []string
+			if tt.want != nil {
+				want = tt.want(f)
+			}
+			if !slices.Equal(f.pub.events, want) {
+				t.Errorf("published %v, want %v", f.pub.events, want)
+			}
+		})
+	}
+
+	t.Run("create", func(t *testing.T) {
+		f := newFixture(t)
+		creator := uuid.New()
+
+		d, err := f.svc.Create(ctx, creator, "Neue WG")
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if want := []string{line("joined", d.ID, creator)}; !slices.Equal(f.pub.events, want) {
+			t.Errorf("published %v, want %v", f.pub.events, want)
+		}
+	})
+
+	t.Run("create with an invalid name", func(t *testing.T) {
+		f := newFixture(t)
+		if _, err := f.svc.Create(ctx, uuid.New(), " "); !errors.Is(err, ErrInvalidName) {
+			t.Fatalf("Create() error = %v, want %v", err, ErrInvalidName)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %v, want nothing", f.pub.events)
+		}
+	})
+}
+
+func TestNewService_nilPublisher(t *testing.T) {
+	f := newFixture(t)
+	svc := NewService(f.repo, nil)
+	ctx := context.Background()
+
+	d, err := svc.Create(ctx, f.owner, "Neue WG")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := svc.Rename(ctx, f.owner, d.ID, "Anderer Name"); err != nil {
+		t.Fatalf("Rename() error = %v", err)
+	}
+	f.repo.roles[d.ID][f.member] = RoleMember
+	if err := svc.SetRole(ctx, f.owner, d.ID, f.member, RoleAdmin); err != nil {
+		t.Fatalf("SetRole() error = %v", err)
+	}
+	if err := svc.RemoveMember(ctx, f.owner, d.ID, f.member); err != nil {
+		t.Fatalf("RemoveMember() error = %v", err)
+	}
+	if err := svc.Delete(ctx, f.owner, d.ID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
 	}
 }

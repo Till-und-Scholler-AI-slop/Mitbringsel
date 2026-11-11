@@ -10,15 +10,53 @@ import (
 	"github.com/google/uuid"
 )
 
+// Publisher tells the members of a group about a change once it is committed.
+// It is best effort: it must not block and has no error to return, because
+// the change is stored either way. ctx is the request's and may be cancelled
+// at any moment, so an implementation must not depend on it staying alive
+// (use context.WithoutCancel for work that outlives the request).
+//
+// The methods say what happened, not what to send: moving connections in and
+// out of the group's room is part of the job, and the order inside a method
+// matters to the implementation.
+type Publisher interface {
+	// GroupChanged is called when the name or a role changed. It is only a
+	// hint to reload the groups.
+	GroupChanged(ctx context.Context, groupID, actor uuid.UUID)
+	// MemberJoined is called when userID became a member, by creating the
+	// group or by accepting an invite. userID is also the actor.
+	MemberJoined(ctx context.Context, groupID, userID uuid.UUID)
+	// MemberRemoved is called when userID left (actor == userID) or was
+	// removed by actor.
+	MemberRemoved(ctx context.Context, groupID, actor, userID uuid.UUID)
+	// GroupDeleted is called when the group is gone with its lists, items
+	// and members.
+	GroupDeleted(ctx context.Context, groupID, actor uuid.UUID)
+}
+
+// noPublisher is the Publisher for callers without live connections (the
+// seed command, tests). It does nothing.
+type noPublisher struct{}
+
+func (noPublisher) GroupChanged(context.Context, uuid.UUID, uuid.UUID)             {}
+func (noPublisher) MemberJoined(context.Context, uuid.UUID, uuid.UUID)             {}
+func (noPublisher) MemberRemoved(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) {}
+func (noPublisher) GroupDeleted(context.Context, uuid.UUID, uuid.UUID)             {}
+
 // Service holds the rules for groups. Every method takes the acting user
 // (actor) and checks what they may do, so a handler cannot forget it.
 type Service struct {
 	repo Repository
+	pub  Publisher
 }
 
-// NewService returns a service backed by the given repository.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+// NewService returns a service backed by the given repository. pub is told
+// about every change after it is committed; nil means nobody listens.
+func NewService(repo Repository, pub Publisher) *Service {
+	if pub == nil {
+		pub = noPublisher{}
+	}
+	return &Service{repo: repo, pub: pub}
 }
 
 // Create makes a new group with the actor as its only member and owner.
@@ -44,6 +82,9 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, name string) (Det
 	if err != nil {
 		return Details{}, err
 	}
+	// Before Get: if Get fails, the group exists all the same, and the
+	// creator's connections must be in its room.
+	s.pub.MemberJoined(ctx, groupID, actor)
 	return s.Get(ctx, actor, groupID)
 }
 
@@ -107,7 +148,8 @@ func (s *Service) Get(ctx context.Context, actor, groupID uuid.UUID) (Details, e
 	return Details{Group: g, Role: role, Members: members[groupID]}, nil
 }
 
-// Rename changes the group's name. Owner and admins.
+// Rename changes the group's name. Owner and admins. Giving it the name it
+// has already changes nothing: no write, no event.
 func (s *Service) Rename(ctx context.Context, actor, groupID uuid.UUID, name string) (Group, error) {
 	name, err := normalizeName(name)
 	if err != nil {
@@ -116,10 +158,21 @@ func (s *Service) Rename(ctx context.Context, actor, groupID uuid.UUID, name str
 	if err := requireManager(ctx, s.repo, groupID, actor); err != nil {
 		return Group{}, err
 	}
+	// The check reads the group before writing, so a rename that races with
+	// another one may skip or repeat a write. That is fine: the request
+	// counts as executed at the moment of the read.
+	current, err := s.repo.Get(ctx, groupID)
+	if err != nil {
+		return Group{}, fmt.Errorf("get group: %w", err)
+	}
+	if current.Name == name {
+		return current, nil
+	}
 	g, err := s.repo.Rename(ctx, groupID, name)
 	if err != nil {
 		return Group{}, fmt.Errorf("rename group: %w", err)
 	}
+	s.pub.GroupChanged(ctx, groupID, actor)
 	return g, nil
 }
 
@@ -131,6 +184,9 @@ func (s *Service) Delete(ctx context.Context, actor, groupID uuid.UUID) error {
 	if err := s.repo.Delete(ctx, groupID); err != nil {
 		return fmt.Errorf("delete group: %w", err)
 	}
+	// The lists and items go with the group without events of their own:
+	// clients drop them together with the group.
+	s.pub.GroupDeleted(ctx, groupID, actor)
 	return nil
 }
 
@@ -138,7 +194,7 @@ func (s *Service) Delete(ctx context.Context, actor, groupID uuid.UUID) error {
 // remove themselves (leave). Removing someone else needs a higher role: the
 // owner removes admins and members, an admin only plain members.
 func (s *Service) RemoveMember(ctx context.Context, actor, groupID, userID uuid.UUID) error {
-	return s.repo.InTx(ctx, func(tx Repository) error {
+	err := s.repo.InTx(ctx, func(tx Repository) error {
 		// Locked first, so the roles checked below cannot change before the
 		// removal is committed.
 		if err := tx.Lock(ctx, groupID); err != nil {
@@ -173,6 +229,11 @@ func (s *Service) RemoveMember(ctx context.Context, actor, groupID, userID uuid.
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	s.pub.MemberRemoved(ctx, groupID, actor, userID)
+	return nil
 }
 
 // SetRole makes userID an admin or a plain member. Owner only. The owner's
@@ -182,7 +243,10 @@ func (s *Service) SetRole(ctx context.Context, actor, groupID, userID uuid.UUID,
 	if !role.assignable() {
 		return ErrInvalidRole
 	}
-	return s.repo.InTx(ctx, func(tx Repository) error {
+	// changed stays false when the member has the role already: nothing is
+	// written then, and nothing is published.
+	var changed bool
+	err := s.repo.InTx(ctx, func(tx Repository) error {
 		if err := tx.Lock(ctx, groupID); err != nil {
 			return fmt.Errorf("lock group: %w", err)
 		}
@@ -204,8 +268,16 @@ func (s *Service) SetRole(ctx context.Context, actor, groupID, userID uuid.UUID,
 		if err := tx.SetRole(ctx, groupID, userID, role); err != nil {
 			return fmt.Errorf("set role: %w", err)
 		}
+		changed = true
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	if changed {
+		s.pub.GroupChanged(ctx, groupID, actor)
+	}
+	return nil
 }
 
 // roleLookup is the one repository method the permission checks need, so
