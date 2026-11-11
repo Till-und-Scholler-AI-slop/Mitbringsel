@@ -19,7 +19,10 @@ export default defineConfig({
     // The browser only talks to Vite; /api is forwarded to the Go server,
     // so the frontend uses the same relative URLs in development and production.
     proxy: {
-      '/api': { target: apiProxyTarget, changeOrigin: true },
+      // ws: also forward WebSocket upgrades (/api/v1/ws). The browser's Origin
+      // header stays untouched, so open the app on the host of PUBLIC_BASE_URL
+      // (localhost:5173), or the backend refuses the connection.
+      '/api': { target: apiProxyTarget, changeOrigin: true, ws: true },
     },
   },
 })
