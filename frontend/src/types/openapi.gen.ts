@@ -1827,8 +1827,28 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            429: components["responses"]["RateLimited"];
+            /**
+             * @description The user already holds the maximum number of connections, or
+             *     opened too many in a minute (`RATE_LIMITED`).
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             500: components["responses"]["Error"];
+            /** @description The server is shutting down (`INTERNAL_ERROR`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
 }

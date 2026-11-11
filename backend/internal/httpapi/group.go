@@ -25,8 +25,11 @@ const (
 )
 
 // GroupService is everything the handlers need from groups.
-// *group.Service satisfies it; tests use a fake.
+// *group.Service satisfies it; tests use a fake. Embedding GroupIDLister
+// adds its GroupIDs method, so the live connection can keep asking for the
+// smaller GroupIDLister.
 type GroupService interface {
+	GroupIDLister
 	Create(ctx context.Context, actor uuid.UUID, name string) (group.Details, error)
 	List(ctx context.Context, actor uuid.UUID) ([]group.Details, error)
 	Get(ctx context.Context, actor, groupID uuid.UUID) (group.Details, error)

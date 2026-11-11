@@ -22,6 +22,7 @@ import (
 	"mitbringsel/internal/list"
 	"mitbringsel/internal/platform/db"
 	"mitbringsel/internal/platform/db/sqlcgen"
+	"mitbringsel/internal/realtime"
 	"mitbringsel/internal/user"
 )
 
@@ -94,6 +95,8 @@ func run() error {
 		return err
 	}
 
+	hub := realtime.NewHub(realtime.DefaultMaxConnsPerUser, realtime.DefaultSendBuffer)
+
 	// Declared with the interface type and only assigned when configured:
 	// an interface holding a nil *auth.GoogleProvider would not compare
 	// equal to nil, and the router would register routes that crash.
@@ -108,16 +111,18 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Env:       cfg.Env,
-			DB:        pool,
-			Sessions:  sessions,
-			Users:     users,
-			Groups:    groups,
-			Invites:   invites,
-			Lists:     lists,
-			Items:     items,
-			ItemClock: itemClock,
-			Google:    google,
+			Env:           cfg.Env,
+			DB:            pool,
+			Sessions:      sessions,
+			Users:         users,
+			Groups:        groups,
+			Invites:       invites,
+			Lists:         lists,
+			Items:         items,
+			ItemClock:     itemClock,
+			Hub:           hub,
+			PublicBaseURL: cfg.PublicBaseURL,
+			Google:        google,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 	}

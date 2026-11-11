@@ -83,6 +83,19 @@ func (f *fakeGroups) SetRole(_ context.Context, actor, groupID, userID uuid.UUID
 	return f.err
 }
 
+// GroupIDs serves the live connection, which runs on goroutines of its own.
+// It therefore only reads and records no call: the calls slice has no lock.
+func (f *fakeGroups) GroupIDs(_ context.Context, _ uuid.UUID) ([]uuid.UUID, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	ids := make([]uuid.UUID, len(f.details))
+	for i, d := range f.details {
+		ids[i] = d.ID
+	}
+	return ids, nil
+}
+
 func testDetails() group.Details {
 	return group.Details{
 		Group: group.Group{ID: testGroupID, Name: "WG Kaiserstraße", CreatedAt: groupTime, UpdatedAt: groupTime},

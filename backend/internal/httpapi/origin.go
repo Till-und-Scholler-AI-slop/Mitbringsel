@@ -22,15 +22,18 @@ func originAllowed(origin, publicBaseURL string) bool {
 	if origin == "" {
 		return true
 	}
-	o, err := url.Parse(origin)
-	if err != nil || o.Host == "" {
-		return false
+	originHost, baseHost := hostOf(origin), hostOf(publicBaseURL)
+	return originHost != "" && strings.EqualFold(originHost, baseHost)
+}
+
+// hostOf returns the host of a URL including the port, or "" if the URL
+// cannot be parsed or has no host.
+func hostOf(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
 	}
-	base, err := url.Parse(publicBaseURL)
-	if err != nil || base.Host == "" {
-		return false
-	}
-	return strings.EqualFold(o.Host, base.Host)
+	return u.Host
 }
 
 // requireOrigin wraps handlers that open a live connection. It answers 403

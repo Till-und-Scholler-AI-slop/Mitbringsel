@@ -11,6 +11,7 @@ import (
 
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/httpapi/apigen"
+	"mitbringsel/internal/realtime"
 	"mitbringsel/internal/user"
 )
 
@@ -20,6 +21,9 @@ const (
 	loginRateLimit   = 10
 	previewRateLimit = 30
 	acceptRateLimit  = 10
+	// A client that lost its connection retries with a growing pause, so
+	// even a bad network stays far below this.
+	wsUpgradeRateLimit = 30
 )
 
 // UserGetter loads a user by ID. *user.Service satisfies it; tests use a
@@ -51,6 +55,11 @@ type Deps struct {
 	Items    ItemService
 	// ItemClock stamps the item changes that arrive over REST.
 	ItemClock ItemClock
+	// Hub holds the live connections of /api/v1/ws.
+	Hub *realtime.Hub
+	// PublicBaseURL is where browsers reach the app. Live connections are
+	// only accepted from pages of its host.
+	PublicBaseURL string
 	// Google is nil if the Google login is not configured, which only
 	// development allows; its routes then answer 404.
 	Google GoogleLogin
@@ -67,6 +76,12 @@ type router struct {
 
 // NewRouter builds the HTTP handler with all API routes registered.
 func NewRouter(deps Deps) http.Handler {
+	return newRouter(deps, defaultWSConfig)
+}
+
+// newRouter is NewRouter with the durations of the live connection
+// as a parameter, so tests do not have to wait for the real ones.
+func newRouter(deps Deps, ws wsConfig) http.Handler {
 	r := &router{
 		mux:     http.NewServeMux(),
 		methods: make(map[string][]string),
@@ -85,6 +100,9 @@ func NewRouter(deps Deps) http.Handler {
 	loginLimit := rateLimitWith(newLimiter(loginRateLimit, time.Minute, time.Now), ipKey(deps.Env), rejectLoginRateLimited)
 	previewLimit := rateLimit(newLimiter(previewRateLimit, time.Minute, time.Now), ipKey(deps.Env))
 	acceptLimit := rateLimit(newLimiter(acceptRateLimit, time.Minute, time.Now), userKey(deps.Env))
+	// Besides the limit on open connections in the hub: this one stops a
+	// client that reconnects in a loop.
+	wsLimit := rateLimit(newLimiter(wsUpgradeRateLimit, time.Minute, time.Now), userKey(deps.Env))
 
 	r.handle(http.MethodGet, HealthPath, healthHandler(deps.DB))
 	r.handle(http.MethodGet, mePath, protect(meHandler(deps.Users)))
@@ -110,6 +128,11 @@ func NewRouter(deps Deps) http.Handler {
 	r.handle(http.MethodPatch, itemPath, protect(updateItemHandler(deps.Items, deps.ItemClock)))
 	r.handle(http.MethodDelete, itemPath, protect(deleteItemHandler(deps.Items)))
 	r.handle(http.MethodPost, inviteAcceptPath, protect(acceptLimit(acceptInviteHandler(deps.Invites))))
+	// The origin is checked before the session, so a page of another site
+	// learns nothing about whether the visitor is logged in. The limit comes
+	// after requireUser because it counts per user.
+	r.handle(http.MethodGet, wsPath, requireOrigin(deps.PublicBaseURL)(protect(wsLimit(
+		wsHandler(deps.Hub, deps.Groups, deps.PublicBaseURL, newWSHandlers(), ws)))))
 	// Not behind requireUser: the page behind an invite link shows the
 	// invitation before the visitor has signed in. The token is the secret.
 	r.handle(http.MethodGet, invitePath, previewLimit(previewInviteHandler(deps.Invites)))
