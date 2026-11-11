@@ -34,10 +34,18 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 
 const upsertUserByGoogleSub = `-- name: UpsertUserByGoogleSub :one
 INSERT INTO users (google_sub, email, display_name, avatar_url)
-VALUES ($1, $2, $3, $4)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4
+)
 ON CONFLICT (google_sub) DO UPDATE
 SET email        = EXCLUDED.email,
-    display_name = EXCLUDED.display_name,
+    display_name = CASE
+                       WHEN $5::boolean THEN EXCLUDED.display_name
+                       ELSE users.display_name
+                   END,
     avatar_url   = EXCLUDED.avatar_url
 RETURNING id, google_sub, email, display_name, avatar_url, locale, theme, created_at
 `
@@ -47,16 +55,20 @@ type UpsertUserByGoogleSubParams struct {
 	Email       string
 	DisplayName string
 	AvatarURL   *string
+	NameGiven   bool
 }
 
 // Creates the user on first sign-in, otherwise refreshes the profile data
 // Google sends. locale and theme are user settings and stay untouched.
+// display_name is only replaced if the login came with a name (name_given);
+// otherwise display_name is just the fallback for a new user.
 func (q *Queries) UpsertUserByGoogleSub(ctx context.Context, arg UpsertUserByGoogleSubParams) (User, error) {
 	row := q.db.QueryRow(ctx, upsertUserByGoogleSub,
 		arg.GoogleSub,
 		arg.Email,
 		arg.DisplayName,
 		arg.AvatarURL,
+		arg.NameGiven,
 	)
 	var i User
 	err := row.Scan(

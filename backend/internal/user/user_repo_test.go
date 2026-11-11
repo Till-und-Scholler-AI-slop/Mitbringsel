@@ -56,6 +56,7 @@ func TestPostgresRepository(t *testing.T) {
 			Email:     "renamed@example.com",
 			Name:      "Renamed",
 			AvatarURL: "https://example.com/new.png",
+			nameGiven: true,
 		}
 		second, err := repo.UpsertByGoogleSub(ctx, changed)
 		if err != nil {
@@ -71,6 +72,44 @@ func TestPostgresRepository(t *testing.T) {
 		}
 		if second.Theme != ThemeDark {
 			t.Errorf("Theme = %q, want %q", second.Theme, ThemeDark)
+		}
+	})
+
+	t.Run("upsert without a given name keeps the stored name", func(t *testing.T) {
+		first, err := repo.UpsertByGoogleSub(ctx, testIdentity("keep-name"))
+		if err != nil {
+			t.Fatalf("first UpsertByGoogleSub() error = %v", err)
+		}
+
+		// The service sets nameGiven only for a real name, so the fallback
+		// below must not overwrite the stored one.
+		fallback := testIdentity("keep-name")
+		fallback.Name = "keep-name-fallback"
+		fallback.nameGiven = false
+		second, err := repo.UpsertByGoogleSub(ctx, fallback)
+		if err != nil {
+			t.Fatalf("second UpsertByGoogleSub() error = %v", err)
+		}
+
+		if second.ID != first.ID {
+			t.Errorf("ID = %v, want %v", second.ID, first.ID)
+		}
+		if second.DisplayName != first.DisplayName {
+			t.Errorf("DisplayName = %q, want %q", second.DisplayName, first.DisplayName)
+		}
+	})
+
+	t.Run("upsert without a given name names a new user after the fallback", func(t *testing.T) {
+		identity := testIdentity("new-fallback")
+		identity.Name = "new-fallback-local"
+		identity.nameGiven = false
+
+		got, err := repo.UpsertByGoogleSub(ctx, identity)
+		if err != nil {
+			t.Fatalf("UpsertByGoogleSub() error = %v", err)
+		}
+		if got.DisplayName != identity.Name {
+			t.Errorf("DisplayName = %q, want %q", got.DisplayName, identity.Name)
 		}
 	})
 
@@ -132,6 +171,7 @@ func testIdentity(name string) Identity {
 		Email:     name + "@example.com",
 		Name:      name,
 		AvatarURL: "https://example.com/" + name + ".png",
+		nameGiven: true,
 	}
 }
 

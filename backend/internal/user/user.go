@@ -57,6 +57,22 @@ type Identity struct {
 	Email     string
 	Name      string
 	AvatarURL string
+
+	// nameGiven is set by the service: it is true if the provider sent a
+	// name, false if Name is only the fallback made from the email. Only
+	// the repositories read it, so it stays unexported.
+	nameGiven bool
+}
+
+// devSubjectPrefix keeps dev users apart from real accounts: Google subjects
+// are plain digits and never start with it.
+const devSubjectPrefix = "dev:"
+
+// DevSubject returns the subject of the dev user with this email. The dev
+// login and the seed data both use it, so they find the same users. The email
+// is trimmed, so " anna@example.com" and "anna@example.com" are one user.
+func DevSubject(email string) string {
+	return devSubjectPrefix + strings.TrimSpace(email)
 }
 
 // Repository stores users. It lives here, at the consumer, so the service
@@ -66,6 +82,7 @@ type Repository interface {
 	Get(ctx context.Context, id uuid.UUID) (User, error)
 	// UpsertByGoogleSub creates the user or updates email, name and avatar
 	// of the user with the same subject. Locale and theme stay untouched.
+	// An existing user keeps their name if the identity came without one.
 	UpsertByGoogleSub(ctx context.Context, identity Identity) (User, error)
 }
 
@@ -105,7 +122,8 @@ func (s *Service) SignIn(ctx context.Context, identity Identity) (User, error) {
 }
 
 // normalizeIdentity trims all fields and fills in a display name if the
-// provider sent none, because the UI always needs something to show.
+// provider sent none, because the UI always needs something to show. It
+// remembers in nameGiven whether the name is the provider's or the fallback.
 func normalizeIdentity(identity Identity) (Identity, error) {
 	identity.Subject = strings.TrimSpace(identity.Subject)
 	identity.Email = strings.TrimSpace(identity.Email)
@@ -119,7 +137,8 @@ func normalizeIdentity(identity Identity) (Identity, error) {
 		return Identity{}, fmt.Errorf("%w: email is empty", ErrInvalidIdentity)
 	}
 
-	if identity.Name == "" {
+	identity.nameGiven = identity.Name != ""
+	if !identity.nameGiven {
 		// strings.Cut splits at the first "@". Without one, local is the
 		// whole address, which is still a usable name.
 		local, _, _ := strings.Cut(identity.Email, "@")

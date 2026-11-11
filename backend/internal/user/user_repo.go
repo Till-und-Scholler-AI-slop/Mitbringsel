@@ -41,6 +41,7 @@ func (r *PostgresRepository) UpsertByGoogleSub(ctx context.Context, identity Ide
 		Email:       identity.Email,
 		DisplayName: identity.Name,
 		AvatarURL:   nullIfEmpty(identity.AvatarURL),
+		NameGiven:   identity.nameGiven,
 	})
 	if err != nil {
 		return User{}, err

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/httpapi/apigen"
@@ -19,9 +18,6 @@ const (
 	// An email address and a name fit easily; anything larger is not a
 	// login request.
 	maxDevLoginBodyBytes = 4 << 10 // 4 KiB
-	// Real Google subjects are plain digits, so the prefix keeps dev users
-	// apart from real accounts.
-	devSubjectPrefix = "dev:"
 )
 
 // logoutHandler deletes the session and the cookie. Without a cookie the
@@ -61,9 +57,7 @@ func devLoginHandler(users UserService, sessions SessionManager, env config.Env)
 		}
 
 		u, err := users.SignIn(r.Context(), user.Identity{
-			// Trimmed here as well, so " anna@example.com" and
-			// "anna@example.com" log in as the same user.
-			Subject: devSubjectPrefix + strings.TrimSpace(req.Email),
+			Subject: user.DevSubject(req.Email),
 			Email:   req.Email,
 			Name:    req.Name,
 		})

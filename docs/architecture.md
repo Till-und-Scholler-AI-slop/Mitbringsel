@@ -11,6 +11,7 @@ einkaufsliste/
 ├── api/openapi.yaml              # API-Vertrag, Quelle der generierten Typen
 ├── backend/
 │   ├── cmd/server/main.go        # Einstieg, Dependency Injection von Hand
+│   ├── cmd/seed/main.go          # Einstieg für `make seed`, nicht im Docker-Image
 │   ├── internal/
 │   │   ├── config/               # Konfiguration aus Umgebungsvariablen
 │   │   ├── auth/                 # Google OIDC, Sessions (ohne HTTP)
@@ -25,7 +26,7 @@ einkaufsliste/
 │   └── db/
 │       ├── migrations/           # goose-Migrationen
 │       ├── queries/              # SQL für sqlc
-│       └── seed/                 # Dummy-Daten für Entwicklung
+│       └── seed/                 # Dummy-Daten für Entwicklung (`make seed`)
 ├── frontend/
 │   └── src/
 │       ├── components/base/      # Wiederverwendbare Basis-Komponenten

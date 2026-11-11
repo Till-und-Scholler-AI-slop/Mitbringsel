@@ -1387,7 +1387,9 @@ components:
           type: string
         name:
           type: string
-          description: Optional; the part of the email before the @ if empty.
+          description: >-
+            Optional. If empty, a new user gets the part of the email before
+            the @, and an existing user keeps the name stored before.
           # A missing name is the same as an empty one, so Go gets a plain
           # string instead of a pointer.
           x-go-type-skip-optional-pointer: true

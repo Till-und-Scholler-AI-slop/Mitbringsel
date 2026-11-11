@@ -725,7 +725,7 @@ export interface components {
         Theme: "light" | "dark" | "system";
         DevLoginRequest: {
             email: string;
-            /** @description Optional; the part of the email before the @ if empty. */
+            /** @description Optional. If empty, a new user gets the part of the email before the @, and an existing user keeps the name stored before. */
             name?: string;
         };
         Error: {

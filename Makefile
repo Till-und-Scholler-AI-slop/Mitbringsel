@@ -9,7 +9,7 @@ DATABASE_URL ?= postgres://mitbringsel:mitbringsel@localhost:5432/mitbringsel?ss
 HTTP_ADDR    ?= 127.0.0.1:8080
 IMAGE_TAG    ?= dev
 
-.PHONY: db-up db-down dev migrate test test-short lint generate \
+.PHONY: db-up db-down dev migrate seed test test-short lint generate \
 	frontend-install frontend-dev frontend-test frontend-lint frontend-build \
 	docker-build
 
@@ -28,6 +28,10 @@ dev: db-up
 ## migrate: apply database migrations and exit
 migrate: db-up
 	cd backend && go run ./cmd/server -migrate-only
+
+## seed: fill the local database with dummy data (replaces earlier seed data, development only)
+seed: db-up
+	cd backend && go run ./cmd/seed
 
 ## test: run all backend tests (integration tests need Docker)
 test:

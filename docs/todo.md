@@ -49,4 +49,5 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 ## Komponenten
 
+- [ ] **Fehlende Basis-Komponenten:** In den [Konventionen](conventions.md) stehen `BaseCheckbox`, `BaseSelect`, `BaseTextarea` und `BaseToast`, die es noch nicht gibt (`BaseModal` und `BaseBottomSheet` deckt `BaseDialog` ab, `BaseSyncIndicator` kommt mit dem Sync in Phase 5). Bauen, sobald ein Screen sie braucht.
 - [ ] **`BaseButton`-Größen:** Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen). Die Variante `danger` gibt es seit dem Verwalten-Screen.
