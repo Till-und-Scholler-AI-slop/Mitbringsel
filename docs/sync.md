@@ -102,13 +102,18 @@ Browser können keine WebSocket-Protokoll-Pings senden. Der Client schickt desha
 ### Reihenfolge und Zustellung
 
 - Der Server sendet nach dem Commit, aber ohne globale Ordnung. Zwei Ereignisse zum selben Artikel können vertauscht ankommen; der Client wendet ein Ereignis nur an, wenn dessen `serverSeq` größer ist als die gespeicherte.
+- Auch die Verbindungen des Absenders bekommen das Ereignis (Broadcast an den ganzen Raum). Die REST-Antwort trägt dieselbe `serverSeq`; der Tab, der die Änderung gemacht hat, verwirft das Ereignis, weil dessen `serverSeq` nicht größer ist als die gespeicherte.
+- Zwei gleichzeitige Löschvorgänge können beide einen lebenden Artikel sehen und `itemDeleted` zweimal mit derselben `serverSeq` senden. Der zweite wird aus demselben Grund verworfen.
 - Die Zustellung ist Best Effort. Wer ein Ereignis verpasst (Verbindung weg, zu langsam), holt es mit dem Neuladen nach dem nächsten `ready` nach.
 - Mitgliedschaften bestimmen, wer Ereignisse bekommt: Wer in eine Gruppe aufgenommen wird, wechselt mit seinen Verbindungen in deren Raum; wer sie verlässt, bekommt `groupRemoved` und verlässt den Raum.
 
 ## Server-Seite
 
 - **Hub:** Das Paket `backend/internal/realtime` verwaltet die Verbindungen als Räume pro Gruppe. Es kennt keine Domäne und verteilt nur Bytes. Jede Verbindung hat einen gepufferten Sendekanal; langsame Clients werden getrennt statt den Hub zu blockieren. Beim Verbinden wird die Verbindung erst registriert und dann werden die Gruppen geladen; Entfernen aus einer Gruppe oder Löschen einer Gruppe während des Ladens merkt sich der Hub, damit die Verbindung nicht in einen Raum gerät, den sie nicht mehr betreten darf. Pro Nutzer gilt ein Limit: Die 11. Verbindung wird abgewiesen, die älteste bleibt bestehen. Der Name `sync` entfällt, weil er mit der Standardbibliothek kollidiert; die Konfliktauflösung bleibt im Paket `item`.
-- **Veröffentlichen:** Die Services `item`, `list` und `group` rufen nach dem Commit und nur bei echten Änderungen ein kleines `Publisher`-Interface auf. In `httpapi` setzt ein `Broadcaster` daraus die Nachrichten zusammen.
+- **Veröffentlichen:** Die Services `item`, `list` und `group` rufen nach dem Commit und nur bei echten Änderungen ein kleines `Publisher`-Interface auf. In `httpapi` setzt ein `Broadcaster` daraus die Nachrichten zusammen. Der Publisher blockiert nie und gibt keinen Fehler zurück, denn die Änderung ist gespeichert, egal ob jemand sie erfährt. Beim Artikel-Service (`item.Publisher`) gilt:
+  - **Anlegen:** `itemChanged` nach dem Speichern, nicht bei einer Wiederholung derselben Anfrage (gleiche ID in derselben Liste).
+  - **Ändern:** `itemChanged` erst nach dem Commit der Transaktion und nur, wenn mindestens ein Feld gewonnen hat. Verliert jedes Feld den Merge oder ist der Artikel ein Tombstone, ändert sich nichts und es gibt weder Ereignis noch neue `serverSeq`.
+  - **Löschen:** `itemDeleted` nur beim ersten Löschen. Löschen eines Tombstones ändert nichts.
 - **Authentifizierung:** `GET /api/v1/ws` liegt hinter der Session-Prüfung. Die `Origin` muss zum Host von `PUBLIC_BASE_URL` passen, sonst `403 CROSS_ORIGIN_REQUEST`. Der Schutz gegen Cross-Origin-Anfragen aus der Standardbibliothek greift hier nicht, weil er GET durchlässt und der Vite-Proxy im Dev-Betrieb den `Host`-Header umschreibt.
 - **Lebensdauer und Limits:** Eine Verbindung lebt höchstens etwa eine Stunde, damit die Session beim Wiederverbinden neu geprüft wird. Pro Nutzer sind etwa 10 Verbindungen erlaubt. Beim Logout schließt das Frontend den Socket, beim Herunterfahren schließt der Server alle Verbindungen selbst.
 - **Fristen und Größen:** Der Server liest höchstens 4 KiB pro Nachricht (heute gibt es nur `ping`; Phase 6 braucht für `mutate` mehr). Er trennt eine Verbindung nach 60 Sekunden ohne Nachricht und gibt jeder Nachricht beim Schreiben 10 Sekunden. Die Verbindung wird ohne Kompression geführt.
