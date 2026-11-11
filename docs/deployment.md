@@ -25,7 +25,7 @@ Je Umgebung ein Compose-Projekt (`mitbringsel-staging`, `mitbringsel-prod`) mit 
 
 Netzwerkname, Entrypoint, Cert-Resolver und Middleware-Name kommen aus der `.env`, weil sie von der Traefik-Konfiguration des Servers abhängen.
 
-Der WebSocket (`/api/v1/ws`) braucht keine eigenen Labels: Traefik reicht den Upgrade am `/api`-Router durch. Zu prüfen bleibt auf Staging das Timeout des Entrypoints: `respondingTimeouts.readTimeout` ist bei Traefik v3 standardmäßig 60 Sekunden, und es ist nicht sicher, ob es eine geöffnete WebSocket-Verbindung kappt. Das wird auf Staging mit einer länger offenen Verbindung geprüft (siehe [Aufgeschobene Punkte](todo.md)). Im Backend darf eine Middleware, die den `ResponseWriter` umhüllt, den Upgrade nicht verbauen: Ein solcher Wrapper muss `Unwrap()` (oder `Hijack`) anbieten, sonst scheitert der Upgrade mit `501`.
+Der WebSocket (`/api/v1/ws`) braucht keine eigenen Labels: Traefik reicht den Upgrade am `/api`-Router durch. Das Timeout des Entrypoints (`respondingTimeouts.readTimeout`, bei Traefik v3 standardmäßig 60 Sekunden) kappt den WebSocket nicht: Auf Staging geprüft (November 2026), eine Verbindung bleibt mit den `ping`-Nachrichten über 3 Minuten offen. Im Backend darf eine Middleware, die den `ResponseWriter` umhüllt, den Upgrade nicht verbauen: Ein solcher Wrapper muss `Unwrap()` (oder `Hijack`) anbieten, sonst scheitert der Upgrade mit `501`.
 
 ### Compose-Dateien
 
