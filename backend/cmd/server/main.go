@@ -124,8 +124,15 @@ func run() error {
 			PublicBaseURL: cfg.PublicBaseURL,
 			Google:        google,
 		}),
+		// Only the header timeout, never ReadTimeout or WriteTimeout: they
+		// stay in force as deadlines on a connection after it has been
+		// hijacked for a WebSocket, and would cut every live connection.
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
+	// Shutdown does not touch hijacked connections such as WebSockets, so the
+	// hub closes them. RegisterOnShutdown runs the function in a goroutine of
+	// its own when Shutdown starts.
+	srv.RegisterOnShutdown(hub.Close)
 
 	serveErr := make(chan error, 1)
 	go func() {
