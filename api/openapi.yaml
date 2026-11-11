@@ -842,6 +842,42 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /ws:
+    get:
+      operationId: connectWebSocket
+      summary: Open the live connection
+      description: |
+        Upgrades the request to a WebSocket. The session cookie is required
+        and the `Origin` header must match the app, otherwise the upgrade
+        is refused.
+
+        Messages are JSON text frames with the envelope
+        `{"type": "...", "payload": {...}}`. The client sends
+        `ClientMessage`, the server sends `ServerMessage`. After the
+        upgrade the server joins the connection to all groups of the user
+        and sends `ready`; the client then reloads what it has loaded via
+        REST. Delivery is best effort, REST stays the source of truth.
+      tags: [sync]
+      security:
+        - sessionCookie: []
+      responses:
+        "101":
+          description: Switching protocols; the connection is now a WebSocket.
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          description: |
+            The `Origin` header does not match the app
+            (`CROSS_ORIGIN_REQUEST`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1465,3 +1501,356 @@ components:
         - ItemUnitInvalid
         - ItemNoteInvalid
         - ItemIDTaken
+
+    # WebSocket messages (see GET /ws). Every message has a `type` with a
+    # single allowed value, so the TypeScript types narrow on it and the
+    # payload follows from the type.
+
+    PingMessage:
+      type: object
+      description: "Client to server: keeps the connection alive. Sent every 25 seconds; the server disconnects after 60 seconds of silence."
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [ping]
+
+    ClientMessage:
+      description: Any message the client may send.
+      oneOf:
+        - $ref: "#/components/schemas/PingMessage"
+      discriminator:
+        propertyName: type
+        mapping:
+          ping: "#/components/schemas/PingMessage"
+
+    ReadyMessage:
+      type: object
+      description: "Server to client: the connection is set up and joined to all groups of the user. The client reloads what it has loaded via REST."
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [ready]
+
+    PongMessage:
+      type: object
+      description: "Server to client: answer to `ping`."
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [pong]
+
+    ItemChangedMessage:
+      type: object
+      description: "Server to client: an item was created or changed."
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          enum: [itemChanged]
+        payload:
+          $ref: "#/components/schemas/ItemChangedPayload"
+
+    ItemChangedPayload:
+      type: object
+      description: The client applies the item only if `item.serverSeq` is greater than the one it already has; events can arrive out of order.
+      required: [groupId, actorId, item]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        actorId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: The user who made the change.
+        item:
+          $ref: "#/components/schemas/Item"
+
+    ItemDeletedMessage:
+      type: object
+      description: "Server to client: an item was deleted."
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          enum: [itemDeleted]
+        payload:
+          $ref: "#/components/schemas/ItemDeletedPayload"
+
+    ItemDeletedPayload:
+      type: object
+      description: The client removes the item if `serverSeq` is greater than the one it already has for it.
+      required: [groupId, listId, itemId, serverSeq, actorId]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        listId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        itemId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        serverSeq:
+          type: integer
+          format: int64
+          description: The sequence number of the deletion.
+        actorId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: The user who made the change.
+
+    ItemsDeletedMessage:
+      type: object
+      description: "Server to client: several items of one list were deleted at once, e.g. all checked items."
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          enum: [itemsDeleted]
+        payload:
+          $ref: "#/components/schemas/ItemsDeletedPayload"
+
+    ItemsDeletedPayload:
+      type: object
+      description: Every item carries its own `serverSeq`; the client removes each one as for `itemDeleted`.
+      required: [groupId, listId, actorId, items]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        listId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        actorId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: The user who made the change.
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeletedItem"
+
+    DeletedItem:
+      type: object
+      description: One deleted item of an `itemsDeleted` event.
+      required: [itemId, serverSeq]
+      properties:
+        itemId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        serverSeq:
+          type: integer
+          format: int64
+          description: The sequence number of the deletion.
+
+    ListChangedMessage:
+      type: object
+      description: "Server to client: a list was created, renamed, archived or unarchived."
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          enum: [listChanged]
+        payload:
+          $ref: "#/components/schemas/ListChangedPayload"
+
+    ListChangedPayload:
+      type: object
+      description: The client applies the list only if `list.serverSeq` is greater than the one it already has; events can arrive out of order.
+      required: [actorId, list]
+      properties:
+        actorId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: The user who made the change.
+        list:
+          $ref: "#/components/schemas/List"
+
+    ListDeletedMessage:
+      type: object
+      description: "Server to client: a list was deleted together with its items."
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          enum: [listDeleted]
+        payload:
+          $ref: "#/components/schemas/ListDeletedPayload"
+
+    ListDeletedPayload:
+      type: object
+      description: Lists are deleted for good, so this event has no sequence number.
+      required: [groupId, listId, actorId]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        listId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        actorId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: The user who made the change.
+
+    GroupChangedMessage:
+      type: object
+      description: "Server to client: a group changed."
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          enum: [groupChanged]
+        payload:
+          $ref: "#/components/schemas/GroupChangedPayload"
+
+    GroupChangedPayload:
+      type: object
+      description: "The name, the members or the roles changed. Only a hint: the client reloads `GET /groups`, because `Group` contains the role of the requesting user."
+      required: [groupId, actorId]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        actorId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: The user who made the change.
+
+    GroupRemovedMessage:
+      type: object
+      description: "Server to client: the user is no longer in the group."
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          enum: [groupRemoved]
+        payload:
+          $ref: "#/components/schemas/GroupRemovedPayload"
+
+    GroupRemovedPayload:
+      type: object
+      description: The client drops the group and everything it loaded for it.
+      required: [groupId, reason, actorId]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+        reason:
+          $ref: "#/components/schemas/GroupRemovedReason"
+        actorId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: The user who made the change.
+
+    GroupRemovedReason:
+      type: string
+      description: |
+        Why the user left the group: it was deleted, or the user was
+        removed or left it.
+      enum: [deleted, removed]
+      # Go constant names (GroupRemovedReasonDeleted, ...).
+      x-enum-varnames: [Deleted, Removed]
+
+    SocketErrorMessage:
+      type: object
+      description: "Server to client: the server cannot continue, e.g. the message was invalid. The server usually closes the connection afterwards."
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          enum: [error]
+        payload:
+          $ref: "#/components/schemas/SocketErrorPayload"
+
+    SocketErrorPayload:
+      type: object
+      description: The reason for the error.
+      required: [code]
+      properties:
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+
+    ServerMessage:
+      description: Any message the server may send.
+      oneOf:
+        - $ref: "#/components/schemas/ReadyMessage"
+        - $ref: "#/components/schemas/PongMessage"
+        - $ref: "#/components/schemas/ItemChangedMessage"
+        - $ref: "#/components/schemas/ItemDeletedMessage"
+        - $ref: "#/components/schemas/ItemsDeletedMessage"
+        - $ref: "#/components/schemas/ListChangedMessage"
+        - $ref: "#/components/schemas/ListDeletedMessage"
+        - $ref: "#/components/schemas/GroupChangedMessage"
+        - $ref: "#/components/schemas/GroupRemovedMessage"
+        - $ref: "#/components/schemas/SocketErrorMessage"
+      discriminator:
+        propertyName: type
+        mapping:
+          ready: "#/components/schemas/ReadyMessage"
+          pong: "#/components/schemas/PongMessage"
+          itemChanged: "#/components/schemas/ItemChangedMessage"
+          itemDeleted: "#/components/schemas/ItemDeletedMessage"
+          itemsDeleted: "#/components/schemas/ItemsDeletedMessage"
+          listChanged: "#/components/schemas/ListChangedMessage"
+          listDeleted: "#/components/schemas/ListDeletedMessage"
+          groupChanged: "#/components/schemas/GroupChangedMessage"
+          groupRemoved: "#/components/schemas/GroupRemovedMessage"
+          error: "#/components/schemas/SocketErrorMessage"

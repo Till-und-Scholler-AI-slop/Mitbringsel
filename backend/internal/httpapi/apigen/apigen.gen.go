@@ -96,6 +96,54 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for GroupChangedMessageType.
+const (
+	GroupChangedMessageTypeGroupChanged GroupChangedMessageType = "groupChanged"
+)
+
+// Valid indicates whether the value is a known member of the GroupChangedMessageType enum.
+func (e GroupChangedMessageType) Valid() bool {
+	switch e {
+	case GroupChangedMessageTypeGroupChanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GroupRemovedMessageType.
+const (
+	GroupRemovedMessageTypeGroupRemoved GroupRemovedMessageType = "groupRemoved"
+)
+
+// Valid indicates whether the value is a known member of the GroupRemovedMessageType enum.
+func (e GroupRemovedMessageType) Valid() bool {
+	switch e {
+	case GroupRemovedMessageTypeGroupRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GroupRemovedReason.
+const (
+	GroupRemovedReasonDeleted GroupRemovedReason = "deleted"
+	GroupRemovedReasonRemoved GroupRemovedReason = "removed"
+)
+
+// Valid indicates whether the value is a known member of the GroupRemovedReason enum.
+func (e GroupRemovedReason) Valid() bool {
+	switch e {
+	case GroupRemovedReasonDeleted:
+		return true
+	case GroupRemovedReasonRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatus.
 const (
 	HealthStatusOk HealthStatus = "ok"
@@ -105,6 +153,81 @@ const (
 func (e HealthStatus) Valid() bool {
 	switch e {
 	case HealthStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ItemChangedMessageType.
+const (
+	ItemChangedMessageTypeItemChanged ItemChangedMessageType = "itemChanged"
+)
+
+// Valid indicates whether the value is a known member of the ItemChangedMessageType enum.
+func (e ItemChangedMessageType) Valid() bool {
+	switch e {
+	case ItemChangedMessageTypeItemChanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ItemDeletedMessageType.
+const (
+	ItemDeletedMessageTypeItemDeleted ItemDeletedMessageType = "itemDeleted"
+)
+
+// Valid indicates whether the value is a known member of the ItemDeletedMessageType enum.
+func (e ItemDeletedMessageType) Valid() bool {
+	switch e {
+	case ItemDeletedMessageTypeItemDeleted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ItemsDeletedMessageType.
+const (
+	ItemsDeletedMessageTypeItemsDeleted ItemsDeletedMessageType = "itemsDeleted"
+)
+
+// Valid indicates whether the value is a known member of the ItemsDeletedMessageType enum.
+func (e ItemsDeletedMessageType) Valid() bool {
+	switch e {
+	case ItemsDeletedMessageTypeItemsDeleted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListChangedMessageType.
+const (
+	ListChangedMessageTypeListChanged ListChangedMessageType = "listChanged"
+)
+
+// Valid indicates whether the value is a known member of the ListChangedMessageType enum.
+func (e ListChangedMessageType) Valid() bool {
+	switch e {
+	case ListChangedMessageTypeListChanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListDeletedMessageType.
+const (
+	ListDeletedMessageTypeListDeleted ListDeletedMessageType = "listDeleted"
+)
+
+// Valid indicates whether the value is a known member of the ListDeletedMessageType enum.
+func (e ListDeletedMessageType) Valid() bool {
+	switch e {
+	case ListDeletedMessageTypeListDeleted:
 		return true
 	default:
 		return false
@@ -129,6 +252,51 @@ func (e Locale) Valid() bool {
 	}
 }
 
+// Defines values for PingMessageType.
+const (
+	PingMessageTypePing PingMessageType = "ping"
+)
+
+// Valid indicates whether the value is a known member of the PingMessageType enum.
+func (e PingMessageType) Valid() bool {
+	switch e {
+	case PingMessageTypePing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PongMessageType.
+const (
+	PongMessageTypePong PongMessageType = "pong"
+)
+
+// Valid indicates whether the value is a known member of the PongMessageType enum.
+func (e PongMessageType) Valid() bool {
+	switch e {
+	case PongMessageTypePong:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReadyMessageType.
+const (
+	ReadyMessageTypeReady ReadyMessageType = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ReadyMessageType enum.
+func (e ReadyMessageType) Valid() bool {
+	switch e {
+	case ReadyMessageTypeReady:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Role.
 const (
 	RoleAdmin  Role = "admin"
@@ -144,6 +312,21 @@ func (e Role) Valid() bool {
 	case RoleMember:
 		return true
 	case RoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SocketErrorMessageType.
+const (
+	SocketErrorMessageTypeError SocketErrorMessageType = "error"
+)
+
+// Valid indicates whether the value is a known member of the SocketErrorMessageType enum.
+func (e SocketErrorMessageType) Valid() bool {
+	switch e {
+	case SocketErrorMessageTypeError:
 		return true
 	default:
 		return false
@@ -222,6 +405,14 @@ type CreateItemRequest struct {
 	Unit *Unit `json:"unit,omitempty"`
 }
 
+// DeletedItem One deleted item of an `itemsDeleted` event.
+type DeletedItem struct {
+	ItemID uuid.UUID `json:"itemId"`
+
+	// ServerSeq The sequence number of the deletion.
+	ServerSeq int64 `json:"serverSeq"`
+}
+
 // DevLoginRequest defines model for DevLoginRequest.
 type DevLoginRequest struct {
 	Email string `json:"email"`
@@ -256,6 +447,23 @@ type Group struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// GroupChangedMessage Server to client: a group changed.
+type GroupChangedMessage struct {
+	// Payload The name, the members or the roles changed. Only a hint: the client reloads `GET /groups`, because `Group` contains the role of the requesting user.
+	Payload GroupChangedPayload     `json:"payload"`
+	Type    GroupChangedMessageType `json:"type"`
+}
+
+// GroupChangedMessageType defines model for GroupChangedMessage.Type.
+type GroupChangedMessageType string
+
+// GroupChangedPayload The name, the members or the roles changed. Only a hint: the client reloads `GET /groups`, because `Group` contains the role of the requesting user.
+type GroupChangedPayload struct {
+	// ActorID The user who made the change.
+	ActorID uuid.UUID `json:"actorId"`
+	GroupID uuid.UUID `json:"groupId"`
+}
+
 // GroupList defines model for GroupList.
 type GroupList struct {
 	Groups []Group `json:"groups"`
@@ -280,6 +488,31 @@ type GroupNameRequest struct {
 	// `GROUP_NAME_INVALID`.
 	Name string `json:"name"`
 }
+
+// GroupRemovedMessage Server to client: the user is no longer in the group.
+type GroupRemovedMessage struct {
+	// Payload The client drops the group and everything it loaded for it.
+	Payload GroupRemovedPayload     `json:"payload"`
+	Type    GroupRemovedMessageType `json:"type"`
+}
+
+// GroupRemovedMessageType defines model for GroupRemovedMessage.Type.
+type GroupRemovedMessageType string
+
+// GroupRemovedPayload The client drops the group and everything it loaded for it.
+type GroupRemovedPayload struct {
+	// ActorID The user who made the change.
+	ActorID uuid.UUID `json:"actorId"`
+	GroupID uuid.UUID `json:"groupId"`
+
+	// Reason Why the user left the group: it was deleted, or the user was
+	// removed or left it.
+	Reason GroupRemovedReason `json:"reason"`
+}
+
+// GroupRemovedReason Why the user left the group: it was deleted, or the user was
+// removed or left it.
+type GroupRemovedReason string
 
 // Health defines model for Health.
 type Health struct {
@@ -385,6 +618,24 @@ type Item struct {
 	Unit *Unit `json:"unit"`
 }
 
+// ItemChangedMessage Server to client: an item was created or changed.
+type ItemChangedMessage struct {
+	// Payload The client applies the item only if `item.serverSeq` is greater than the one it already has; events can arrive out of order.
+	Payload ItemChangedPayload     `json:"payload"`
+	Type    ItemChangedMessageType `json:"type"`
+}
+
+// ItemChangedMessageType defines model for ItemChangedMessage.Type.
+type ItemChangedMessageType string
+
+// ItemChangedPayload The client applies the item only if `item.serverSeq` is greater than the one it already has; events can arrive out of order.
+type ItemChangedPayload struct {
+	// ActorID The user who made the change.
+	ActorID uuid.UUID `json:"actorId"`
+	GroupID uuid.UUID `json:"groupId"`
+	Item    Item      `json:"item"`
+}
+
 // ItemClocks The hybrid logical clock (HLC) of the latest accepted change per
 // field, `<wall>-<counter>-<node>` (docs/sync.md). Clients need them to
 // merge changes per field.
@@ -396,9 +647,50 @@ type ItemClocks struct {
 	Unit     string `json:"unit"`
 }
 
+// ItemDeletedMessage Server to client: an item was deleted.
+type ItemDeletedMessage struct {
+	// Payload The client removes the item if `serverSeq` is greater than the one it already has for it.
+	Payload ItemDeletedPayload     `json:"payload"`
+	Type    ItemDeletedMessageType `json:"type"`
+}
+
+// ItemDeletedMessageType defines model for ItemDeletedMessage.Type.
+type ItemDeletedMessageType string
+
+// ItemDeletedPayload The client removes the item if `serverSeq` is greater than the one it already has for it.
+type ItemDeletedPayload struct {
+	// ActorID The user who made the change.
+	ActorID uuid.UUID `json:"actorId"`
+	GroupID uuid.UUID `json:"groupId"`
+	ItemID  uuid.UUID `json:"itemId"`
+	ListID  uuid.UUID `json:"listId"`
+
+	// ServerSeq The sequence number of the deletion.
+	ServerSeq int64 `json:"serverSeq"`
+}
+
 // ItemList defines model for ItemList.
 type ItemList struct {
 	Items []Item `json:"items"`
+}
+
+// ItemsDeletedMessage Server to client: several items of one list were deleted at once, e.g. all checked items.
+type ItemsDeletedMessage struct {
+	// Payload Every item carries its own `serverSeq`; the client removes each one as for `itemDeleted`.
+	Payload ItemsDeletedPayload     `json:"payload"`
+	Type    ItemsDeletedMessageType `json:"type"`
+}
+
+// ItemsDeletedMessageType defines model for ItemsDeletedMessage.Type.
+type ItemsDeletedMessageType string
+
+// ItemsDeletedPayload Every item carries its own `serverSeq`; the client removes each one as for `itemDeleted`.
+type ItemsDeletedPayload struct {
+	// ActorID The user who made the change.
+	ActorID uuid.UUID     `json:"actorId"`
+	GroupID uuid.UUID     `json:"groupId"`
+	Items   []DeletedItem `json:"items"`
+	ListID  uuid.UUID     `json:"listId"`
 }
 
 // List defines model for List.
@@ -414,6 +706,41 @@ type List struct {
 	// changed after the last one they saw.
 	ServerSeq int64     `json:"serverSeq"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ListChangedMessage Server to client: a list was created, renamed, archived or unarchived.
+type ListChangedMessage struct {
+	// Payload The client applies the list only if `list.serverSeq` is greater than the one it already has; events can arrive out of order.
+	Payload ListChangedPayload     `json:"payload"`
+	Type    ListChangedMessageType `json:"type"`
+}
+
+// ListChangedMessageType defines model for ListChangedMessage.Type.
+type ListChangedMessageType string
+
+// ListChangedPayload The client applies the list only if `list.serverSeq` is greater than the one it already has; events can arrive out of order.
+type ListChangedPayload struct {
+	// ActorID The user who made the change.
+	ActorID uuid.UUID `json:"actorId"`
+	List    List      `json:"list"`
+}
+
+// ListDeletedMessage Server to client: a list was deleted together with its items.
+type ListDeletedMessage struct {
+	// Payload Lists are deleted for good, so this event has no sequence number.
+	Payload ListDeletedPayload     `json:"payload"`
+	Type    ListDeletedMessageType `json:"type"`
+}
+
+// ListDeletedMessageType defines model for ListDeletedMessage.Type.
+type ListDeletedMessageType string
+
+// ListDeletedPayload Lists are deleted for good, so this event has no sequence number.
+type ListDeletedPayload struct {
+	// ActorID The user who made the change.
+	ActorID uuid.UUID `json:"actorId"`
+	GroupID uuid.UUID `json:"groupId"`
+	ListID  uuid.UUID `json:"listId"`
 }
 
 // ListList defines model for ListList.
@@ -442,6 +769,30 @@ type Me struct {
 	Theme       Theme     `json:"theme"`
 }
 
+// PingMessage Client to server: keeps the connection alive. Sent every 25 seconds; the server disconnects after 60 seconds of silence.
+type PingMessage struct {
+	Type PingMessageType `json:"type"`
+}
+
+// PingMessageType defines model for PingMessage.Type.
+type PingMessageType string
+
+// PongMessage Server to client: answer to `ping`.
+type PongMessage struct {
+	Type PongMessageType `json:"type"`
+}
+
+// PongMessageType defines model for PongMessage.Type.
+type PongMessageType string
+
+// ReadyMessage Server to client: the connection is set up and joined to all groups of the user. The client reloads what it has loaded via REST.
+type ReadyMessage struct {
+	Type ReadyMessageType `json:"type"`
+}
+
+// ReadyMessageType defines model for ReadyMessage.Type.
+type ReadyMessageType string
+
 // Role The owner created the group and is the only one. Admins help run
 // it; members use it.
 type Role string
@@ -456,6 +807,22 @@ type SetRoleRequest struct {
 	// Role The owner created the group and is the only one. Admins help run
 	// it; members use it.
 	Role Role `json:"role"`
+}
+
+// SocketErrorMessage Server to client: the server cannot continue, e.g. the message was invalid. The server usually closes the connection afterwards.
+type SocketErrorMessage struct {
+	// Payload The reason for the error.
+	Payload SocketErrorPayload     `json:"payload"`
+	Type    SocketErrorMessageType `json:"type"`
+}
+
+// SocketErrorMessageType defines model for SocketErrorMessage.Type.
+type SocketErrorMessageType string
+
+// SocketErrorPayload The reason for the error.
+type SocketErrorPayload struct {
+	// Code Machine-readable error; the frontend translates it.
+	Code ErrorCode `json:"code"`
 }
 
 // Theme defines model for Theme.
