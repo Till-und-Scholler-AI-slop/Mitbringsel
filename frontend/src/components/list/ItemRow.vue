@@ -12,10 +12,16 @@ const AVATAR_SIZE_DONE = 22
 
 // person: who added the item (open) or checked it (done); null if that
 // person left the household or deleted their account.
-const props = defineProps<{
-  item: Item
-  person: { name: string; avatarUrl: string | null } | null
-}>()
+// recent: another member just changed the item; name is null if that member
+// is not (yet) among the known members. Only open items show it.
+const props = withDefaults(
+  defineProps<{
+    item: Item
+    person: { name: string; avatarUrl: string | null } | null
+    recent?: { name: string | null } | null
+  }>(),
+  { recent: null },
+)
 defineEmits<{ toggle: [] }>()
 
 const { t } = useI18n()
@@ -23,6 +29,11 @@ const quantityText = useQuantityText()
 
 const quantity = computed(() => quantityText(props.item))
 const done = computed(() => props.item.checked)
+const recentText = computed(() => {
+  if (!props.recent || done.value) return null
+  const name = props.recent.name
+  return name ? t('list.row.justChanged', { name }) : t('list.row.justChangedAnon')
+})
 
 // What a screen reader says: the whole row is one button, so everything the
 // eye sees on it has to be in the label.
@@ -31,13 +42,19 @@ const label = computed(() => {
   const by = props.person
     ? t(done.value ? 'list.row.checkedBy' : 'list.row.addedBy', { name: props.person.name })
     : null
+  const recent =
+    recentText.value && props.recent
+      ? props.recent.name
+        ? t('list.row.justChangedBy', { name: props.recent.name })
+        : t('list.row.justChangedByAnon')
+      : null
   const action = t(done.value ? 'list.row.uncheck' : 'list.row.check')
-  return `${[...details, by].filter(Boolean).join(', ')} – ${action}`
+  return `${[...details, by, recent].filter(Boolean).join(', ')} – ${action}`
 })
 </script>
 
 <template>
-  <li :class="['row', { 'row--done': done }]">
+  <li :class="['row', { 'row--done': done, 'row--recent': recentText }]">
     <button type="button" class="toggle" :aria-label="label" @click="$emit('toggle')">
       <span class="box" aria-hidden="true">
         <BaseIcon v-if="done" name="check" :size="16" :stroke-width="3.5" />
@@ -45,6 +62,7 @@ const label = computed(() => {
       <span class="text">
         <span class="name" lang="de">{{ item.name }}</span>
         <span v-if="item.note && !done" class="note">{{ item.note }}</span>
+        <span v-if="recentText" class="recent">{{ recentText }}</span>
       </span>
       <span v-if="quantity" class="quantity">{{ quantity }}</span>
       <BaseAvatar
@@ -59,10 +77,30 @@ const label = computed(() => {
 
 <style scoped>
 .row {
+  position: relative;
   display: flex;
   align-items: center;
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  /* The highlight of a recent change fades out instead of vanishing. */
+  transition:
+    background-color 0.4s ease-out,
+    box-shadow 0.4s ease-out,
+    margin 0.4s ease-out;
+}
+
+/* Another member just changed it: lifted out of the list with a ring. */
+.row--recent {
+  z-index: 1;
+  margin-block: var(--space-1-5);
+  background: var(--color-recent-bg);
+  box-shadow: var(--shadow-recent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    transition: none;
+  }
 }
 
 .row--done {
@@ -138,6 +176,17 @@ const label = computed(() => {
   font-weight: var(--font-weight-medium);
   line-height: 1.3;
   overflow-wrap: anywhere;
+}
+
+.recent {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-tomato);
+  color: var(--color-on-accent);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: var(--font-weight-heavy);
+  white-space: nowrap;
 }
 
 .quantity {

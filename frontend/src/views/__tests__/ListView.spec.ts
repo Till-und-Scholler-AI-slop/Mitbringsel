@@ -57,6 +57,13 @@ vi.mock('@/stores/lists', async (importOriginal) => {
     useListsStore: original.defineListsStore(listsService, () => 'user-1', serverEvents),
   }
 })
+vi.mock('@/stores/recentChanges', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/stores/recentChanges')>()
+  return {
+    ...original,
+    useRecentChangesStore: original.defineRecentChangesStore(() => 'user-1', serverEvents),
+  }
+})
 vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
   return {
@@ -651,6 +658,19 @@ describe('ListView: live changes', () => {
     await flushPromises()
 
     expect(openNames(wrapper)).toEqual(['Milch', 'Käse'])
+    wrapper.unmount()
+  })
+
+  it('highlights an item another member just changed, with the name', async () => {
+    itemsService.list.mockResolvedValue([item('i1', 'Milch'), item('i2', 'Brot')])
+    const { wrapper } = await mountView()
+
+    serverEvents.emit(changed(item('i2', 'Vollkornbrot', { serverSeq: 2 })))
+    await flushPromises()
+
+    const recent = wrapper.findAll('.open .row--recent')
+    expect(recent.map((row) => row.get('.name').text())).toEqual(['Vollkornbrot'])
+    expect(recent[0]!.get('.recent').text()).toBe('Jonas · just changed')
     wrapper.unmount()
   })
 

@@ -206,7 +206,11 @@
       "check": "abhaken",
       "uncheck": "zurückholen",
       "addedBy": "von {name}",
-      "checkedBy": "abgehakt von {name}"
+      "checkedBy": "abgehakt von {name}",
+      "justChanged": "{name} · gerade geändert",
+      "justChangedAnon": "Gerade geändert",
+      "justChangedBy": "gerade von {name} geändert",
+      "justChangedByAnon": "gerade geändert"
     },
     "done": {
       "title": "Erledigt ({count})"
@@ -361,5 +365,12 @@
     "start": "Start",
     "households": "Haushalte",
     "lists": "Listen von {name}"
+  },
+  "sync": {
+    "synced": "Synchron",
+    "syncedLong": "Alles synchron",
+    "offline": "Offline",
+    "syncedHint": "Alle sehen denselben Stand.",
+    "offlineHint": "Du siehst den letzten Stand. Ändern geht erst wieder mit Verbindung."
   }
 }

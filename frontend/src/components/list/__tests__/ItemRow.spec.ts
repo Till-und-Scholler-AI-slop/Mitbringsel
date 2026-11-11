@@ -94,3 +94,36 @@ describe('ItemRow: checked item', () => {
     )
   })
 })
+
+describe('ItemRow: just changed by another member', () => {
+  function mountRecent(i: Item, recent: { name: string | null } | null) {
+    return mount(ItemRow, {
+      props: { item: i, person: JONAS, recent },
+      global: { plugins: [createAppI18n(['en'], null)] },
+    })
+  }
+
+  it('is highlighted with the name of the member, also in the label', () => {
+    const wrapper = mountRecent(item(), { name: 'Ben' })
+
+    expect(wrapper.get('li').classes()).toContain('row--recent')
+    expect(wrapper.get('.recent').text()).toBe('Ben · just changed')
+    expect(wrapper.get('button').attributes('aria-label')).toBe(
+      'Milch, by Jonas, just changed by Ben – check off',
+    )
+  })
+
+  it('says only "just changed" when the member is unknown', () => {
+    const wrapper = mountRecent(item(), { name: null })
+
+    expect(wrapper.get('.recent').text()).toBe('Just changed')
+  })
+
+  it('is not highlighted without a recent change or once checked off', () => {
+    expect(mountRecent(item(), null).find('.recent').exists()).toBe(false)
+
+    const done = mountRecent(item({ checked: true }), { name: 'Ben' })
+    expect(done.find('.recent').exists()).toBe(false)
+    expect(done.get('li').classes()).not.toContain('row--recent')
+  })
+})

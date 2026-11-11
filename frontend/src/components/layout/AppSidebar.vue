@@ -6,6 +6,7 @@ import { RouterLink } from 'vue-router'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import ProfileMenu from '@/components/start/ProfileMenu.vue'
+import SyncStatus from '@/components/layout/SyncStatus.vue'
 import { useLogout } from '@/composables/useLogout'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
@@ -83,6 +84,8 @@ const currentLists = computed(() => (props.groupId ? lists.activeLists(props.gro
     </div>
 
     <span class="spacer" aria-hidden="true" />
+
+    <SyncStatus class="sync" size="lg" hint />
 
     <div v-if="auth.user" class="profile">
       <ProfileMenu
@@ -266,6 +269,10 @@ const currentLists = computed(() => (props.groupId ? lists.activeLists(props.gro
 
 .spacer {
   flex: 1;
+}
+
+.sync {
+  padding: 0 var(--space-1);
 }
 
 .profile {

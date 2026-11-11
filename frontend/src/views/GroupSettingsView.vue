@@ -13,6 +13,7 @@ import MemberActionsDialog from '@/components/settings/MemberActionsDialog.vue'
 import MemberRow from '@/components/settings/MemberRow.vue'
 import RenameGroupDialog from '@/components/settings/RenameGroupDialog.vue'
 import SettingsCard from '@/components/settings/SettingsCard.vue'
+import SyncStatus from '@/components/layout/SyncStatus.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
 import { canManage, memberActions, sortMembers } from '@/services/groupRoles'
@@ -73,9 +74,12 @@ function goBack() {
 <template>
   <div class="settings">
     <header class="bar">
-      <button type="button" class="back" :aria-label="t('settings.back')" @click="goBack">
-        <BaseIcon name="arrowLeft" :size="24" :stroke-width="2.75" />
-      </button>
+      <div class="top">
+        <button type="button" class="back" :aria-label="t('settings.back')" @click="goBack">
+          <BaseIcon name="arrowLeft" :size="24" :stroke-width="2.75" />
+        </button>
+        <SyncStatus />
+      </div>
       <h1 class="title">{{ t('settings.title') }}</h1>
     </header>
 
@@ -177,6 +181,14 @@ function goBack() {
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   background: var(--color-brand);
   color: var(--color-on-brand);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-self: stretch;
 }
 
 /* White in both themes, like the header it sits on. */

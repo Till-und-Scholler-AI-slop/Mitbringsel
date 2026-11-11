@@ -7,6 +7,7 @@ import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import AppFrame from '@/components/layout/AppFrame.vue'
+import SyncStatus from '@/components/layout/SyncStatus.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import GroupCard from '@/components/start/GroupCard.vue'
 import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
@@ -66,12 +67,15 @@ watch(online, (isOnline) => {
       <!-- The phone header; on the desktop the sidebar takes its place. -->
       <header class="bar">
         <BrandLogo />
-        <ProfileMenu
-          v-if="auth.user"
-          :name="auth.user.displayName"
-          :avatar-url="auth.user.avatarUrl"
-          @logout="logout"
-        />
+        <div class="bar-actions">
+          <SyncStatus />
+          <ProfileMenu
+            v-if="auth.user"
+            :name="auth.user.displayName"
+            :avatar-url="auth.user.avatarUrl"
+            @logout="logout"
+          />
+        </div>
       </header>
 
       <main class="content">
@@ -151,6 +155,12 @@ watch(online, (isOnline) => {
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   background: var(--color-brand);
   color: var(--color-on-brand);
+}
+
+.bar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .content {

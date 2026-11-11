@@ -10,6 +10,7 @@ import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import AppFrame from '@/components/layout/AppFrame.vue'
+import SyncStatus from '@/components/layout/SyncStatus.vue'
 import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
 import HouseholdSwitcher from '@/components/list/HouseholdSwitcher.vue'
 import ItemRow from '@/components/list/ItemRow.vue'
@@ -26,6 +27,7 @@ import { listToOpen, rememberLastList } from '@/services/lastList'
 import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
+import { useRecentChangesStore } from '@/stores/recentChanges'
 import type { Group, Item, List } from '@/types/api'
 
 // noLists: the household has no active list to open.
@@ -43,6 +45,7 @@ const router = useRouter()
 const groups = useGroupsStore()
 const lists = useListsStore()
 const items = useItemsStore()
+const recentChanges = useRecentChangesStore()
 
 const createOpen = ref(false)
 const createGroupOpen = ref(false)
@@ -109,6 +112,14 @@ function personOf(item: Item) {
   const id = item.checked ? item.checkedBy : item.createdBy
   const member = members.value.find((m) => m.userId === id)
   return member ? { name: member.displayName, avatarUrl: member.avatarUrl } : null
+}
+
+// Who else just changed an item; the name is null for a member we do not
+// know yet (joined after the household was loaded).
+function recentOf(item: Item) {
+  const id = recentChanges.changedBy(item.id)
+  if (!id) return null
+  return { name: members.value.find((m) => m.userId === id)?.displayName ?? null }
 }
 
 // A direct visit of the URL has to load what the screens before would have
@@ -187,10 +198,14 @@ function openCreated(created: List) {
       <!-- On the phone a green header; on the desktop the plain top of the
          page, as the sidebar holds the way back to the start page. -->
       <header class="bar">
-        <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
-          <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
-          <BrandLogo small flat aria-hidden="true" />
-        </RouterLink>
+        <!-- Phone only: on the desktop the sidebar holds both. -->
+        <div class="top">
+          <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
+            <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
+            <BrandLogo small flat aria-hidden="true" />
+          </RouterLink>
+          <SyncStatus />
+        </div>
 
         <div v-if="group" class="household">
           <HouseholdSwitcher
@@ -304,6 +319,7 @@ function openCreated(created: List) {
                 :key="item.id"
                 :item="item"
                 :person="personOf(item)"
+                :recent="recentOf(item)"
                 @toggle="toggle(item)"
               />
             </ul>
@@ -383,8 +399,14 @@ function openCreated(created: List) {
   color: var(--color-on-brand);
 }
 
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .home {
-  align-self: flex-start;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -530,7 +552,7 @@ function openCreated(created: List) {
     color: var(--color-text);
   }
 
-  .home {
+  .top {
     display: none;
   }
 
