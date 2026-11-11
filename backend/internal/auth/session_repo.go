@@ -64,3 +64,7 @@ func (r *PostgresSessionRepository) Touch(ctx context.Context, idHash []byte, la
 func (r *PostgresSessionRepository) Delete(ctx context.Context, idHash []byte) error {
 	return r.q.DeleteSession(ctx, idHash)
 }
+
+func (r *PostgresSessionRepository) DeleteExpired(ctx context.Context, now time.Time) (int64, error) {
+	return r.q.DeleteExpiredSessions(ctx, now)
+}

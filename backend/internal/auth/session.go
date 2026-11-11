@@ -40,6 +40,9 @@ type SessionRepository interface {
 	Get(ctx context.Context, idHash []byte) (Session, error)
 	Touch(ctx context.Context, idHash []byte, lastSeenAt, expiresAt time.Time) error
 	Delete(ctx context.Context, idHash []byte) error
+	// DeleteExpired removes every session that expired at or before now and
+	// returns how many there were.
+	DeleteExpired(ctx context.Context, now time.Time) (int64, error)
 }
 
 // SessionService creates, validates and deletes sessions.
@@ -126,4 +129,11 @@ func hashToken(token string) []byte {
 	// Sum256 returns a fixed-size array; [:] turns it into the slice pgx
 	// needs for bytea.
 	return sum[:]
+}
+
+// DeleteExpired removes the sessions that have run out. Nothing changes for
+// their users: an expired session is refused like an unknown one. It only
+// keeps the table from growing; the cleanup job calls it.
+func (s *SessionService) DeleteExpired(ctx context.Context) (int64, error) {
+	return s.repo.DeleteExpired(ctx, s.now())
 }

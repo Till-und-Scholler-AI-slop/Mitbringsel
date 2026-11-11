@@ -36,6 +36,14 @@ WHERE id = $1
   AND group_id = $2
   AND revoked_at IS NULL;
 
+-- name: DeleteStaleGroupInvites :execrows
+-- The cleanup job. Deletes invites that expired or were revoked before the
+-- cutoff. Until then an old link still says "expired" instead of "not
+-- found". Active invites are never older than the cutoff by either date.
+DELETE FROM group_invites
+WHERE expires_at < sqlc.arg(cutoff)
+   OR revoked_at < sqlc.arg(cutoff);
+
 -- name: GetGroupInviteByTokenHash :one
 -- Returns revoked and expired invites too; the service decides what to
 -- tell the caller.

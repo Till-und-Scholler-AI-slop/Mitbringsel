@@ -71,6 +71,21 @@ func (r *fakeSessionRepo) Delete(_ context.Context, idHash []byte) error {
 	return nil
 }
 
+// DeleteExpired drops what the real query drops: expired at or before now.
+func (r *fakeSessionRepo) DeleteExpired(_ context.Context, now time.Time) (int64, error) {
+	if r.failWith != nil {
+		return 0, r.failWith
+	}
+	var n int64
+	for key, s := range r.sessions {
+		if !now.Before(s.ExpiresAt) {
+			delete(r.sessions, key)
+			n++
+		}
+	}
+	return n, nil
+}
+
 // fakeClock is a clock that only moves when the test says so.
 type fakeClock struct{ now time.Time }
 
@@ -296,5 +311,44 @@ func TestSessionService_Delete_repoError(t *testing.T) {
 
 	if err := svc.Delete(context.Background(), "SOME-TOKEN"); !errors.Is(err, errRepo) {
 		t.Errorf("Delete() error = %v, want %v", err, errRepo)
+	}
+}
+
+func TestSessionService_DeleteExpired(t *testing.T) {
+	svc, repo, clock := newTestService()
+	first, _, err := svc.Create(context.Background(), testUserID)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	clock.Advance(sessionLifetime / 2)
+	second, _, err := svc.Create(context.Background(), testUserID)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// The first session runs out exactly now, the second one later.
+	clock.Advance(sessionLifetime / 2)
+	n, err := svc.DeleteExpired(context.Background())
+	if err != nil {
+		t.Fatalf("DeleteExpired() error = %v", err)
+	}
+
+	if n != 1 {
+		t.Errorf("DeleteExpired() = %d, want 1", n)
+	}
+	if _, ok := repo.sessions[string(hashToken(first))]; ok {
+		t.Error("the expired session is still stored")
+	}
+	if _, ok := repo.sessions[string(hashToken(second))]; !ok {
+		t.Error("the valid session was deleted")
+	}
+}
+
+func TestSessionService_DeleteExpiredPassesErrorsOn(t *testing.T) {
+	svc, repo, _ := newTestService()
+	repo.failWith = errRepo
+
+	if _, err := svc.DeleteExpired(context.Background()); !errors.Is(err, errRepo) {
+		t.Errorf("DeleteExpired() error = %v, want %v", err, errRepo)
 	}
 }

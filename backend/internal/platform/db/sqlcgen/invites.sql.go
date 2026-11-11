@@ -111,6 +111,23 @@ func (q *Queries) CreateGroupInvite(ctx context.Context, arg CreateGroupInvitePa
 	return i, err
 }
 
+const deleteStaleGroupInvites = `-- name: DeleteStaleGroupInvites :execrows
+DELETE FROM group_invites
+WHERE expires_at < $1
+   OR revoked_at < $1
+`
+
+// The cleanup job. Deletes invites that expired or were revoked before the
+// cutoff. Until then an old link still says "expired" instead of "not
+// found". Active invites are never older than the cutoff by either date.
+func (q *Queries) DeleteStaleGroupInvites(ctx context.Context, cutoff time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaleGroupInvites, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getGroupInviteByTokenHash = `-- name: GetGroupInviteByTokenHash :one
 SELECT g.id, g.name, g.created_by, g.created_at, g.updated_at, i.expires_at, i.revoked_at,
        u.display_name AS invited_by, u.avatar_url AS invited_by_avatar_url

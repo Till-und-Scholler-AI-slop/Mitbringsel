@@ -218,6 +218,10 @@ func (r *PostgresRepository) RevokeInvite(ctx context.Context, groupID, inviteID
 	return nil
 }
 
+func (r *PostgresRepository) DeleteStaleInvites(ctx context.Context, cutoff time.Time) (int64, error) {
+	return r.q.DeleteStaleGroupInvites(ctx, cutoff)
+}
+
 func (r *PostgresRepository) FindInvite(ctx context.Context, tokenHash []byte) (InviteTarget, error) {
 	row, err := r.q.GetGroupInviteByTokenHash(ctx, tokenHash)
 	if errors.Is(err, pgx.ErrNoRows) {

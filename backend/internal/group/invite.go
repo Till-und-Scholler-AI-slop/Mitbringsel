@@ -16,6 +16,10 @@ import (
 const (
 	// inviteLifetime is how long a link works (docs/auth.md).
 	inviteLifetime = 7 * 24 * time.Hour
+	// staleInviteRetention is how long an expired or revoked invite is kept.
+	// Until then its link still says "expired" (410) instead of "not found"
+	// (404), which tells the visitor what happened.
+	staleInviteRetention = 30 * 24 * time.Hour
 	// MaxActiveInvites caps the links a group can have open at once, so
 	// nobody can fill the table by creating links in a loop.
 	MaxActiveInvites = 10
@@ -109,6 +113,9 @@ type InviteRepository interface {
 	// already are one (their role stays). added tells which of the two
 	// happened.
 	AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) (added bool, err error)
+	// DeleteStaleInvites removes the invites that expired or were revoked
+	// before cutoff and returns how many there were.
+	DeleteStaleInvites(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 // InviteService creates, lists, revokes and redeems invite links.
@@ -264,4 +271,11 @@ func firstName(displayName string) string {
 		return first
 	}
 	return strings.TrimSpace(displayName)
+}
+
+// DeleteStale removes invites that expired or were revoked more than
+// staleInviteRetention ago. Active invites are never touched. The cleanup
+// job calls it.
+func (s *InviteService) DeleteStale(ctx context.Context) (int64, error) {
+	return s.repo.DeleteStaleInvites(ctx, s.now().Add(-staleInviteRetention))
 }

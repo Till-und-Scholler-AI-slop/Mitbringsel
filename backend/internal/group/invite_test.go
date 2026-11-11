@@ -19,6 +19,8 @@ type fakeInviteRepo struct {
 	roles   map[uuid.UUID]map[uuid.UUID]Role
 	groups  map[uuid.UUID]Group
 	invites []fakeInvite
+	// staleCutoff is the cutoff of the last DeleteStaleInvites call.
+	staleCutoff time.Time
 }
 
 type fakeInvite struct {
@@ -94,6 +96,13 @@ func (r *fakeInviteRepo) AddMemberIfAbsent(_ context.Context, groupID, userID uu
 	}
 	r.roles[groupID][userID] = role
 	return true, nil
+}
+
+// DeleteStaleInvites only remembers the cutoff: which rows it hits is the
+// query's job and tested against Postgres.
+func (r *fakeInviteRepo) DeleteStaleInvites(_ context.Context, cutoff time.Time) (int64, error) {
+	r.staleCutoff = cutoff
+	return 3, nil
 }
 
 // inviteFixture is one group with an owner, an admin and a member, a second
@@ -458,5 +467,21 @@ func TestFirstName(t *testing.T) {
 		if got := firstName(in); got != want {
 			t.Errorf("firstName(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestInviteService_DeleteStale(t *testing.T) {
+	f := newInviteFixture(t)
+
+	n, err := f.svc.DeleteStale(context.Background())
+	if err != nil {
+		t.Fatalf("DeleteStale() error = %v", err)
+	}
+
+	if n != 3 {
+		t.Errorf("DeleteStale() = %d, want what the repository reported (3)", n)
+	}
+	if want := inviteNow.Add(-staleInviteRetention); !f.repo.staleCutoff.Equal(want) {
+		t.Errorf("cutoff = %v, want %v (30 days before now)", f.repo.staleCutoff, want)
 	}
 }

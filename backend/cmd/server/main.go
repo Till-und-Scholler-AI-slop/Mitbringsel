@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"mitbringsel/internal/auth"
+	"mitbringsel/internal/cleanup"
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/group"
 	"mitbringsel/internal/httpapi"
@@ -137,6 +138,18 @@ func run() error {
 	// its own when Shutdown starts.
 	srv.RegisterOnShutdown(hub.Close)
 
+	// The cleanup job runs next to the server until ctx ends. The method
+	// values (sessions.DeleteExpired) are the methods bound to their
+	// service, so they fit the func type of Task.Run.
+	cleanupDone := make(chan struct{})
+	go func() {
+		defer close(cleanupDone)
+		cleanup.Run(ctx, cleanup.DefaultInterval, []cleanup.Task{
+			{Name: "expired sessions", Run: sessions.DeleteExpired},
+			{Name: "stale invites", Run: invites.DeleteStale},
+		})
+	}()
+
 	serveErr := make(chan error, 1)
 	go func() {
 		slog.Info("server listening", "addr", cfg.HTTPAddr)
@@ -145,6 +158,9 @@ func run() error {
 
 	select {
 	case err := <-serveErr:
+		// stop also cancels ctx, which ends the cleanup.
+		stop()
+		<-cleanupDone
 		return fmt.Errorf("listen: %w", err)
 	case <-ctx.Done():
 		slog.Info("shutdown signal received")
@@ -157,6 +173,9 @@ func run() error {
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("shutdown: %w", err)
 	}
+	// ctx is cancelled, so the cleanup ends quickly; waiting keeps it from
+	// running a query while the deferred pool.Close shuts the pool.
+	<-cleanupDone
 	return nil
 }
 

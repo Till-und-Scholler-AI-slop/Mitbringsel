@@ -20,3 +20,9 @@ WHERE id_hash = $1;
 -- Logout. Deleting an unknown hash affects no rows and is not an error.
 DELETE FROM sessions
 WHERE id_hash = $1;
+
+-- name: DeleteExpiredSessions :execrows
+-- The cleanup job. A session counts as expired from expires_at on, like in
+-- the service, so this never deletes one that would still be accepted.
+DELETE FROM sessions
+WHERE expires_at <= sqlc.arg(now);

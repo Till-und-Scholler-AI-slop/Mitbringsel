@@ -347,6 +347,57 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("delete stale invites keeps active and recent ones", func(t *testing.T) {
+		anna := newTestUser(t, pool, "stale-anna")
+		created, err := svc.Create(ctx, anna, "Stale")
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		// Long before the invites of the other subtests (made with now()),
+		// so the count below only sees the invites made here.
+		cutoff := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+		before, after := cutoff.Add(-time.Hour), cutoff.Add(time.Hour)
+		cases := []struct {
+			name      string
+			expiresAt time.Time
+			revokedAt *time.Time
+			wantGone  bool
+		}{
+			{"expired before the cutoff", before, nil, true},
+			{"revoked before the cutoff, expiring later", after, &before, true},
+			{"expired exactly at the cutoff", cutoff, nil, false},
+			{"still valid", after, nil, false},
+			{"revoked after the cutoff", after, &after, false},
+		}
+		ids := make([]uuid.UUID, len(cases))
+		for i, c := range cases {
+			hash := make([]byte, 32)
+			hash[0], hash[1] = 2, byte(i)
+			err := pool.QueryRow(ctx, `INSERT INTO group_invites (group_id, token_hash, created_by, expires_at, revoked_at)
+				VALUES ($1, $2, $3, $4, $5) RETURNING id`, created.ID, hash, anna, c.expiresAt, c.revokedAt).Scan(&ids[i])
+			if err != nil {
+				t.Fatalf("insert invite %q: %v", c.name, err)
+			}
+		}
+
+		n, err := repo.DeleteStaleInvites(ctx, cutoff)
+		if err != nil {
+			t.Fatalf("DeleteStaleInvites() error = %v", err)
+		}
+		if n != 2 {
+			t.Errorf("DeleteStaleInvites() = %d, want 2", n)
+		}
+		for i, c := range cases {
+			var left bool
+			if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM group_invites WHERE id = $1)`, ids[i]).Scan(&left); err != nil {
+				t.Fatalf("look up invite %q: %v", c.name, err)
+			}
+			if left == c.wantGone {
+				t.Errorf("invite %q still there = %v, want %v", c.name, left, !c.wantGone)
+			}
+		}
+	})
+
 	t.Run("publishes only after the commit", func(t *testing.T) {
 		anna := newTestUser(t, pool, "publish-anna")
 		ben := newTestUser(t, pool, "publish-ben")
