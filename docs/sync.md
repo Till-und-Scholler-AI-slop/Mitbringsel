@@ -106,6 +106,12 @@ Browser können keine WebSocket-Protokoll-Pings senden. Der Client schickt desha
 - Zwei gleichzeitige Löschvorgänge können beide einen lebenden Artikel sehen und `itemDeleted` zweimal mit derselben `serverSeq` senden. Der zweite wird aus demselben Grund verworfen.
 - Die Zustellung ist Best Effort. Wer ein Ereignis verpasst (Verbindung weg, zu langsam), holt es mit dem Neuladen nach dem nächsten `ready` nach.
 - Mitgliedschaften bestimmen, wer Ereignisse bekommt: Wer in eine Gruppe aufgenommen wird, wechselt mit seinen Verbindungen in deren Raum; wer sie verlässt, bekommt `groupRemoved` und verlässt den Raum.
+- Die Reihenfolge beim Hub ist je Fall festgelegt, und die Raumwechsel laufen immer, auch wenn eine Nachricht nicht kodiert werden kann:
+  - **Aufnehmen** (Gruppe anlegen, Einladung annehmen): erst `JoinGroup`, dann `groupChanged` an den Raum. Die neuen Verbindungen bekommen den Hinweis also selbst und laden die Gruppen neu.
+  - **Entfernen:** erst `LeaveGroup`, dann `groupRemoved` (`removed`) an alle Verbindungen des Entfernten (`SendToUser`, auch an solche, die noch laden), dann `groupChanged` an die übrigen Mitglieder. Der Entfernte bekommt `groupChanged` nicht; die `actorId` von `groupChanged` ist der Entfernende (beim Austreten der Austretende selbst).
+  - **Löschen:** erst `groupRemoved` (`deleted`) an den Raum, dann `RemoveGroup`. Andersherum würde niemand benachrichtigt.
+- Der Client verwirft Ereignisse zu Gruppen oder Listen, die er nicht kennt (nach `groupRemoved` oder `listDeleted`, oder bevor er sie geladen hat), statt sie anzulegen. `groupRemoved` kann auch vor `ready` eintreffen, weil es auch Verbindungen erreicht, die noch laden; der Client behandelt es wie sonst.
+- Zwei Rennen nehmen wir bewusst hin, weil die Datenbank stimmt und das nächste `ready` es korrigiert: Wird eine Einladung fast gleichzeitig mit dem Löschen der Gruppe angenommen, kann die Verbindung in einen Raum geraten, den es nicht mehr gibt, und bleibt dort bis zum Trennen ohne Ereignisse. Wird jemand entfernt und im selben Moment wieder aufgenommen, kann `LeaveGroup` nach `JoinGroup` laufen, und er fehlt im Raum, bis er sich neu verbindet.
 
 ## Server-Seite
 
@@ -114,6 +120,18 @@ Browser können keine WebSocket-Protokoll-Pings senden. Der Client schickt desha
   - **Anlegen:** `itemChanged` nach dem Speichern, nicht bei einer Wiederholung derselben Anfrage (gleiche ID in derselben Liste).
   - **Ändern:** `itemChanged` erst nach dem Commit der Transaktion und nur, wenn mindestens ein Feld gewonnen hat. Verliert jedes Feld den Merge oder ist der Artikel ein Tombstone, ändert sich nichts und es gibt weder Ereignis noch neue `serverSeq`.
   - **Löschen:** `itemDeleted` nur beim ersten Löschen. Löschen eines Tombstones ändert nichts.
+
+  Beim Listen-Service (`list.Publisher`) gilt:
+  - **Anlegen, Umbenennen, Archivieren, Reaktivieren:** `listChanged` mit der gespeicherten Liste (samt `serverSeq`), nach dem Schreiben. Eine Änderung, die nichts ändert, wird übersprungen: derselbe Name, Archivieren einer archivierten oder Reaktivieren einer aktiven Liste schreiben nichts, vergeben keine neue `serverSeq` und senden kein Ereignis. Der Service liest die Liste dafür vor dem Schreiben; die Anfrage gilt als zum Zeitpunkt dieses Lesens ausgeführt.
+  - **Löschen:** `listDeleted` nach dem Löschen, mit der Gruppe der Liste, die der Service vorher gelesen hat. Zwei gleichzeitige Löschvorgänge: der zweite findet keine Zeile (`ErrNotFound`) und sendet nichts. Die Artikel der Liste bekommen kein eigenes Ereignis; der Client verwirft sie mit der Liste.
+
+  Beim Gruppen-Service (`group.Publisher`) gilt:
+  - **Anlegen:** Die Gruppe hat kein eigenes Ereignis, sie entsteht über `MemberJoined`: Die Verbindungen des Erstellers treten dem Raum bei, danach geht `groupChanged` an den Raum. Das passiert nach dem Commit und vor dem Laden der Antwort; scheitert das Laden, existiert die Gruppe trotzdem und der Ersteller ist im Raum.
+  - **Umbenennen:** `groupChanged` nur, wenn sich der Name ändert. Derselbe Name schreibt nichts. Die Rechteprüfung kommt vor diesem Vergleich, ein Außenstehender bekommt also denselben Fehler wie bisher.
+  - **Rolle ändern:** `groupChanged` nur, wenn sich die Rolle ändert. Dieselbe Rolle ändert nichts (der Service erkennt das in der Transaktion).
+  - **Einladung annehmen:** `MemberJoined` nur, wenn wirklich jemand aufgenommen wurde (`AddMemberIfAbsent` meldet das). Wer schon Mitglied ist oder den Link ein zweites Mal öffnet, löst nichts aus.
+  - **Mitglied entfernen oder Austreten:** `MemberRemoved` nach dem Commit. Der Owner kann nicht austreten (`ErrOwnerImmutable`), dabei gibt es kein Ereignis.
+  - **Gruppe löschen:** `GroupDeleted` nach dem Löschen. Listen und Artikel bekommen kein eigenes Ereignis; der Client verwirft sie mit der Gruppe.
 - **Authentifizierung:** `GET /api/v1/ws` liegt hinter der Session-Prüfung. Die `Origin` muss zum Host von `PUBLIC_BASE_URL` passen, sonst `403 CROSS_ORIGIN_REQUEST`. Der Schutz gegen Cross-Origin-Anfragen aus der Standardbibliothek greift hier nicht, weil er GET durchlässt und der Vite-Proxy im Dev-Betrieb den `Host`-Header umschreibt.
 - **Lebensdauer und Limits:** Eine Verbindung lebt höchstens etwa eine Stunde, damit die Session beim Wiederverbinden neu geprüft wird. Pro Nutzer sind etwa 10 Verbindungen erlaubt. Beim Logout schließt das Frontend den Socket, beim Herunterfahren schließt der Server alle Verbindungen selbst.
 - **Fristen und Größen:** Der Server liest höchstens 4 KiB pro Nachricht (heute gibt es nur `ping`; Phase 6 braucht für `mutate` mehr). Er trennt eine Verbindung nach 60 Sekunden ohne Nachricht und gibt jeder Nachricht beim Schreiben 10 Sekunden. Die Verbindung wird ohne Kompression geführt.
