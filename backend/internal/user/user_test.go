@@ -135,6 +135,23 @@ func TestService_SignIn_repoError(t *testing.T) {
 	}
 }
 
+func TestDevSubject(t *testing.T) {
+	tests := []struct {
+		email string
+		want  string
+	}{
+		{email: "anna@example.com", want: "dev:anna@example.com"},
+		{email: "  anna@example.com\t", want: "dev:anna@example.com"},
+		{email: "", want: "dev:"},
+	}
+
+	for _, tt := range tests {
+		if got := DevSubject(tt.email); got != tt.want {
+			t.Errorf("DevSubject(%q) = %q, want %q", tt.email, got, tt.want)
+		}
+	}
+}
+
 func TestService_Get(t *testing.T) {
 	repo := newFakeRepo()
 	svc := NewService(repo)

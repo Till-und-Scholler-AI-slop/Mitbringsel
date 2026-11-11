@@ -59,6 +59,17 @@ type Identity struct {
 	AvatarURL string
 }
 
+// devSubjectPrefix keeps dev users apart from real accounts: Google subjects
+// are plain digits and never start with it.
+const devSubjectPrefix = "dev:"
+
+// DevSubject returns the subject of the dev user with this email. The dev
+// login and the seed data both use it, so they find the same users. The email
+// is trimmed, so " anna@example.com" and "anna@example.com" are one user.
+func DevSubject(email string) string {
+	return devSubjectPrefix + strings.TrimSpace(email)
+}
+
 // Repository stores users. It lives here, at the consumer, so the service
 // does not depend on pgx or sqlc and can be tested with a fake.
 type Repository interface {
