@@ -90,7 +90,7 @@ func newSeeder(pool *pgxpool.Pool) (*seeder, error) {
 		groups:  group.NewService(groupRepo),
 		invites: group.NewInviteService(groupRepo),
 		lists:   lists,
-		items:   item.NewService(item.NewPostgresRepository(pool), lists),
+		items:   item.NewService(item.NewPostgresRepository(pool), lists, nil),
 		clock:   clock,
 		userIDs: make(map[string]uuid.UUID),
 	}, nil

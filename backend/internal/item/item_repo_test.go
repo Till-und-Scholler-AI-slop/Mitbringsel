@@ -3,6 +3,7 @@ package item
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -40,6 +41,39 @@ func newItemID(t *testing.T) uuid.UUID {
 	return id
 }
 
+// storedSeqPublisher reads the item from the database, over a connection of
+// its own, at the moment the service publishes. A publish before the commit
+// would see the old row there.
+type storedSeqPublisher struct {
+	repo *PostgresRepository
+
+	mu sync.Mutex
+	// published and stored are the serverSeq of each event and the one the
+	// database had at that moment; storeErrs are failed reads.
+	published, stored []int64
+	storeErrs         []error
+}
+
+func (p *storedSeqPublisher) ItemChanged(ctx context.Context, _, _ uuid.UUID, it Item) {
+	p.record(ctx, it)
+}
+
+func (p *storedSeqPublisher) ItemDeleted(ctx context.Context, _, _ uuid.UUID, it Item) {
+	p.record(ctx, it)
+}
+
+func (p *storedSeqPublisher) record(ctx context.Context, it Item) {
+	stored, err := p.repo.Get(ctx, it.ID)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.published = append(p.published, it.ServerSeq)
+	p.stored = append(p.stored, stored.ServerSeq)
+	if err != nil {
+		p.storeErrs = append(p.storeErrs, err)
+	}
+}
+
 // TestPostgresRepository shares one container across its subtests; each
 // subtest creates its own users and lists. The item service runs on the real
 // list and group services, so access is checked against the database, too.
@@ -50,7 +84,7 @@ func TestPostgresRepository(t *testing.T) {
 	groups := group.NewService(groupRepo)
 	lists := list.NewService(list.NewPostgresRepository(sqlcgen.New(pool)), groupRepo)
 	repo := NewPostgresRepository(pool)
-	svc := NewService(repo, lists)
+	svc := NewService(repo, lists, nil)
 
 	// newList makes a user with a group and a list, and returns both.
 	newList := func(t *testing.T, name string) (user, listID uuid.UUID) {
@@ -289,6 +323,37 @@ func TestPostgresRepository(t *testing.T) {
 	// newer clock wins whichever transaction runs first. Without the lock
 	// both would read the old clock and the last write would win, even if
 	// its clock is older. Repeated to give a missing lock a chance to show.
+	t.Run("publishes only after the commit", func(t *testing.T) {
+		anna, listID := newList(t, "publish-anna")
+		pub := &storedSeqPublisher{repo: NewPostgresRepository(pool)}
+		pubSvc := NewService(repo, lists, pub)
+		it, err := pubSvc.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: "Milch"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		updated, err := pubSvc.Update(ctx, anna, it.ID, Change{Name: Some("Hafermilch")}, clock(t, time.Minute, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		deleted, err := pubSvc.Delete(ctx, anna, it.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		pub.mu.Lock()
+		defer pub.mu.Unlock()
+		if len(pub.storeErrs) != 0 {
+			t.Fatalf("reading in the publisher failed: %v", pub.storeErrs)
+		}
+		want := []int64{it.ServerSeq, updated.ServerSeq, deleted.ServerSeq}
+		if !slices.Equal(pub.published, want) {
+			t.Errorf("published serverSeqs = %v, want %v (create, update, delete)", pub.published, want)
+		}
+		if !slices.Equal(pub.stored, want) {
+			t.Errorf("serverSeqs in the database at publishing = %v, want %v", pub.stored, want)
+		}
+	})
+
 	t.Run("concurrent changes to one field: the newer clock wins", func(t *testing.T) {
 		anna, listID := newList(t, "race-anna")
 		for i := range 25 {

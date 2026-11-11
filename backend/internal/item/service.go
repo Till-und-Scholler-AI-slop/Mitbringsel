@@ -22,6 +22,26 @@ type ListAccess interface {
 	Get(ctx context.Context, actor, listID uuid.UUID) (list.List, error)
 }
 
+// Publisher tells the members of a group about an item change once it is
+// committed. It is best effort: it must not block and has no error to return,
+// because the change is stored either way. ctx is the request's and may be
+// cancelled at any moment, so an implementation must not depend on it staying
+// alive (use context.WithoutCancel for work that outlives the request).
+type Publisher interface {
+	// ItemChanged gets the item as stored after a create or an update.
+	ItemChanged(ctx context.Context, groupID, actor uuid.UUID, it Item)
+	// ItemDeleted gets the tombstone: ID, ListID and the ServerSeq of the
+	// deletion are what matters.
+	ItemDeleted(ctx context.Context, groupID, actor uuid.UUID, it Item)
+}
+
+// noPublisher is the Publisher for callers without live connections (the
+// seed command, tests). It does nothing.
+type noPublisher struct{}
+
+func (noPublisher) ItemChanged(context.Context, uuid.UUID, uuid.UUID, Item) {}
+func (noPublisher) ItemDeleted(context.Context, uuid.UUID, uuid.UUID, Item) {}
+
 // Service holds the rules for items. Every method takes the acting user
 // (actor) and checks what they may do, so a handler cannot forget it.
 //
@@ -35,13 +55,18 @@ type ListAccess interface {
 type Service struct {
 	repo  Repository
 	lists ListAccess
+	pub   Publisher
 	// now is the server time; tests replace it.
 	now func() time.Time
 }
 
-// NewService returns a service backed by the given repository.
-func NewService(repo Repository, lists ListAccess) *Service {
-	return &Service{repo: repo, lists: lists, now: time.Now}
+// NewService returns a service backed by the given repository. pub is told
+// about every change after it is committed; nil means nobody listens.
+func NewService(repo Repository, lists ListAccess, pub Publisher) *Service {
+	if pub == nil {
+		pub = noPublisher{}
+	}
+	return &Service{repo: repo, lists: lists, pub: pub, now: time.Now}
 }
 
 // Create adds an item to a list. If an item with this ID already exists in
@@ -50,7 +75,8 @@ func NewService(repo Repository, lists ListAccess) *Service {
 // item elsewhere, it returns ErrIDTaken.
 func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem, clock HLC) (Item, error) {
 	// Access first: an outsider must not learn anything about the rules.
-	if _, err := s.requireList(ctx, actor, listID); err != nil {
+	l, err := s.requireList(ctx, actor, listID)
+	if err != nil {
 		return Item{}, err
 	}
 	if n.ID == uuid.Nil {
@@ -93,6 +119,7 @@ func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem
 	if err != nil {
 		return Item{}, fmt.Errorf("create item: %w", err)
 	}
+	s.pub.ItemChanged(ctx, l.GroupID, actor, created)
 	return created, nil
 }
 
@@ -123,7 +150,7 @@ func (s *Service) Get(ctx context.Context, actor, itemID uuid.UUID) (Item, error
 // unchanged; check Deleted.
 func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Change, clock HLC) (Item, error) {
 	// Access first: an outsider must not learn anything about the rules.
-	found, _, err := s.find(ctx, actor, itemID)
+	found, l, err := s.find(ctx, actor, itemID)
 	if err != nil {
 		return Item{}, err
 	}
@@ -137,6 +164,9 @@ func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Ch
 	}
 
 	var result Item
+	// changed is set inside the transaction and read after it: only a
+	// committed change is published.
+	var changed bool
 	// One transaction with the row locked: another change to this item
 	// waits here until we are done, so it merges against our result.
 	err = s.repo.InTx(ctx, func(tx Repository) error {
@@ -153,6 +183,7 @@ func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Ch
 			result = current
 			return nil
 		}
+		changed = true
 
 		update := Update{Change: change.only(won), Clocks: won}
 		if _, ok := won[FieldChecked]; ok && change.Checked.Value {
@@ -168,19 +199,30 @@ func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Ch
 		}
 		return Item{}, fmt.Errorf("update item: %w", err)
 	}
+	// After the commit, so a listener who reads the database finds the change.
+	// Nothing is published if no field won: nothing was stored.
+	if changed {
+		s.pub.ItemChanged(ctx, l.GroupID, actor, result)
+	}
 	return result, nil
 }
 
 // Delete turns an item into a tombstone. Deleting always wins over edits,
 // and deleting twice is harmless. It returns the stored item.
 func (s *Service) Delete(ctx context.Context, actor, itemID uuid.UUID) (Item, error) {
-	found, _, err := s.find(ctx, actor, itemID)
+	found, l, err := s.find(ctx, actor, itemID)
 	if err != nil {
 		return Item{}, err
 	}
 	deleted, err := s.repo.MarkDeleted(ctx, found.ID)
 	if err != nil {
 		return Item{}, fmt.Errorf("delete item: %w", err)
+	}
+	// found is the state before the deletion: only the first delete changed
+	// something. Two deletes at the same moment may both see a live item and
+	// publish twice with the same serverSeq; clients drop the second one.
+	if !found.Deleted() {
+		s.pub.ItemDeleted(ctx, l.GroupID, actor, deleted)
 	}
 	return deleted, nil
 }

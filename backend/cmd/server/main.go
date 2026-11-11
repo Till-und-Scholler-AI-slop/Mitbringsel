@@ -89,7 +89,7 @@ func run() error {
 	// The group repository doubles as the list service's membership lookup.
 	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo)
 	// Items check access through the list service.
-	items := item.NewService(item.NewPostgresRepository(pool), lists)
+	items := item.NewService(item.NewPostgresRepository(pool), lists, nil)
 	itemClock, err := newItemClock()
 	if err != nil {
 		return err

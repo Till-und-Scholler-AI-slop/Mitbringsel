@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,10 @@ type fakeRepo struct {
 	items map[uuid.UUID]Item
 	// fail makes every method return errRepo.
 	fail bool
-	seq  int64
+	// failCommit makes InTx return errRepo after fn has run, like a commit
+	// that fails.
+	failCommit bool
+	seq        int64
 }
 
 func newFakeRepo() *fakeRepo {
@@ -31,7 +35,13 @@ func (r *fakeRepo) InTx(_ context.Context, fn func(tx Repository) error) error {
 	if r.fail {
 		return errRepo
 	}
-	return fn(r)
+	if err := fn(r); err != nil {
+		return err
+	}
+	if r.failCommit {
+		return errRepo
+	}
+	return nil
 }
 
 func (r *fakeRepo) Create(_ context.Context, it Item) (Item, error) {
@@ -125,6 +135,30 @@ func (r *fakeRepo) MarkDeleted(ctx context.Context, itemID uuid.UUID) (Item, err
 	return it, nil
 }
 
+// fakeGroupID is the group every fake list belongs to.
+var fakeGroupID = uuid.MustParse("0190a8c4-0000-7000-8000-0000000000a1")
+
+// publishedEvent is one call to the publisher.
+type publishedEvent struct {
+	kind    string // "changed" or "deleted"
+	groupID uuid.UUID
+	actor   uuid.UUID
+	item    Item
+}
+
+// fakePublisher records what the service publishes.
+type fakePublisher struct {
+	events []publishedEvent
+}
+
+func (p *fakePublisher) ItemChanged(_ context.Context, groupID, actor uuid.UUID, it Item) {
+	p.events = append(p.events, publishedEvent{"changed", groupID, actor, it})
+}
+
+func (p *fakePublisher) ItemDeleted(_ context.Context, groupID, actor uuid.UUID, it Item) {
+	p.events = append(p.events, publishedEvent{"deleted", groupID, actor, it})
+}
+
 // fakeLists says which users may see which lists.
 type fakeLists map[uuid.UUID]map[uuid.UUID]bool
 
@@ -132,7 +166,7 @@ func (l fakeLists) Get(_ context.Context, actor, listID uuid.UUID) (list.List, e
 	if !l[listID][actor] {
 		return list.List{}, list.ErrNotFound
 	}
-	return list.List{ID: listID}, nil
+	return list.List{ID: listID, GroupID: fakeGroupID}, nil
 }
 
 // serverNow is the time of the server in the tests: an hour after the
@@ -143,6 +177,7 @@ var serverNow = at.Add(time.Hour)
 type fixture struct {
 	svc      *Service
 	repo     *fakeRepo
+	pub      *fakePublisher
 	listID   uuid.UUID
 	otherID  uuid.UUID // a list the member cannot see
 	member   uuid.UUID
@@ -152,6 +187,7 @@ type fixture struct {
 func newFixture() fixture {
 	f := fixture{
 		repo:     newFakeRepo(),
+		pub:      &fakePublisher{},
 		listID:   uuid.New(),
 		otherID:  uuid.New(),
 		member:   uuid.New(),
@@ -161,7 +197,7 @@ func newFixture() fixture {
 		f.listID:  {f.member: true},
 		f.otherID: {f.outsider: true},
 	}
-	f.svc = NewService(f.repo, lists)
+	f.svc = NewService(f.repo, lists, f.pub)
 	f.svc.now = func() time.Time { return serverNow }
 	return f
 }
@@ -321,6 +357,69 @@ func TestService_Create(t *testing.T) {
 		}
 		if f.repo.items[foreign.ID].Name != "Fremd" {
 			t.Error("the foreign item was changed")
+		}
+	})
+
+	t.Run("publishes the new item once with group and actor", func(t *testing.T) {
+		f := newFixture()
+
+		it := f.create(t)
+
+		want := []publishedEvent{{"changed", fakeGroupID, f.member, it}}
+		if !reflect.DeepEqual(f.pub.events, want) {
+			t.Errorf("published %+v, want %+v", f.pub.events, want)
+		}
+	})
+
+	t.Run("a repeated request publishes nothing", func(t *testing.T) {
+		f := newFixture()
+		first := f.create(t)
+		f.pub.events = nil
+
+		_, err := f.svc.Create(ctx, f.member, f.listID, NewItem{ID: first.ID, Name: "Milch"}, f.clock(t, 5, "anna"))
+
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.events)
+		}
+	})
+
+	t.Run("errors publish nothing", func(t *testing.T) {
+		foreign := Item{ID: uuid.New(), ListID: uuid.New(), Name: "Fremd"}
+		tests := []struct {
+			name    string
+			actor   func(f fixture) uuid.UUID
+			item    NewItem
+			setup   func(f fixture)
+			wantErr error
+		}{
+			{"outsider", func(f fixture) uuid.UUID { return f.outsider }, NewItem{ID: uuid.New(), Name: "Mehl"}, nil, ErrNotFound},
+			{"invalid input", nil, NewItem{ID: uuid.New(), Name: " "}, nil, ErrInvalidName},
+			{"id of another list", nil, NewItem{ID: foreign.ID, Name: "Mehl"}, func(f fixture) { f.repo.items[foreign.ID] = foreign }, ErrIDTaken},
+			{"repository failure", nil, NewItem{ID: uuid.New(), Name: "Mehl"}, func(f fixture) { f.repo.fail = true }, errRepo},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f := newFixture()
+				if tt.setup != nil {
+					tt.setup(f)
+				}
+				actor := f.member
+				if tt.actor != nil {
+					actor = tt.actor(f)
+				}
+
+				_, err := f.svc.Create(ctx, actor, f.listID, tt.item, f.clock(t, 0, "anna"))
+
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("error = %v, want %v", err, tt.wantErr)
+				}
+				if len(f.pub.events) != 0 {
+					t.Errorf("published %+v, want nothing", f.pub.events)
+				}
+			})
 		}
 	})
 
@@ -504,6 +603,97 @@ func TestService_Update(t *testing.T) {
 		}
 	})
 
+	t.Run("a winning change publishes the stored item", func(t *testing.T) {
+		f := newFixture()
+		it := f.create(t)
+		f.pub.events = nil
+
+		got, err := f.svc.Update(ctx, f.member, it.ID, Change{Name: Some("Hafermilch")}, f.clock(t, 1, "ben"))
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []publishedEvent{{"changed", fakeGroupID, f.member, got}}
+		if !reflect.DeepEqual(f.pub.events, want) {
+			t.Errorf("published %+v, want %+v", f.pub.events, want)
+		}
+		if got.ServerSeq <= it.ServerSeq {
+			t.Errorf("serverSeq = %d, want more than %d", got.ServerSeq, it.ServerSeq)
+		}
+	})
+
+	t.Run("a change that loses publishes nothing", func(t *testing.T) {
+		f := newFixture()
+		it := f.create(t)
+		f.pub.events = nil
+
+		_, err := f.svc.Update(ctx, f.member, it.ID, Change{Name: Some("Alt")}, f.clock(t, -1, "ben"))
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.events)
+		}
+	})
+
+	t.Run("a change to a deleted item publishes nothing", func(t *testing.T) {
+		f := newFixture()
+		it := f.create(t)
+		if _, err := f.svc.Delete(ctx, f.member, it.ID); err != nil {
+			t.Fatal(err)
+		}
+		f.pub.events = nil
+
+		_, err := f.svc.Update(ctx, f.member, it.ID, Change{Name: Some("Zombie")}, f.clock(t, 100, "ben"))
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.events)
+		}
+	})
+
+	// The publish call comes after InTx returns. If it sat inside the
+	// closure, it would run here before the commit failed.
+	t.Run("a failed commit publishes nothing", func(t *testing.T) {
+		f := newFixture()
+		it := f.create(t)
+		f.pub.events = nil
+		f.repo.failCommit = true
+
+		_, err := f.svc.Update(ctx, f.member, it.ID, Change{Name: Some("Neu")}, f.clock(t, 1, "ben"))
+
+		if !errors.Is(err, errRepo) {
+			t.Errorf("error = %v, want %v", err, errRepo)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.events)
+		}
+	})
+
+	t.Run("errors publish nothing", func(t *testing.T) {
+		f := newFixture()
+		it := f.create(t)
+		f.pub.events = nil
+
+		_, outsider := f.svc.Update(ctx, f.outsider, it.ID, Change{Name: Some("X")}, f.clock(t, 1, "ben"))
+		_, invalid := f.svc.Update(ctx, f.member, it.ID, Change{Name: Some(" ")}, f.clock(t, 1, "ben"))
+		_, empty := f.svc.Update(ctx, f.member, it.ID, Change{}, f.clock(t, 1, "ben"))
+		f.repo.fail = true
+		_, failing := f.svc.Update(ctx, f.member, it.ID, Change{Name: Some("X")}, f.clock(t, 1, "ben"))
+
+		for _, err := range []error{outsider, invalid, empty, failing} {
+			if err == nil {
+				t.Error("an update succeeded, want every one to fail")
+			}
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.events)
+		}
+	})
+
 	t.Run("outsider and unknown item are not found", func(t *testing.T) {
 		f := newFixture()
 		it := f.create(t)
@@ -591,6 +781,41 @@ func TestService_Delete(t *testing.T) {
 		}
 	})
 
+	t.Run("publishes the tombstone once, deleting twice publishes nothing more", func(t *testing.T) {
+		f := newFixture()
+		it := f.create(t)
+		f.pub.events = nil
+
+		first, err := f.svc.Delete(ctx, f.member, it.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.svc.Delete(ctx, f.member, it.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		want := []publishedEvent{{"deleted", fakeGroupID, f.member, first}}
+		if !reflect.DeepEqual(f.pub.events, want) {
+			t.Errorf("published %+v, want %+v", f.pub.events, want)
+		}
+	})
+
+	t.Run("outsider and unknown item publish nothing", func(t *testing.T) {
+		f := newFixture()
+		it := f.create(t)
+		f.pub.events = nil
+
+		_, outsider := f.svc.Delete(ctx, f.outsider, it.ID)
+		_, unknown := f.svc.Delete(ctx, f.member, uuid.New())
+
+		if outsider == nil || unknown == nil {
+			t.Errorf("errors = %v, %v, want both to fail", outsider, unknown)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.events)
+		}
+	})
+
 	t.Run("outsider and unknown item are not found", func(t *testing.T) {
 		f := newFixture()
 		it := f.create(t)
@@ -604,6 +829,23 @@ func TestService_Delete(t *testing.T) {
 			t.Error("the outsider deleted the item")
 		}
 	})
+}
+
+func TestNewService_nilPublisher(t *testing.T) {
+	f := newFixture()
+	svc := NewService(f.repo, fakeLists{f.listID: {f.member: true}}, nil)
+	ctx := context.Background()
+	id := uuid.New()
+
+	if _, err := svc.Create(ctx, f.member, f.listID, NewItem{ID: id, Name: "Milch"}, f.clock(t, 0, "anna")); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := svc.Update(ctx, f.member, id, Change{Name: Some("Hafermilch")}, f.clock(t, 1, "anna")); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if _, err := svc.Delete(ctx, f.member, id); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
 }
 
 func TestService_ListAndGet(t *testing.T) {
