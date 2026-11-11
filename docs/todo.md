@@ -22,20 +22,21 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Owner-Übergabe:** Der Owner kann die Gruppe nur löschen, nicht übergeben (siehe [Überblick](overview.md)). Nachrüsten, falls sich das im Alltag als Lücke zeigt.
 - [ ] **Limit für Gruppen pro Nutzer:** `POST /api/v1/groups` legt beliebig viele Gruppen an; jeder angemeldete Nutzer könnte die Tabelle füllen. Vor dem öffentlichen Start eine Obergrenze (z.B. pro Nutzer und Mitglieder pro Gruppe) im Service festlegen, mit eigenem Fehlercode.
 - [ ] **Limit für Listen pro Gruppe:** `Service.Create` im Paket `list` legt beliebig viele Listen an. Zusammen mit dem Gruppen-Limit eine Obergrenze im Service festlegen, mit eigenem Fehlercode.
-- [ ] **Abgelaufene Einladungen aufräumen:** Abgelaufene und widerrufene Zeilen in `group_invites` werden nur ignoriert, nie gelöscht. Zusammen mit dem Aufräum-Job für Sessions und `processed_ops` (Phase 5) umsetzen.
+- [ ] **Abgelaufene Einladungen aufräumen:** Abgelaufene und widerrufene Zeilen in `group_invites` werden nur ignoriert, nie gelöscht. Mit dem Aufräum-Job für Sessions (Phase 5, Schritt 10) umsetzen.
 
 ## Artikel
 
 - [ ] **Symbol und Farbe pro Liste:** Die Chips im Design haben links einen Kreis in der Listenfarbe mit Symbol (🛒, 🧴, 🔨), auch auf den Karten der Startseite und in der Desktop-Seitenleiste. `lists` hat dafür keine Spalten; braucht eine Schema- und API-Änderung.
-- [ ] **Hervorhebung und Uhr-Symbol in der Artikelzeile:** Das Design markiert kürzlich von anderen geänderte Artikel („gerade geändert") und noch nicht synchronisierte mit einer Uhr. Beides braucht den Live-Sync (Phase 5).
-- [ ] **Abgehakte gesammelt entfernen:** Die Übersicht verlangt "abgehakte Artikel können gesammelt entfernt werden". Das erzeugt viele Tombstones auf einmal und gehört zum Sync (Phase 5): als eine Nachricht, die für jeden Artikel einen Tombstone und eine `serverSeq` vergibt.
-- [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Zusammen mit dem Aufräum-Job für Sessions, Einladungen und `processed_ops` (Phase 5) umsetzen; danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
+- [ ] **Hervorhebung und Uhr-Symbol in der Artikelzeile:** Das Design markiert kürzlich von anderen geänderte Artikel („gerade geändert") und noch nicht synchronisierte mit einer Uhr. Die Hervorhebung kommt in Phase 5 (Schritt 9), die Uhr mit der Outbox in Phase 6.
+- [ ] **Abgehakte gesammelt entfernen:** Die Übersicht verlangt "abgehakte Artikel können gesammelt entfernt werden". Phase 5, Schritt 11: REST-Endpunkt `POST /lists/{listId}/items/remove-checked`, eine Transaktion, pro Artikel ein Tombstone und eine `serverSeq`, ein Ereignis `itemsDeleted`.
+- [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Phase 6, zusammen mit `sync` und dem Aufräum-Job für `processed_ops`; danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
+- [ ] **Listen-Tombstones oder Neuabgleich für `sync`:** Listen werden hart gelöscht (kaskadierend, kein Tombstone), ein Client mit alter `serverSeq` erfährt von gelöschten Listen also nichts. Für `sync` in Phase 6 entweder Listen-Tombstones einführen oder einen vollständigen Neuabgleich der Listen verlangen.
 
 ## Start
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
 - [ ] **Zähler und letzte Aktivität auf den Haushalt-Karten:** Die Chips auf den Karten (Iteration 1) zeigen die Zahl offener Artikel; `List` liefert sie nicht, dafür braucht die API ein Feld oder einen eigenen Endpunkt. Die letzte Aktivität („Mehmet hat Hafermilch abgehakt“) braucht den Sync (Phase 5). Die Listen selbst lädt die Startseite einmal pro Sitzung; Listen, die andere anlegen, erscheinen erst nach dem Neuladen der Seite, bis der Sync sie bringt.
-- [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
+- [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5, Schritt 9).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
 ## Verwalten
