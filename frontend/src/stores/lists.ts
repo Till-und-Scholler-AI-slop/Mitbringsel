@@ -182,8 +182,12 @@ export function defineListsStore(
       forgetItems(listId)
     }
 
-    // We are no longer in the group (left, removed, or it was deleted). No
-    // tombstones: we may be invited again, and then its lists are back.
+    /**
+     * We are no longer in the group (left, removed, or it was deleted). No
+     * tombstones: we may be invited again, and then its lists are back. The
+     * groups store calls this too, e.g. when a reload no longer lists the
+     * group after a missed groupRemoved.
+     */
     function forgetGroup(groupId: string) {
       const entry = byGroup.value[groupId]
       if (!entry) {
@@ -354,6 +358,7 @@ export function defineListsStore(
       archive,
       unarchive,
       remove,
+      forgetGroup,
     }
   })
 }

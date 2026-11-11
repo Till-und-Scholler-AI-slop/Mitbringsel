@@ -45,11 +45,17 @@ const serverEvents = await vi.hoisted(async () =>
 
 vi.mock('@/stores/groups', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/groups')>()
-  return { ...original, useGroupsStore: original.defineGroupsStore(groupsService, () => 'user-1') }
+  return {
+    ...original,
+    useGroupsStore: original.defineGroupsStore(groupsService, () => 'user-1', serverEvents),
+  }
 })
 vi.mock('@/stores/lists', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/lists')>()
-  return { ...original, useListsStore: original.defineListsStore(listsService, () => 'user-1') }
+  return {
+    ...original,
+    useListsStore: original.defineListsStore(listsService, () => 'user-1', serverEvents),
+  }
 })
 vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
@@ -645,6 +651,37 @@ describe('ListView: live changes', () => {
     await flushPromises()
 
     expect(openNames(wrapper)).toEqual(['Milch', 'Käse'])
+    wrapper.unmount()
+  })
+
+  it('goes to the start page when the user is removed from the household', async () => {
+    const { wrapper, router } = await mountView()
+    const replace = vi.spyOn(router, 'replace')
+
+    serverEvents.emit({
+      type: 'groupRemoved',
+      payload: { groupId: 'g1', reason: 'removed', actorId: 'user-2' },
+    })
+    await flushPromises()
+
+    // Straight to the start page, not first to the household its list was in.
+    expect(replace.mock.calls).toEqual([[{ name: 'home' }]])
+    expect(router.currentRoute.value.name).toBe('home')
+    // replace, not push: the back button must not lead to the household again.
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('home')
+    wrapper.unmount()
+  })
+
+  it('goes to the start page when a reload no longer lists the household', async () => {
+    const { wrapper, router } = await mountView()
+    groupsService.list.mockResolvedValue([])
+
+    serverEvents.emit({ type: 'ready' })
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('home')
     wrapper.unmount()
   })
 })

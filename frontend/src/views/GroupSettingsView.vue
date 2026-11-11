@@ -14,6 +14,7 @@ import MemberRow from '@/components/settings/MemberRow.vue'
 import RenameGroupDialog from '@/components/settings/RenameGroupDialog.vue'
 import SettingsCard from '@/components/settings/SettingsCard.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
 import { canManage, memberActions, sortMembers } from '@/services/groupRoles'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
@@ -57,6 +58,8 @@ const state = computed<ViewState>(() => {
 onMounted(() => {
   if (groups.status === 'idle') groups.load()
 })
+
+useLeaveRemovedGroup(() => props.groupId)
 
 function goHome() {
   return router.push({ name: 'home' })

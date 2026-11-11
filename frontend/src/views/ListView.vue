@@ -19,6 +19,7 @@ import ListNameDialog from '@/components/list/ListNameDialog.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { canManage } from '@/services/groupRoles'
 import { listToOpen, rememberLastList } from '@/services/lastList'
@@ -153,11 +154,18 @@ async function toggle(item: Item) {
 
 // The open list was deleted: go on with the household, which opens the
 // first active list or offers to create one. A new URL with an unknown list
-// is not a deletion; that one shows "not found".
-watch([() => props.listId, list], ([listId, now], [listIdBefore, before]) => {
-  if (!before || now || listId !== listIdBefore) return
-  router.replace({ name: 'group', params: { groupId: props.groupId } })
-})
+// is not a deletion; that one shows "not found". If the household went with
+// it, useLeaveRemovedGroup goes to the start page instead.
+watch(
+  [() => props.listId, list, group],
+  ([listId, now, groupNow], [listIdBefore, before, groupBefore]) => {
+    if (!before || now || listId !== listIdBefore) return
+    if (groupBefore && !groupNow) return
+    router.replace({ name: 'group', params: { groupId: props.groupId } })
+  },
+)
+
+useLeaveRemovedGroup(() => props.groupId)
 
 function startRename(listId: string) {
   actionsId.value = null

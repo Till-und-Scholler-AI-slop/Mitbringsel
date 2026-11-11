@@ -1,18 +1,22 @@
-import { ref, watch } from 'vue'
+import { onScopeDispose, ref, toRaw, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import { ApiError, ERROR_CODE_UNKNOWN, HTTP_STATUS_UNAUTHORIZED } from '@/services/api/client'
 import { groupsService, type GroupsService } from '@/services/api/groups'
+import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
+import { useListsStore } from '@/stores/lists'
 import type { Group, Role } from '@/types/api'
 
 /** idle: not loaded yet. error: the last load failed (groups may still be shown). */
 export type GroupsStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 /**
- * Builds the store around a service and a getter for the ID of the signed-in
- * user. Setup stores cannot take parameters, so this factory is how tests
- * inject fakes.
+ * Builds the store around a service, a getter for the ID of the signed-in
+ * user, the source of server events (the live socket; tests pass a fake) and
+ * a function that drops the lists of a group the user is no longer in, like
+ * defineListsStore. Setup stores cannot take parameters, so this factory is
+ * how tests inject fakes.
  *
  * The store forgets everything when that ID changes (logout, expired session,
  * another user), so nobody ever sees the groups of the previous user.
@@ -20,22 +24,46 @@ export type GroupsStatus = 'idle' | 'loading' | 'ready' | 'error'
  * Reading never throws: load() sets `status` and `errorCode`. The writing
  * actions reject with the ApiError instead, so the dialog that started them
  * can show the message next to its form.
+ *
+ * Other members' changes arrive as events. `groupChanged` is only a hint to
+ * reload (a Group contains the role of the user, which the event cannot
+ * carry), `groupRemoved` drops the group at once. Groups have no serverSeq,
+ * so a logical clock decides which state is newer, as in the lists store.
+ * See docs/sync.md.
  */
-export function defineGroupsStore(service: GroupsService, currentUserId: () => string | null) {
+export function defineGroupsStore(
+  service: GroupsService,
+  currentUserId: () => string | null,
+  events: ServerEvents = liveSocket,
+  forgetLists: (groupId: string) => void = (groupId) => useListsStore().forgetGroup(groupId),
+) {
   return defineStore('groups', () => {
     const groups = ref<Group[]>([])
     const status = ref<GroupsStatus>('idle')
     const errorCode = ref<string | null>(null)
 
-    // Bumped by reset(). A load that started before it is outdated when it
-    // answers and must not put the old user's groups back.
+    // Bumped by reset(). A load or write that started before it is outdated
+    // when it answers and must not put the old user's groups back.
     let generation = 0
+
+    // A logical clock (a counter, not a time): touchedAt says when a group
+    // last got a state from an answer to a write, removedAt when the user
+    // left it, and a load remembers the clock at its start. Not shown, so
+    // plain Maps next to the reactive state; reset() empties them.
+    let clock = 0
+    const touchedAt = new Map<string, number>()
+    const removedAt = new Map<string, number>()
+    // The start of the newest load whose answer was applied.
+    let appliedLoadStart = 0
 
     function reset() {
       generation++
       groups.value = []
       status.value = 'idle'
       errorCode.value = null
+      touchedAt.clear()
+      removedAt.clear()
+      appliedLoadStart = 0
     }
 
     watch(currentUserId, reset)
@@ -44,23 +72,69 @@ export function defineGroupsStore(service: GroupsService, currentUserId: () => s
       return groups.value.find((group) => group.id === groupId)
     }
 
+    // False if the user changed since `started`, or if the answer of a load
+    // that started later was applied already. Otherwise this load is now the
+    // newest one applied.
+    function isCurrentLoad(started: number, startedAt: number): boolean {
+      if (started !== generation || startedAt < appliedLoadStart) {
+        return false
+      }
+      appliedLoadStart = startedAt
+      return true
+    }
+
+    // Puts the answer of a load into the store. The answer is the truth,
+    // except for what changed after the load started: a group left since
+    // then stays gone, a group from a write answer since then stays as it
+    // is. Every other group the answer does not list is gone on the server.
+    function mergeLoaded(loaded: Group[], startedAt: number) {
+      // The raw array: its groups are the plain objects, not the reactive
+      // proxies around them, which must not end up inside the new array.
+      const local = new Map(toRaw(groups.value).map((group) => [group.id, group]))
+      const merged: Group[] = []
+
+      for (const server of loaded) {
+        if ((removedAt.get(server.id) ?? 0) > startedAt) {
+          continue
+        }
+        const held = local.get(server.id)
+        local.delete(server.id)
+        merged.push(held && (touchedAt.get(server.id) ?? 0) > startedAt ? held : server)
+      }
+
+      for (const [id, held] of local) {
+        if ((touchedAt.get(id) ?? 0) > startedAt) {
+          merged.push(held)
+        } else {
+          forgetLists(id)
+        }
+      }
+
+      groups.value = merged
+    }
+
     /**
-     * Loads all groups of the user. If this fails, the groups loaded before
-     * stay: an unreachable server should not empty the screen.
+     * Loads all groups of the user and merges them into what the store has.
+     * Loaded groups keep the status `ready` meanwhile, so reloading shows no
+     * spinner. If this fails, the groups loaded before stay: an unreachable
+     * server should not empty the screen.
      */
     async function load() {
       const started = generation
-      status.value = 'loading'
+      const startedAt = ++clock
+      if (status.value !== 'ready') {
+        status.value = 'loading'
+      }
       errorCode.value = null
       try {
         const loaded = await service.list()
-        if (started !== generation) {
+        if (!isCurrentLoad(started, startedAt)) {
           return
         }
-        groups.value = loaded
+        mergeLoaded(loaded, startedAt)
         status.value = 'ready'
       } catch (err) {
-        if (started !== generation) {
+        if (!isCurrentLoad(started, startedAt)) {
           return
         }
         status.value = 'error'
@@ -68,21 +142,55 @@ export function defineGroupsStore(service: GroupsService, currentUserId: () => s
       }
     }
 
+    // The answer of the server to our own write is the truth for this group.
+    // A group that is there already (e.g. a reload after our own
+    // groupChanged was faster than the answer to create) is replaced, not
+    // added twice.
+    function takeAnswer(group: Group) {
+      touchedAt.set(group.id, ++clock)
+      removedAt.delete(group.id)
+      const index = groups.value.findIndex((g) => g.id === group.id)
+      if (index === -1) {
+        groups.value.push(group)
+      } else {
+        groups.value[index] = group
+      }
+    }
+
+    // The user is no longer in the group: left, removed, or it was deleted.
+    // Its lists (and through them their items) go with it.
+    function takeRemoval(groupId: string) {
+      removedAt.set(groupId, ++clock)
+      touchedAt.delete(groupId)
+      groups.value = groups.value.filter((group) => group.id !== groupId)
+      forgetLists(groupId)
+    }
+
     /** Creates a group and returns it, so the caller can open it. */
     async function create(name: string): Promise<Group> {
+      const started = generation
       const group = await service.create(name)
-      groups.value.push(group)
+      if (started === generation) {
+        takeAnswer(group)
+      }
       return group
     }
 
     async function rename(groupId: string, name: string) {
+      const started = generation
       const updated = await service.rename(groupId, name)
-      replace(updated)
+      // Only a group we still show: the user may have been removed meanwhile.
+      if (started === generation && byId(groupId)) {
+        takeAnswer(updated)
+      }
     }
 
     async function remove(groupId: string) {
+      const started = generation
       await service.remove(groupId)
-      drop(groupId)
+      if (started === generation) {
+        takeRemoval(groupId)
+      }
     }
 
     /** The signed-in user leaves the group; the owner cannot (OWNER_IMMUTABLE). */
@@ -91,10 +199,15 @@ export function defineGroupsStore(service: GroupsService, currentUserId: () => s
       if (!userId) {
         throw new ApiError('UNAUTHENTICATED', HTTP_STATUS_UNAUTHORIZED)
       }
+      const started = generation
       await service.removeMember(groupId, userId)
-      drop(groupId)
+      if (started === generation) {
+        takeRemoval(groupId)
+      }
     }
 
+    // The two member actions answer without the group. They change the
+    // local copy; the groupChanged that follows reloads the real state.
     async function removeMember(groupId: string, userId: string) {
       await service.removeMember(groupId, userId)
       const group = byId(groupId)
@@ -111,17 +224,28 @@ export function defineGroupsStore(service: GroupsService, currentUserId: () => s
       }
     }
 
-    // The answer of the server is the truth, so it replaces the local copy.
-    function replace(group: Group) {
-      const index = groups.value.findIndex((g) => g.id === group.id)
-      if (index !== -1) {
-        groups.value[index] = group
+    // Only reload what was loaded: a screen that needs the groups loads
+    // them itself and then gets the current state anyway.
+    function reloadIfLoaded() {
+      if (status.value !== 'idle') {
+        void load()
       }
     }
 
-    function drop(groupId: string) {
-      groups.value = groups.value.filter((group) => group.id !== groupId)
-    }
+    // The setup function runs in the effect scope of the store, so
+    // onScopeDispose() runs at $dispose(): the handlers must not outlive the
+    // store, as the socket outlives it.
+    const unsubscribes = [
+      events.on('groupChanged', reloadIfLoaded),
+      events.on('groupRemoved', ({ payload }) => takeRemoval(payload.groupId)),
+      // Events are best effort and the connection may have been down.
+      events.on('ready', reloadIfLoaded),
+    ]
+    onScopeDispose(() => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
+      }
+    })
 
     return {
       groups,
