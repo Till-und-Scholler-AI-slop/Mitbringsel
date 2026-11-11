@@ -32,6 +32,12 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Phase 6, zusammen mit `sync` und dem Aufräum-Job für `processed_ops`; danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
 - [ ] **Listen-Tombstones oder Neuabgleich für `sync`:** Listen werden hart gelöscht (kaskadierend, kein Tombstone), ein Client mit alter `serverSeq` erfährt von gelöschten Listen also nichts. Für `sync` in Phase 6 entweder Listen-Tombstones einführen oder einen vollständigen Neuabgleich der Listen verlangen.
 
+## Live-Sync
+
+- [ ] **Lesegrenze des WebSocket für `mutate` anheben:** `wsReadLimit` in `httpapi/ws.go` steht auf 4 KiB, weil es nur `ping` gibt. Mit `mutate` und `sync` in Phase 6 an die größte erlaubte Nachricht anpassen.
+- [ ] **Traefik-Timeout auf Staging prüfen:** Phase 5, Schritt 8: Eine Verbindung länger als 2 Minuten offen halten (auch ohne Änderungen, nur mit den `ping`-Nachrichten) und sehen, ob Traefik sie trennt (`respondingTimeouts.readTimeout`, Standard 60 Sekunden). Falls ja, am Entrypoint anheben oder abschalten.
+- [ ] **Beim Herunterfahren auf Close-Frames warten:** `hub.Close` stößt das Schließen nur an; `main` wartet nicht, bis die Handler die Close-Frames geschrieben haben, und beendet den Prozess womöglich vorher (die Clients sehen dann 1006 statt 1001). Einen `sync.WaitGroup` über die aktiven WebSocket-Handler führen und in `main` mit `shutdownCtx` abwarten.
+
 ## Start
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).

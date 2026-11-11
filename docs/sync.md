@@ -111,6 +111,20 @@ Browser können keine WebSocket-Protokoll-Pings senden. Der Client schickt desha
 - **Veröffentlichen:** Die Services `item`, `list` und `group` rufen nach dem Commit und nur bei echten Änderungen ein kleines `Publisher`-Interface auf. In `httpapi` setzt ein `Broadcaster` daraus die Nachrichten zusammen.
 - **Authentifizierung:** `GET /api/v1/ws` liegt hinter der Session-Prüfung. Die `Origin` muss zum Host von `PUBLIC_BASE_URL` passen, sonst `403 CROSS_ORIGIN_REQUEST`. Der Schutz gegen Cross-Origin-Anfragen aus der Standardbibliothek greift hier nicht, weil er GET durchlässt und der Vite-Proxy im Dev-Betrieb den `Host`-Header umschreibt.
 - **Lebensdauer und Limits:** Eine Verbindung lebt höchstens etwa eine Stunde, damit die Session beim Wiederverbinden neu geprüft wird. Pro Nutzer sind etwa 10 Verbindungen erlaubt. Beim Logout schließt das Frontend den Socket, beim Herunterfahren schließt der Server alle Verbindungen selbst.
+- **Fristen und Größen:** Der Server liest höchstens 4 KiB pro Nachricht (heute gibt es nur `ping`; Phase 6 braucht für `mutate` mehr). Er trennt eine Verbindung nach 60 Sekunden ohne Nachricht und gibt jeder Nachricht beim Schreiben 10 Sekunden. Die Verbindung wird ohne Kompression geführt.
+- **Unbekannter Typ:** Eine Nachricht mit einem Typ, den der Server nicht kennt, beantwortet er mit `error` (`INVALID_REQUEST`) und lässt die Verbindung offen, damit ein Client einer anderen Version nicht getrennt wird. Neue Nachrichtentypen kommen als Eintrag in die Handler-Registry (`newWSHandlers` in `httpapi/ws.go`).
+- **Schließcodes:** Der Server schließt, wenn er einen Grund hat, mit einem Close-Frame. Das Frontend verbindet sich in allen Fällen neu (mit Backoff) und lädt nach `ready` per REST nach; der Code sagt nur, warum.
+
+  | Code | Grund (Text im Frame) | Anlass |
+  | --- | --- | --- |
+  | 1001 | `server shutting down` | Server wird heruntergefahren (`Hub.Close`) |
+  | 1001 | `connection lifetime reached` | Verbindung ist eine Stunde alt |
+  | 1003 | `text messages only` | Binärnachricht |
+  | 1008 | `invalid message` | Kein JSON, kein Umschlag `{type, payload}` oder `type` leer |
+  | 1009 | (von der Bibliothek) | Nachricht größer als 4 KiB |
+  | 1011 | `internal error` | Gruppen konnten nicht geladen werden oder ein Handler ist gescheitert |
+  | 1013 | `too slow` | Sendepuffer voll, siehe Hub |
+  | 1006 (kein Frame) | | 60 Sekunden Stille, Schreib-Timeout oder Netzabbruch: Der Browser meldet 1006, weil kein Close-Frame ankommt |
 - **Eine Instanz:** Für den Start läuft ein einzelner Backend-Container. Muss später horizontal skaliert werden, verteilt PostgreSQL `LISTEN/NOTIFY` die Änderungen zwischen Instanzen. Das wird erst bei Bedarf gebaut.
 
 ## Abgrenzung erstes Release
