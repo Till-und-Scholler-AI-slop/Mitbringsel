@@ -1,6 +1,7 @@
 import type { ApiErrorBody } from '@/types/api'
 
-const API_BASE = '/api/v1'
+/** Prefix of every API path; the WebSocket URL is built from it as well. */
+export const API_BASE = '/api/v1'
 
 /** The status the backend answers when the request has no valid session. */
 export const HTTP_STATUS_UNAUTHORIZED = 401
