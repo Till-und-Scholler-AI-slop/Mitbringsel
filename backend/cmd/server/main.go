@@ -22,6 +22,7 @@ import (
 	"mitbringsel/internal/list"
 	"mitbringsel/internal/platform/db"
 	"mitbringsel/internal/platform/db/sqlcgen"
+	"mitbringsel/internal/realtime"
 	"mitbringsel/internal/user"
 )
 
@@ -80,15 +81,20 @@ func run() error {
 	queries := sqlcgen.New(pool)
 	sessions := auth.NewSessionService(auth.NewPostgresSessionRepository(queries))
 	users := user.NewService(user.NewPostgresRepository(queries))
+	// The hub comes first: the broadcaster hands the events of the services
+	// to it.
+	hub := realtime.NewHub(realtime.DefaultMaxConnsPerUser, realtime.DefaultSendBuffer)
+	broadcaster := httpapi.NewBroadcaster(hub)
 	// Unlike the other repositories, this one takes the pool: it starts the
 	// transactions that keep a group and its owner together.
 	groupRepo := group.NewPostgresRepository(pool)
-	groups := group.NewService(groupRepo)
-	invites := group.NewInviteService(groupRepo)
+	groups := group.NewService(groupRepo, broadcaster)
+	invites := group.NewInviteService(groupRepo, broadcaster)
 	// The group repository doubles as the list service's membership lookup.
-	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo)
-	// Items check access through the list service.
-	items := item.NewService(item.NewPostgresRepository(pool), lists)
+	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo, broadcaster)
+	// Items check access through the list service and publish their changes
+	// to the broadcaster.
+	items := item.NewService(item.NewPostgresRepository(pool), lists, broadcaster)
 	itemClock, err := newItemClock()
 	if err != nil {
 		return err
@@ -108,19 +114,28 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Env:       cfg.Env,
-			DB:        pool,
-			Sessions:  sessions,
-			Users:     users,
-			Groups:    groups,
-			Invites:   invites,
-			Lists:     lists,
-			Items:     items,
-			ItemClock: itemClock,
-			Google:    google,
+			Env:           cfg.Env,
+			DB:            pool,
+			Sessions:      sessions,
+			Users:         users,
+			Groups:        groups,
+			Invites:       invites,
+			Lists:         lists,
+			Items:         items,
+			ItemClock:     itemClock,
+			Hub:           hub,
+			PublicBaseURL: cfg.PublicBaseURL,
+			Google:        google,
 		}),
+		// Only the header timeout, never ReadTimeout or WriteTimeout: they
+		// stay in force as deadlines on a connection after it has been
+		// hijacked for a WebSocket, and would cut every live connection.
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
+	// Shutdown does not touch hijacked connections such as WebSockets, so the
+	// hub closes them. RegisterOnShutdown runs the function in a goroutine of
+	// its own when Shutdown starts.
+	srv.RegisterOnShutdown(hub.Close)
 
 	serveErr := make(chan error, 1)
 	go func() {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -87,17 +88,19 @@ func (r *fakeInviteRepo) PreviewMembers(_ context.Context, groupID uuid.UUID, ma
 	return count, members, nil
 }
 
-func (r *fakeInviteRepo) AddMemberIfAbsent(_ context.Context, groupID, userID uuid.UUID, role Role) error {
-	if _, ok := r.roles[groupID][userID]; !ok {
-		r.roles[groupID][userID] = role
+func (r *fakeInviteRepo) AddMemberIfAbsent(_ context.Context, groupID, userID uuid.UUID, role Role) (bool, error) {
+	if _, ok := r.roles[groupID][userID]; ok {
+		return false, nil
 	}
-	return nil
+	r.roles[groupID][userID] = role
+	return true, nil
 }
 
 // inviteFixture is one group with an owner, an admin and a member, a second
 // group the others are not in, and a clock the tests can move.
 type inviteFixture struct {
 	repo                                  *fakeInviteRepo
+	pub                                   *fakePublisher
 	svc                                   *InviteService
 	now                                   time.Time
 	group, otherGroup                     uuid.UUID
@@ -116,6 +119,7 @@ func newInviteFixture(t *testing.T) *inviteFixture {
 		outsider:   uuid.New(),
 		guest:      uuid.New(),
 	}
+	f.pub = &fakePublisher{}
 	f.repo = &fakeInviteRepo{
 		roles: map[uuid.UUID]map[uuid.UUID]Role{
 			f.group:      {f.owner: RoleOwner, f.admin: RoleAdmin, f.member: RoleMember},
@@ -126,7 +130,7 @@ func newInviteFixture(t *testing.T) *inviteFixture {
 			f.otherGroup: {ID: f.otherGroup, Name: "Andere"},
 		},
 	}
-	f.svc = NewInviteService(f.repo)
+	f.svc = NewInviteService(f.repo, f.pub)
 	f.svc.now = func() time.Time { return f.now }
 	return f
 }
@@ -333,6 +337,18 @@ func TestInviteService_PreviewAndAccept(t *testing.T) {
 		if role := f.repo.roles[f.group][f.guest]; role != RoleMember {
 			t.Errorf("role = %q, want %q", role, RoleMember)
 		}
+		if want := []string{"joined " + f.group.String() + " " + f.guest.String()}; !slices.Equal(f.pub.events, want) {
+			t.Errorf("published %v, want %v", f.pub.events, want)
+		}
+
+		// The same person with the same link again is not news.
+		f.pub.events = nil
+		if _, err := f.svc.Accept(ctx, f.guest, token); err != nil {
+			t.Fatalf("second Accept() error = %v", err)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("second Accept() published %v, want nothing", f.pub.events)
+		}
 	})
 
 	t.Run("the link works for several people", func(t *testing.T) {
@@ -358,6 +374,9 @@ func TestInviteService_PreviewAndAccept(t *testing.T) {
 			if got := f.repo.roles[f.group][user]; got != role {
 				t.Errorf("role = %q, want it to stay %q", got, role)
 			}
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %v, want nothing", f.pub.events)
 		}
 	})
 
@@ -385,6 +404,9 @@ func TestInviteService_PreviewAndAccept(t *testing.T) {
 				_, joined := f.repo.roles[f.group][f.guest]
 				if joined == wantExpired {
 					t.Errorf("guest joined = %v, want %v", joined, !wantExpired)
+				}
+				if published := len(f.pub.events) > 0; published != joined {
+					t.Errorf("published %v, but guest joined = %v", f.pub.events, joined)
 				}
 			})
 		}
@@ -416,6 +438,9 @@ func TestInviteService_PreviewAndAccept(t *testing.T) {
 		}
 		if _, joined := f.repo.roles[f.group][f.guest]; joined {
 			t.Error("guest joined with a wrong token")
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %v, want nothing", f.pub.events)
 		}
 	})
 }

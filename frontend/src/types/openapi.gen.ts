@@ -480,6 +480,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open the live connection
+         * @description Upgrades the request to a WebSocket. The session cookie is required
+         *     and the `Origin` header must match the app, otherwise the upgrade
+         *     is refused.
+         *
+         *     Messages are JSON text frames with the envelope
+         *     `{"type": "...", "payload": {...}}`. The client sends
+         *     `ClientMessage`, the server sends `ServerMessage`. After the
+         *     upgrade the server joins the connection to all groups of the user
+         *     and sends `ready`; the client then reloads what it has loaded via
+         *     REST. Delivery is best effort, REST stays the source of truth.
+         */
+        get: operations["connectWebSocket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -739,6 +768,211 @@ export interface components {
          * @enum {string}
          */
         ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID" | "ITEM_NOT_FOUND" | "ITEM_NAME_INVALID" | "ITEM_QUANTITY_INVALID" | "ITEM_UNIT_INVALID" | "ITEM_NOTE_INVALID" | "ITEM_ID_TAKEN";
+        /** @description Client to server: keeps the connection alive. Sent every 25 seconds; the server disconnects after 60 seconds of silence. */
+        PingMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ping";
+        };
+        /** @description Any message the client may send. */
+        ClientMessage: components["schemas"]["PingMessage"];
+        /** @description Server to client: the connection is set up and joined to all groups of the user. The client reloads what it has loaded via REST. */
+        ReadyMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ready";
+        };
+        /** @description Server to client: answer to `ping`. */
+        PongMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "pong";
+        };
+        /** @description Server to client: an item was created or changed. */
+        ItemChangedMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "itemChanged";
+            payload: components["schemas"]["ItemChangedPayload"];
+        };
+        /** @description The client applies the item only if `item.serverSeq` is greater than the one it already has; events can arrive out of order. */
+        ItemChangedPayload: {
+            /** Format: uuid */
+            groupId: string;
+            /**
+             * Format: uuid
+             * @description The user who made the change.
+             */
+            actorId: string;
+            item: components["schemas"]["Item"];
+        };
+        /** @description Server to client: an item was deleted. */
+        ItemDeletedMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "itemDeleted";
+            payload: components["schemas"]["ItemDeletedPayload"];
+        };
+        /** @description The client removes the item if `serverSeq` is greater than the one it already has for it. */
+        ItemDeletedPayload: {
+            /** Format: uuid */
+            groupId: string;
+            /** Format: uuid */
+            listId: string;
+            /** Format: uuid */
+            itemId: string;
+            /**
+             * Format: int64
+             * @description The sequence number of the deletion.
+             */
+            serverSeq: number;
+            /**
+             * Format: uuid
+             * @description The user who made the change.
+             */
+            actorId: string;
+        };
+        /** @description Server to client: several items of one list were deleted at once, e.g. all checked items. */
+        ItemsDeletedMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "itemsDeleted";
+            payload: components["schemas"]["ItemsDeletedPayload"];
+        };
+        /** @description Every item carries its own `serverSeq`; the client removes each one as for `itemDeleted`. */
+        ItemsDeletedPayload: {
+            /** Format: uuid */
+            groupId: string;
+            /** Format: uuid */
+            listId: string;
+            /**
+             * Format: uuid
+             * @description The user who made the change.
+             */
+            actorId: string;
+            items: components["schemas"]["DeletedItem"][];
+        };
+        /** @description One deleted item of an `itemsDeleted` event. */
+        DeletedItem: {
+            /** Format: uuid */
+            itemId: string;
+            /**
+             * Format: int64
+             * @description The sequence number of the deletion.
+             */
+            serverSeq: number;
+        };
+        /** @description Server to client: a list was created, renamed, archived or unarchived. */
+        ListChangedMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "listChanged";
+            payload: components["schemas"]["ListChangedPayload"];
+        };
+        /** @description The client applies the list only if `list.serverSeq` is greater than the one it already has; events can arrive out of order. */
+        ListChangedPayload: {
+            /**
+             * Format: uuid
+             * @description The user who made the change.
+             */
+            actorId: string;
+            list: components["schemas"]["List"];
+        };
+        /** @description Server to client: a list was deleted together with its items. */
+        ListDeletedMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "listDeleted";
+            payload: components["schemas"]["ListDeletedPayload"];
+        };
+        /** @description Lists are deleted for good, so this event has no sequence number. */
+        ListDeletedPayload: {
+            /** Format: uuid */
+            groupId: string;
+            /** Format: uuid */
+            listId: string;
+            /**
+             * Format: uuid
+             * @description The user who made the change.
+             */
+            actorId: string;
+        };
+        /** @description Server to client: a group changed. */
+        GroupChangedMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "groupChanged";
+            payload: components["schemas"]["GroupChangedPayload"];
+        };
+        /** @description The name, the members or the roles changed. Only a hint: the client reloads `GET /groups`, because `Group` contains the role of the requesting user. */
+        GroupChangedPayload: {
+            /** Format: uuid */
+            groupId: string;
+            /**
+             * Format: uuid
+             * @description The user who made the change.
+             */
+            actorId: string;
+        };
+        /** @description Server to client: the user is no longer in the group. */
+        GroupRemovedMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "groupRemoved";
+            payload: components["schemas"]["GroupRemovedPayload"];
+        };
+        /** @description The client drops the group and everything it loaded for it. */
+        GroupRemovedPayload: {
+            /** Format: uuid */
+            groupId: string;
+            reason: components["schemas"]["GroupRemovedReason"];
+            /**
+             * Format: uuid
+             * @description The user who made the change.
+             */
+            actorId: string;
+        };
+        /**
+         * @description Why the user left the group: it was deleted, or the user was
+         *     removed or left it.
+         * @enum {string}
+         */
+        GroupRemovedReason: "deleted" | "removed";
+        /** @description Server to client: the server cannot continue, e.g. the message was invalid. The server usually closes the connection afterwards. */
+        SocketErrorMessage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "error";
+            payload: components["schemas"]["SocketErrorPayload"];
+        };
+        /** @description The reason for the error. */
+        SocketErrorPayload: {
+            code: components["schemas"]["ErrorCode"];
+        };
+        /** @description Any message the server may send. */
+        ServerMessage: components["schemas"]["ReadyMessage"] | components["schemas"]["PongMessage"] | components["schemas"]["ItemChangedMessage"] | components["schemas"]["ItemDeletedMessage"] | components["schemas"]["ItemsDeletedMessage"] | components["schemas"]["ListChangedMessage"] | components["schemas"]["ListDeletedMessage"] | components["schemas"]["GroupChangedMessage"] | components["schemas"]["GroupRemovedMessage"] | components["schemas"]["SocketErrorMessage"];
     };
     responses: {
         /** @description The request failed; `error.code` says why. */
@@ -1562,6 +1796,59 @@ export interface operations {
             410: components["responses"]["Error"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Error"];
+        };
+    };
+    connectWebSocket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switching protocols; the connection is now a WebSocket. */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            /**
+             * @description The `Origin` header does not match the app
+             *     (`CROSS_ORIGIN_REQUEST`).
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /**
+             * @description The user already holds the maximum number of connections, or
+             *     opened too many in a minute (`RATE_LIMITED`).
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["Error"];
+            /** @description The server is shutting down (`INTERNAL_ERROR`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
 }

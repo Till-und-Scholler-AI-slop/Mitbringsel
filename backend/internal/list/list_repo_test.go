@@ -35,9 +35,9 @@ func newTestUser(t *testing.T, pool *pgxpool.Pool, name string) uuid.UUID {
 func TestPostgresRepository(t *testing.T) {
 	pool := dbtest.NewPool(t)
 	groupRepo := group.NewPostgresRepository(pool)
-	groups := group.NewService(groupRepo)
+	groups := group.NewService(groupRepo, nil)
 	repo := NewPostgresRepository(sqlcgen.New(pool))
-	svc := NewService(repo, groupRepo)
+	svc := NewService(repo, groupRepo, nil)
 	ctx := context.Background()
 
 	newGroup := func(t *testing.T, owner uuid.UUID) uuid.UUID {
@@ -124,6 +124,12 @@ func TestPostgresRepository(t *testing.T) {
 		if !renamed.CreatedAt.Equal(created.CreatedAt) {
 			t.Errorf("created_at changed from %v to %v", created.CreatedAt, renamed.CreatedAt)
 		}
+
+		// The same name again is no change: no write, so no new server_seq.
+		same, err := svc.Rename(ctx, anna, created.ID, "New")
+		if err != nil || same.ServerSeq != renamed.ServerSeq || !same.UpdatedAt.Equal(renamed.UpdatedAt) {
+			t.Errorf("second Rename() = %+v, %v, want %+v unchanged", same, err, renamed)
+		}
 	})
 
 	t.Run("archive hides a list and keeps the first archive date", func(t *testing.T) {
@@ -141,6 +147,9 @@ func TestPostgresRepository(t *testing.T) {
 		again, err := svc.Archive(ctx, anna, l.ID)
 		if err != nil || again.ArchivedAt == nil || !again.ArchivedAt.Equal(*archived.ArchivedAt) {
 			t.Errorf("second Archive() = %+v, %v, want the first archive date %v", again, err, archived.ArchivedAt)
+		}
+		if again.ServerSeq != archived.ServerSeq {
+			t.Errorf("second Archive() drew server_seq %d, want the unchanged %d", again.ServerSeq, archived.ServerSeq)
 		}
 
 		active, err := svc.ListForGroup(ctx, anna, groupID, false)

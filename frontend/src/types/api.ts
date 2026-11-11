@@ -82,3 +82,15 @@ export type ApiErrorBody = Schemas['Error']
 
 /** Every error code the backend can send. */
 export type ApiErrorCode = Schemas['ErrorCode']
+
+/** Any message the server sends over the WebSocket (GET /api/v1/ws). */
+export type ServerMessage = Schemas['ServerMessage']
+
+/** Any message the client sends over the WebSocket. */
+export type ClientMessage = Schemas['ClientMessage']
+
+/** The `type` values of ServerMessage, e.g. 'ready' | 'itemChanged' | …. */
+export type ServerMessageType = ServerMessage['type']
+
+/** The one ServerMessage with this `type`, so a handler sees the matching `payload`. */
+export type ServerMessageOf<T extends ServerMessageType> = Extract<ServerMessage, { type: T }>

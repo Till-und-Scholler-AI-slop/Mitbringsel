@@ -10,7 +10,7 @@ import type { GroupsService } from '@/services/api/groups'
 import type { ItemsService } from '@/services/api/items'
 import type { ListsService } from '@/services/api/lists'
 import { rememberLastList } from '@/services/lastList'
-import type { Group, Item, List } from '@/types/api'
+import type { Group, Item, List, ServerMessage } from '@/types/api'
 
 import ListView from '../ListView.vue'
 
@@ -38,6 +38,11 @@ const itemsService = vi.hoisted(() => ({
   remove: vi.fn<ItemsService['remove']>(),
 }))
 
+// vi.hoisted runs before the imports, so the fake has to be imported by hand.
+const serverEvents = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeServerEvents')).createFakeServerEvents(),
+)
+
 vi.mock('@/stores/groups', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/groups')>()
   return { ...original, useGroupsStore: original.defineGroupsStore(groupsService, () => 'user-1') }
@@ -48,7 +53,10 @@ vi.mock('@/stores/lists', async (importOriginal) => {
 })
 vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
-  return { ...original, useItemsStore: original.defineItemsStore(itemsService, () => 'user-1') }
+  return {
+    ...original,
+    useItemsStore: original.defineItemsStore(itemsService, () => 'user-1', serverEvents),
+  }
 })
 
 const GROUP: Group = {
@@ -109,6 +117,8 @@ function item(id: string, name: string, overrides: Partial<Item> = {}): Item {
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  // The stores of the test before are gone with their Pinia; their handlers are not.
+  serverEvents.clear()
   localStorage.clear()
   groupsService.list.mockResolvedValue([GROUP])
   listsService.list.mockResolvedValue([list('l1', 'Supermarkt'), list('l2', 'Baumarkt')])
@@ -601,6 +611,40 @@ describe('ListView: items', () => {
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('ListView: live changes', () => {
+  const changed = (changedItem: Item): ServerMessage => ({
+    type: 'itemChanged',
+    payload: { groupId: 'g1', actorId: 'user-2', item: changedItem },
+  })
+
+  it('shows an item another member checks at once', async () => {
+    itemsService.list.mockResolvedValue([item('i1', 'Milch'), item('i2', 'Brot')])
+    const { wrapper } = await mountView()
+
+    serverEvents.emit(
+      changed(item('i1', 'Milch', { checked: true, checkedBy: 'user-2', serverSeq: 2 })),
+    )
+    await flushPromises()
+
+    expect(openNames(wrapper)).toEqual(['Brot'])
+    expect(doneNames(wrapper)).toEqual(['Milch'])
+    wrapper.unmount()
+  })
+
+  it('shows an item another member adds', async () => {
+    itemsService.list.mockResolvedValue([item('i1', 'Milch')])
+    const { wrapper } = await mountView()
+
+    serverEvents.emit(
+      changed(item('i2', 'Käse', { createdAt: '2026-01-01T11:00:00Z', serverSeq: 2 })),
+    )
+    await flushPromises()
+
+    expect(openNames(wrapper)).toEqual(['Milch', 'Käse'])
     wrapper.unmount()
   })
 })

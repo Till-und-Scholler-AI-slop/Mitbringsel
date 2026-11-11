@@ -106,20 +106,26 @@ type InviteRepository interface {
 	// them, oldest membership first.
 	PreviewMembers(ctx context.Context, groupID uuid.UUID, max int) (count int, members []PreviewMember, err error)
 	// AddMemberIfAbsent makes the user a member, or does nothing if they
-	// already are one (their role stays).
-	AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) error
+	// already are one (their role stays). added tells which of the two
+	// happened.
+	AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) (added bool, err error)
 }
 
 // InviteService creates, lists, revokes and redeems invite links.
 type InviteService struct {
 	repo InviteRepository
+	pub  Publisher
 	// now is a field so tests can move the clock past an expiry.
 	now func() time.Time
 }
 
-// NewInviteService returns a service that uses the real clock.
-func NewInviteService(repo InviteRepository) *InviteService {
-	return &InviteService{repo: repo, now: time.Now}
+// NewInviteService returns a service that uses the real clock. pub is told
+// about every new member; nil means nobody listens.
+func NewInviteService(repo InviteRepository, pub Publisher) *InviteService {
+	if pub == nil {
+		pub = noPublisher{}
+	}
+	return &InviteService{repo: repo, pub: pub, now: time.Now}
 }
 
 // Create makes a new invite. Owner and admins only. It returns the token for
@@ -204,8 +210,13 @@ func (s *InviteService) Accept(ctx context.Context, actor uuid.UUID, token strin
 	if err != nil {
 		return Group{}, err
 	}
-	if err := s.repo.AddMemberIfAbsent(ctx, target.Group.ID, actor, RoleMember); err != nil {
+	added, err := s.repo.AddMemberIfAbsent(ctx, target.Group.ID, actor, RoleMember)
+	if err != nil {
 		return Group{}, fmt.Errorf("join group: %w", err)
+	}
+	// Only a new member is news; a repeated accept is not.
+	if added {
+		s.pub.MemberJoined(ctx, target.Group.ID, actor)
 	}
 	return target.Group, nil
 }

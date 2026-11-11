@@ -19,7 +19,7 @@ einkaufsliste/
 │   │   ├── group/                # Domäne: Gruppen, Mitgliedschaften, Einladungen
 │   │   ├── list/                 # Domäne: Listen
 │   │   ├── item/                 # Domäne: Artikel
-│   │   ├── sync/                 # WebSocket-Hub, Broadcast, Konfliktauflösung
+│   │   ├── realtime/             # WebSocket-Hub, Räume pro Gruppe
 │   │   ├── httpapi/              # Routing, Handler, Middleware, Fehlerformat
 │   │   │   └── apigen/           # aus api/openapi.yaml generierte Typen
 │   │   └── platform/db/          # pgx-Pool, sqlc-Code, Transaktionen
@@ -57,12 +57,12 @@ einkaufsliste/
 
 - **Views** setzen Seiten aus Komponenten zusammen und sprechen nur mit Stores.
 - **Komponenten** bekommen Daten per Props und melden Aktionen per Events. Sie rufen nie direkt `fetch` oder den WebSocket auf.
-- **Stores** halten den Zustand und rufen Services auf. Schreibende Aktionen laufen immer über den Sync-Service (siehe [Live-Sync](sync.md)).
+- **Stores** halten den Zustand und rufen Services auf. Schreibende Aktionen laufen ab Phase 6 immer über den Sync-Service (siehe [Live-Sync](sync.md)); bis dahin schreiben die Stores per REST.
 - **Services** kapseln REST-Client, WebSocket und IndexedDB.
 
 ## REST und WebSocket
 
 - REST unter `/api/v1/...` für Auth, Profil, Gruppen, Einladungen, Listen und das initiale Laden von Daten.
 - Der Vertrag steht in `api/openapi.yaml`. Eine API-Änderung beginnt dort, danach `make generate`; Handler und Frontend nutzen die generierten Typen (siehe [ADR 0002](adr/0002-openapi-als-api-vertrag.md)).
-- WebSocket unter `/api/v1/ws` für Artikel-Änderungen in Echtzeit und das Nachsynchronisieren.
+- WebSocket unter `/api/v1/ws`. In Phase 5 sendet der Server darüber nur Ereignisse (Artikel, Listen, Gruppen); geschrieben wird per REST. Die Nachrichtentypen stehen in `api/openapi.yaml` (siehe [ADR 0005](adr/0005-live-sync-phase-5.md)). Ab Phase 6 kommen Änderungen vom Client und das Nachsynchronisieren dazu.
 - Wichtige Entscheidungen werden als kurzer ADR in [`adr/`](adr/README.md) festgehalten.

@@ -22,20 +22,30 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Owner-Übergabe:** Der Owner kann die Gruppe nur löschen, nicht übergeben (siehe [Überblick](overview.md)). Nachrüsten, falls sich das im Alltag als Lücke zeigt.
 - [ ] **Limit für Gruppen pro Nutzer:** `POST /api/v1/groups` legt beliebig viele Gruppen an; jeder angemeldete Nutzer könnte die Tabelle füllen. Vor dem öffentlichen Start eine Obergrenze (z.B. pro Nutzer und Mitglieder pro Gruppe) im Service festlegen, mit eigenem Fehlercode.
 - [ ] **Limit für Listen pro Gruppe:** `Service.Create` im Paket `list` legt beliebig viele Listen an. Zusammen mit dem Gruppen-Limit eine Obergrenze im Service festlegen, mit eigenem Fehlercode.
-- [ ] **Abgelaufene Einladungen aufräumen:** Abgelaufene und widerrufene Zeilen in `group_invites` werden nur ignoriert, nie gelöscht. Zusammen mit dem Aufräum-Job für Sessions und `processed_ops` (Phase 5) umsetzen.
+- [ ] **Abgelaufene Einladungen aufräumen:** Abgelaufene und widerrufene Zeilen in `group_invites` werden nur ignoriert, nie gelöscht. Mit dem Aufräum-Job für Sessions (Phase 5, Schritt 10) umsetzen.
 
 ## Artikel
 
 - [ ] **Symbol und Farbe pro Liste:** Die Chips im Design haben links einen Kreis in der Listenfarbe mit Symbol (🛒, 🧴, 🔨), auch auf den Karten der Startseite und in der Desktop-Seitenleiste. `lists` hat dafür keine Spalten; braucht eine Schema- und API-Änderung.
-- [ ] **Hervorhebung und Uhr-Symbol in der Artikelzeile:** Das Design markiert kürzlich von anderen geänderte Artikel („gerade geändert") und noch nicht synchronisierte mit einer Uhr. Beides braucht den Live-Sync (Phase 5).
-- [ ] **Abgehakte gesammelt entfernen:** Die Übersicht verlangt "abgehakte Artikel können gesammelt entfernt werden". Das erzeugt viele Tombstones auf einmal und gehört zum Sync (Phase 5): als eine Nachricht, die für jeden Artikel einen Tombstone und eine `serverSeq` vergibt.
-- [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Zusammen mit dem Aufräum-Job für Sessions, Einladungen und `processed_ops` (Phase 5) umsetzen; danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
+- [ ] **Artikel anlegen, bearbeiten und löschen in der UI:** Die Listenansicht kann nur abhaken. `create`, `update` und `remove` im Artikel-Store sind fertig und getestet, aber ohne Oberfläche. Design: Bottom Sheet auf dem Smartphone, Panel auf dem Desktop.
+- [ ] **Artikel-Store: Eintrag bei `listDeleted` und `groupRemoved` verwerfen** (`forgetList`, Phase 5, Schritt 8): Gelöschte Listen und Gruppen, die der Nutzer verlassen hat, bleiben sonst mit ihren Artikeln im Speicher, und `ready` lädt sie weiter nach (dann mit Fehler).
+- [ ] **Hervorhebung und Uhr-Symbol in der Artikelzeile:** Das Design markiert kürzlich von anderen geänderte Artikel („gerade geändert") und noch nicht synchronisierte mit einer Uhr. Die Hervorhebung kommt in Phase 5 (Schritt 9), die Uhr mit der Outbox in Phase 6.
+- [ ] **Abgehakte gesammelt entfernen:** Die Übersicht verlangt "abgehakte Artikel können gesammelt entfernt werden". Phase 5, Schritt 11: REST-Endpunkt `POST /lists/{listId}/items/remove-checked`, eine Transaktion, pro Artikel ein Tombstone und eine `serverSeq`, ein Ereignis `itemsDeleted`.
+- [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Phase 6, zusammen mit `sync` und dem Aufräum-Job für `processed_ops`; danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
+- [ ] **Listen-Tombstones oder Neuabgleich für `sync`:** Listen werden hart gelöscht (kaskadierend, kein Tombstone), ein Client mit alter `serverSeq` erfährt von gelöschten Listen also nichts. Für `sync` in Phase 6 entweder Listen-Tombstones einführen oder einen vollständigen Neuabgleich der Listen verlangen.
+
+## Live-Sync
+
+- [ ] **Lesegrenze des WebSocket für `mutate` anheben:** `wsReadLimit` in `httpapi/ws.go` steht auf 4 KiB, weil es nur `ping` gibt. Mit `mutate` und `sync` in Phase 6 an die größte erlaubte Nachricht anpassen.
+- [ ] **Traefik-Timeout auf Staging prüfen:** Phase 5, Schritt 8: Eine Verbindung länger als 2 Minuten offen halten (auch ohne Änderungen, nur mit den `ping`-Nachrichten) und sehen, ob Traefik sie trennt (`respondingTimeouts.readTimeout`, Standard 60 Sekunden). Falls ja, am Entrypoint anheben oder abschalten.
+- [ ] **Beim Herunterfahren auf Close-Frames warten:** `hub.Close` stößt das Schließen nur an; `main` wartet nicht, bis die Handler die Close-Frames geschrieben haben, und beendet den Prozess womöglich vorher (die Clients sehen dann 1006 statt 1001). Einen `sync.WaitGroup` über die aktiven WebSocket-Handler führen und in `main` mit `shutdownCtx` abwarten.
+- [ ] **Elfter offener Tab bleibt offline:** Der Server erlaubt 10 gleichzeitige Verbindungen pro Nutzer und antwortet auf die elfte mit `429` (siehe [Authentifizierung](auth.md)). Der Browser zeigt davon nur 1006, der Client versucht es mit Backoff weiter und bleibt `offline`; die Sitzungsprüfung per `GET /me` hilft nicht, weil die Session gültig ist. Falls sich das im Alltag zeigt: Tabs eine Verbindung teilen lassen (`BroadcastChannel` oder `SharedWorker`) oder den Hinweis in der UI erklären.
 
 ## Start
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
 - [ ] **Zähler und letzte Aktivität auf den Haushalt-Karten:** Die Chips auf den Karten (Iteration 1) zeigen die Zahl offener Artikel; `List` liefert sie nicht, dafür braucht die API ein Feld oder einen eigenen Endpunkt. Die letzte Aktivität („Mehmet hat Hafermilch abgehakt“) braucht den Sync (Phase 5). Die Listen selbst lädt die Startseite einmal pro Sitzung; Listen, die andere anlegen, erscheinen erst nach dem Neuladen der Seite, bis der Sync sie bringt.
-- [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5).
+- [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5, Schritt 9).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
 ## Verwalten

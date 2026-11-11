@@ -48,8 +48,24 @@ Die Google-Endpunkte sind fest im Code hinterlegt statt beim Start aus Googles D
   | `GET /auth/google/login` und `/callback` (gemeinsam) | Client-IP | 10 |
   | `GET /invites/{token}` | Client-IP | 30 |
   | `POST /invites/{token}/accept` | Nutzer | 10 |
+  | `GET /ws` (Verbindungsaufbau) | Nutzer | 30 |
 
   Die Client-IP ist der **letzte** Eintrag von `X-Forwarded-For`: Traefik hängt dort die Adresse an, die er gesehen hat, alles davor schreibt der Client. In Entwicklung (ohne Proxy) gilt `RemoteAddr`. Der Zähler liegt im Speicher und passt zu einer Backend-Instanz pro Umgebung; bei mehreren müsste er in eine geteilte Ablage.
+
+## WebSocket
+
+`GET /api/v1/ws` öffnet die Live-Verbindung (siehe [Sync](sync.md) und [ADR 0005](adr/0005-live-sync-phase-5.md)). Der Upgrade ist ein gewöhnlicher GET-Request mit Cookie und läuft deshalb durch dieselben Prüfungen wie die REST-Routen, in dieser Reihenfolge:
+
+1. **Origin:** Der Host der `Origin` (mit Port, ohne Beachtung der Groß-/Kleinschreibung) muss dem Host von `PUBLIC_BASE_URL` entsprechen, sonst `403 CROSS_ORIGIN_REQUEST`. Das Schema wird nicht verglichen. Eine Anfrage ganz ohne `Origin` ist erlaubt: Browser senden den Header bei jedem WebSocket-Handshake, ohne ihn kommt die Anfrage nicht von einer Webseite, und ohne Webseite gibt es kein CSRF. `null` und alles, was sich nicht als URL mit Host lesen lässt, wird abgelehnt. Die Prüfung steht vor der Session-Prüfung, damit eine fremde Seite nicht erfährt, ob der Besucher angemeldet ist.
+2. **Session:** wie bei jeder geschützten Route (`requireUser`, `401 UNAUTHENTICATED`). Verlängert die Prüfung die Session, steht das neue Cookie schon in der `101`-Antwort des Upgrades.
+3. **Rate Limit:** höchstens 30 Verbindungsaufbauten pro Minute und Nutzer (`429 RATE_LIMITED` mit `Retry-After`). Zusätzlich sind höchstens 10 Verbindungen gleichzeitig offen; die elfte bekommt ebenfalls `429`, aber ohne `Retry-After`, weil nicht absehbar ist, wann eine andere schließt.
+
+Warum die eigene Origin-Prüfung: `http.CrossOriginProtection` lässt GET durch, und ein Handshake ist ein GET. Der `Host`-Header taugt nicht als Maßstab, weil der Vite-Proxy ihn im Dev-Betrieb umschreibt. Und `SameSite=Lax` genügt nicht: Eine Seite auf einer Schwester-Subdomain (`andere.tinowolter.com`) liegt auf derselben Site, der Browser schickt das Cookie also mit, sodass sie eine Verbindung im Namen des Nutzers öffnen könnte (das `__Host-`-Präfix schützt davor, das Cookie zu setzen, nicht davor, dass es gesendet wird).
+
+- **Lebensdauer:** Der Server beendet jede Verbindung nach einer Stunde mit dem Code 1001. Der Client verbindet sich neu, und damit wird die Session erneut geprüft. Ohne das würde eine Verbindung eine abgelaufene oder beendete Session überleben.
+- **Logout:** Der Server kennt die Verbindungen einer Session nicht; beim Logout schließt das Frontend den Socket selbst: `stores/sync.ts` beobachtet den angemeldeten Nutzer und stoppt den Socket, sobald er wegfällt (Logout, abgelaufene Session, Nutzerwechsel).
+- **Fehlerstatus sichtbar?** Nein. Die Browser-API zeigt vom fehlgeschlagenen Handshake nur „Verbindung geschlossen“ (Code 1006), nie den HTTP-Status. Das Frontend prüft deshalb nach mehreren Fehlversuchen in Folge `GET /me`: Der Sync-Store tut das nach jedem dritten Versuch (3, 6, 9 …). Antwortet `GET /me` mit `401`, greift der übliche Weg über die abgelaufene Session (`setUnauthenticatedHandler`, `expireSession`), und der Store stoppt den Socket. Details: [Sync](sync.md#client-seite).
+- **Entwicklung:** Der Upgrade kommt über den Vite-Proxy, der `Origin` unverändert durchreicht. Die App muss deshalb unter dem Host von `PUBLIC_BASE_URL` geöffnet werden (`http://localhost:5173`); `http://127.0.0.1:5173` wird abgelehnt, auch wenn es derselbe Rechner ist.
 
 ## Einladungen
 

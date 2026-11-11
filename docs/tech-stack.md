@@ -10,7 +10,7 @@ Go im Backend, Vue 3 mit TypeScript im Frontend, PostgreSQL als Datenbank. Fest 
 | DB-Zugriff | `pgx` + `sqlc` | Typsichere Queries aus handgeschriebenem SQL | Ja |
 | Migrationen | `goose` | Versionierte SQL-Migrationen | Vorschlag |
 | API-Vertrag | OpenAPI 3.0 (`api/openapi.yaml`), `oapi-codegen` (Go-Typen), `openapi-typescript` (TS-Typen) | Eine Quelle für die JSON-Formen beider Seiten ([ADR 0002](adr/0002-openapi-als-api-vertrag.md)) | Ja |
-| WebSocket | `github.com/coder/websocket` | Live-Sync | Vorschlag |
+| WebSocket | `github.com/coder/websocket` | Live-Sync | Ja ([ADR 0005](adr/0005-live-sync-phase-5.md)) |
 | Auth | `golang.org/x/oauth2` + `github.com/coreos/go-oidc/v3` | Google Login (OIDC) mit PKCE, Prüfung des ID-Tokens | Ja |
 | Logging | `log/slog` | Strukturiertes Logging | Vorschlag |
 | Frontend | Vue 3, Composition API, `<script setup>` | UI | Ja |

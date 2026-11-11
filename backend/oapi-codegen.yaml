@@ -6,6 +6,15 @@ output: internal/httpapi/apigen/apigen.gen.go
 generate:
   models: true
 output-options:
+  # The WebSocket messages are schemas that no path refers to. Without this
+  # oapi-codegen drops every schema that no operation uses.
+  skip-prune: true
+  # The oneOf unions would need the extra module github.com/oapi-codegen/runtime
+  # (their As.../From... methods call it). The Go code uses the single message
+  # types instead and picks the one that fits `type`.
+  exclude-schemas:
+    - ClientMessage
+    - ServerMessage
   # Go spells initialisms in all caps: ID and AvatarURL, not Id and AvatarUrl.
   name-normalizer: ToCamelCaseWithInitialisms
 compatibility:

@@ -80,17 +80,17 @@ func Run(ctx context.Context, pool *pgxpool.Pool) (Summary, error) {
 func newSeeder(pool *pgxpool.Pool) (*seeder, error) {
 	queries := sqlcgen.New(pool)
 	groupRepo := group.NewPostgresRepository(pool)
-	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo)
+	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo, nil)
 	clock, err := item.NewClock(clockNode, time.Now)
 	if err != nil {
 		return nil, fmt.Errorf("create item clock: %w", err)
 	}
 	return &seeder{
 		users:   user.NewService(user.NewPostgresRepository(queries)),
-		groups:  group.NewService(groupRepo),
-		invites: group.NewInviteService(groupRepo),
+		groups:  group.NewService(groupRepo, nil),
+		invites: group.NewInviteService(groupRepo, nil),
 		lists:   lists,
-		items:   item.NewService(item.NewPostgresRepository(pool), lists),
+		items:   item.NewService(item.NewPostgresRepository(pool), lists, nil),
 		clock:   clock,
 		userIDs: make(map[string]uuid.UUID),
 	}, nil

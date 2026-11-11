@@ -46,9 +46,10 @@ JOIN groups g ON g.id = i.group_id
 LEFT JOIN users u ON u.id = i.created_by
 WHERE i.token_hash = $1;
 
--- name: AddGroupMemberIfAbsent :exec
+-- name: AddGroupMemberIfAbsent :execrows
 -- Two people opening the same link at once, or one person twice, must not
--- fail on the primary key: being a member already is the goal.
+-- fail on the primary key: being a member already is the goal. The row count
+-- tells the caller whether someone was added (1) or already was a member (0).
 INSERT INTO group_members (group_id, user_id, role)
 VALUES ($1, $2, $3)
 ON CONFLICT (group_id, user_id) DO NOTHING;

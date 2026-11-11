@@ -11,7 +11,7 @@ Acht Tabellen tragen das erste Release. Alle Primärschlüssel sind UUIDs, alle 
 | `group_invites` | `id`, `group_id`, `token_hash` (`bytea`, 32 Bytes, unique), `created_by`, `created_at`, `expires_at`, `revoked_at` | Ablauf nach 7 Tagen; nur der SHA-256-Hash des Tokens wird gespeichert; fällt mit der Gruppe weg, `created_by` wird `NULL` beim Löschen des Accounts |
 | `lists` | `id`, `group_id`, `name`, `archived_at`, `created_at`, `updated_at`, `server_seq` | Name 1 bis 50 Zeichen (Service und `CHECK`); fällt mit der Gruppe weg (`ON DELETE CASCADE`) |
 | `items` | `id`, `list_id`, `name`, `quantity` (numeric, nullable), `unit` (nullable), `note` (nullable), `checked`, `checked_by`, `checked_at`, `created_by`, `created_at`, `deleted_at`, `field_clocks` (jsonb), `server_seq` | `field_clocks` hält den HLC-Zeitstempel pro Feld für LWW ([ADR 0004](adr/0004-lww-pro-feld.md)); `id` ohne Default (vom Client); Name 1 bis 100, Notiz bis 500 Zeichen, Menge > 0; `unit` aus `piece`, `g`, `kg`, `ml`, `l`, `pack`; `checked_by`/`checked_at` nur bei `checked`; fällt mit der Liste weg, `created_by`/`checked_by` werden `NULL` |
-| `processed_ops` | `op_id`, `user_id`, `processed_at` | Idempotenz; Einträge nach 30 Tagen löschen |
+| `processed_ops` | `op_id`, `user_id`, `processed_at` | kommt mit Phase 6 (WS-`mutate`); Idempotenz, Einträge nach 30 Tagen löschen |
 
 ## Regeln
 
