@@ -11,17 +11,21 @@ import (
 	"mitbringsel/internal/realtime"
 )
 
-// broadcastHub is the part of *realtime.Hub the Broadcaster uses. Step 5 adds
-// JoinGroup, LeaveGroup, RemoveGroup and SendToUser.
+// broadcastHub is the part of *realtime.Hub the Broadcaster uses.
 type broadcastHub interface {
 	Broadcast(groupID uuid.UUID, msg []byte)
+	SendToUser(userID uuid.UUID, msg []byte)
+	JoinGroup(userID, groupID uuid.UUID)
+	LeaveGroup(userID, groupID uuid.UUID)
+	RemoveGroup(groupID uuid.UUID)
 }
 
 // Broadcaster turns domain events into server messages and hands them to the
 // hub. It is safe for concurrent use; it holds no state of its own.
 //
-// Its methods are named after the domain (Item…), so the events of lists and
-// groups can join them later without touching these.
+// Its methods are named after the domain (Item…, List…, Group…, Member…) and
+// satisfy the Publisher interfaces of the item, list and group services. The
+// list and group methods live in broadcast_list.go and broadcast_group.go.
 type Broadcaster struct {
 	hub broadcastHub
 }
@@ -64,15 +68,32 @@ func (b *Broadcaster) ItemDeleted(ctx context.Context, groupID, actor uuid.UUID,
 	})
 }
 
-// broadcast encodes msg with marshalMessage and queues it for the room of the
-// group. A message that cannot be encoded is logged and dropped: the change
-// is stored, and clients catch up on their next reload. ctx only carries the
-// request's log attributes; the hub never blocks, so nothing waits on it.
+// broadcast encodes msg and queues it for the room of the group. A message
+// that cannot be encoded is logged and dropped: the change is stored, and
+// clients catch up on their next reload. ctx only carries the request's log
+// attributes; the hub never blocks, so nothing waits on it.
 func (b *Broadcaster) broadcast(ctx context.Context, groupID uuid.UUID, msg any) {
+	if data, ok := encode(ctx, msg, "group", groupID); ok {
+		b.hub.Broadcast(groupID, data)
+	}
+}
+
+// sendToUser encodes msg and queues it for every connection of the user,
+// whatever rooms they are in. Failures are handled like in broadcast.
+func (b *Broadcaster) sendToUser(ctx context.Context, userID uuid.UUID, msg any) {
+	if data, ok := encode(ctx, msg, "user", userID); ok {
+		b.hub.SendToUser(userID, data)
+	}
+}
+
+// encode turns msg into the bytes for the wire with marshalMessage. It logs
+// and reports false if that fails, so the callers can drop the message.
+// attrs are extra log attributes (key, value, ...) for the failure.
+func encode(ctx context.Context, msg any, attrs ...any) ([]byte, bool) {
 	data, err := marshalMessage(msg)
 	if err != nil {
-		slog.ErrorContext(ctx, "websocket: marshal broadcast", "group", groupID, "error", err)
-		return
+		slog.ErrorContext(ctx, "websocket: marshal broadcast", append(attrs, "error", err)...)
+		return nil, false
 	}
-	b.hub.Broadcast(groupID, data)
+	return data, true
 }

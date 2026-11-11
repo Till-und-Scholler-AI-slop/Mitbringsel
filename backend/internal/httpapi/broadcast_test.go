@@ -12,7 +12,13 @@ import (
 
 // fakeHub records what the Broadcaster hands over.
 type fakeHub struct {
-	sent []sentMessage
+	// sent has the room broadcasts, toUser the messages for single users.
+	sent   []sentMessage
+	toUser []userMessage
+	// calls has every call in order, e.g. "Broadcast <group>" or
+	// "JoinGroup <user> <group>", so tests can check the order of room
+	// changes and messages.
+	calls []string
 }
 
 type sentMessage struct {
@@ -20,8 +26,31 @@ type sentMessage struct {
 	msg     []byte
 }
 
+type userMessage struct {
+	userID uuid.UUID
+	msg    []byte
+}
+
 func (h *fakeHub) Broadcast(groupID uuid.UUID, msg []byte) {
 	h.sent = append(h.sent, sentMessage{groupID, msg})
+	h.calls = append(h.calls, "Broadcast "+groupID.String())
+}
+
+func (h *fakeHub) SendToUser(userID uuid.UUID, msg []byte) {
+	h.toUser = append(h.toUser, userMessage{userID, msg})
+	h.calls = append(h.calls, "SendToUser "+userID.String())
+}
+
+func (h *fakeHub) JoinGroup(userID, groupID uuid.UUID) {
+	h.calls = append(h.calls, "JoinGroup "+userID.String()+" "+groupID.String())
+}
+
+func (h *fakeHub) LeaveGroup(userID, groupID uuid.UUID) {
+	h.calls = append(h.calls, "LeaveGroup "+userID.String()+" "+groupID.String())
+}
+
+func (h *fakeHub) RemoveGroup(groupID uuid.UUID) {
+	h.calls = append(h.calls, "RemoveGroup "+groupID.String())
 }
 
 // requireOneBroadcast checks that exactly one message went to the group and
@@ -35,13 +64,20 @@ func requireOneBroadcast(t *testing.T, hub *fakeHub) (raw []byte, top, payload m
 		t.Errorf("group = %s, want %s", hub.sent[0].groupID, testGroupID)
 	}
 	raw = hub.sent[0].msg
+	top, payload = decodeMessage(t, raw)
+	return raw, top, payload
+}
+
+// decodeMessage decodes an envelope one level deep.
+func decodeMessage(t *testing.T, raw []byte) (top, payload map[string]json.RawMessage) {
+	t.Helper()
 	if err := json.Unmarshal(raw, &top); err != nil {
 		t.Fatalf("message %s is not JSON: %v", raw, err)
 	}
 	if err := json.Unmarshal(top["payload"], &payload); err != nil {
 		t.Fatalf("payload %s is not an object: %v", top["payload"], err)
 	}
-	return raw, top, payload
+	return top, payload
 }
 
 // requireKeys checks the exact set of keys of a JSON object.
