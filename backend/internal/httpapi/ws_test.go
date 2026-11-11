@@ -18,6 +18,7 @@ import (
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/group"
 	"mitbringsel/internal/item"
+	"mitbringsel/internal/list"
 	"mitbringsel/internal/realtime"
 )
 
@@ -73,6 +74,11 @@ type wsTestOptions struct {
 	// items builds the item service of the server from the Broadcaster that
 	// is wired to its hub. Nil: the server has no item routes.
 	items func(pub item.Publisher) ItemService
+	// lists is the same for the list routes.
+	lists func(pub list.Publisher) ListService
+	// groupService replaces groups as the group service of the server, built
+	// from the Broadcaster like items. Nil: the server uses groups.
+	groupService func(pub group.Publisher) GroupService
 }
 
 // wsTestServer is the router behind a real listener.
@@ -109,11 +115,20 @@ func newWSTestServer(t *testing.T, opts wsTestOptions) *wsTestServer {
 	if opts.items != nil {
 		items = opts.items(NewBroadcaster(hub))
 	}
+	var lists ListService
+	if opts.lists != nil {
+		lists = opts.lists(NewBroadcaster(hub))
+	}
+	var groups GroupService = opts.groups
+	if opts.groupService != nil {
+		groups = opts.groupService(NewBroadcaster(hub))
+	}
 	router := newRouter(Deps{
 		Env:           config.EnvDevelopment,
 		DB:            fakePinger{},
 		Sessions:      opts.sessions,
-		Groups:        opts.groups,
+		Groups:        groups,
+		Lists:         lists,
 		Items:         items,
 		ItemClock:     fakeItemClock{},
 		Hub:           hub,
@@ -531,6 +546,154 @@ func TestWS_itemEventsReachTheGroup(t *testing.T) {
 			t.Errorf("%s: payload = %s, want actor %s, item %s, list %s", name, msg.Payload, testUserID, testItemID, testListID)
 		}
 	}
+}
+
+// publishingLists is the list counterpart of publishingItems.
+type publishingLists struct {
+	*fakeLists
+	pub list.Publisher
+}
+
+func (p publishingLists) Create(ctx context.Context, actor, groupID uuid.UUID, name string) (list.List, error) {
+	l, err := p.fakeLists.Create(ctx, actor, groupID, name)
+	if err == nil {
+		p.pub.ListChanged(ctx, actor, l)
+	}
+	return l, err
+}
+
+func (p publishingLists) Delete(ctx context.Context, actor, listID uuid.UUID) error {
+	err := p.fakeLists.Delete(ctx, actor, listID)
+	if err == nil {
+		// The canned list stands for the list as it was before the delete.
+		p.pub.ListDeleted(ctx, actor, p.lists[0])
+	}
+	return err
+}
+
+// publishingGroups is the group counterpart: it publishes the removal of a
+// member like the real service. GroupIDs, which the connection needs, comes
+// from the embedded fake.
+type publishingGroups struct {
+	*fakeGroups
+	pub group.Publisher
+}
+
+func (p publishingGroups) RemoveMember(ctx context.Context, actor, groupID, userID uuid.UUID) error {
+	err := p.fakeGroups.RemoveMember(ctx, actor, groupID, userID)
+	if err == nil {
+		p.pub.MemberRemoved(ctx, groupID, actor, userID)
+	}
+	return err
+}
+
+func TestWS_listEventsReachTheGroup(t *testing.T) {
+	srv := newWSTestServer(t, wsTestOptions{
+		groups: wsGroups(),
+		lists: func(pub list.Publisher) ListService {
+			return publishingLists{fakeLists: &fakeLists{lists: []list.List{testList()}}, pub: pub}
+		},
+	})
+	anna := connectWS(t, srv, wsTestToken)
+	ben := connectWS(t, srv, wsOtherToken)
+	requireMessage(t, anna, "ready")
+	requireMessage(t, ben, "ready")
+
+	resp := sendREST(t, srv, wsTestToken, http.MethodPost, groupListsPathFor(), `{"name":"Supermarkt"}`)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST status = %d, want 201", resp.StatusCode)
+	}
+
+	for name, conn := range map[string]*websocket.Conn{"anna": anna, "ben": ben} {
+		msg := requireMessage(t, conn, "listChanged")
+		var payload struct {
+			ActorID uuid.UUID `json:"actorId"`
+			List    struct {
+				ID        uuid.UUID `json:"id"`
+				ServerSeq int64     `json:"serverSeq"`
+			} `json:"list"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			t.Fatalf("%s: payload %s: %v", name, msg.Payload, err)
+		}
+		if payload.ActorID != testUserID || payload.List.ID != testListID || payload.List.ServerSeq != testList().ServerSeq {
+			t.Errorf("%s: payload = %s, want actor %s, list %s", name, msg.Payload, testUserID, testListID)
+		}
+	}
+
+	resp = sendREST(t, srv, wsTestToken, http.MethodDelete, listPathFor(""), "")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE status = %d, want 204", resp.StatusCode)
+	}
+
+	for name, conn := range map[string]*websocket.Conn{"anna": anna, "ben": ben} {
+		msg := requireMessage(t, conn, "listDeleted")
+		var payload struct {
+			ActorID uuid.UUID `json:"actorId"`
+			GroupID uuid.UUID `json:"groupId"`
+			ListID  uuid.UUID `json:"listId"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			t.Fatalf("%s: payload %s: %v", name, msg.Payload, err)
+		}
+		if payload.ActorID != testUserID || payload.GroupID != testGroupID || payload.ListID != testListID {
+			t.Errorf("%s: payload = %s, want actor %s, group %s, list %s", name, msg.Payload, testUserID, testGroupID, testListID)
+		}
+	}
+}
+
+func TestWS_removedMemberLeavesTheRoom(t *testing.T) {
+	groups := wsGroups()
+	srv := newWSTestServer(t, wsTestOptions{
+		groupService: func(pub group.Publisher) GroupService {
+			return publishingGroups{fakeGroups: groups, pub: pub}
+		},
+	})
+	anna := connectWS(t, srv, wsTestToken)
+	ben := connectWS(t, srv, wsOtherToken)
+	requireMessage(t, anna, "ready")
+	requireMessage(t, ben, "ready")
+
+	path := groupPathFor("/members/" + wsOtherUserID.String())
+	resp := sendREST(t, srv, wsTestToken, http.MethodDelete, path, "")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE status = %d, want 204", resp.StatusCode)
+	}
+
+	// Ben is told he is out, and only that: he left the room before the
+	// hint for the others went out.
+	msg := requireMessage(t, ben, "groupRemoved")
+	var removed struct {
+		ActorID uuid.UUID `json:"actorId"`
+		GroupID uuid.UUID `json:"groupId"`
+		Reason  string    `json:"reason"`
+	}
+	if err := json.Unmarshal(msg.Payload, &removed); err != nil {
+		t.Fatalf("payload %s: %v", msg.Payload, err)
+	}
+	if removed.ActorID != testUserID || removed.GroupID != testGroupID || removed.Reason != "removed" {
+		t.Errorf("groupRemoved payload = %s, want reason removed by %s in %s", msg.Payload, testUserID, testGroupID)
+	}
+	requirePong(t, ben)
+
+	// Anna stays in the room and is told to reload.
+	msg = requireMessage(t, anna, "groupChanged")
+	var changed struct {
+		ActorID uuid.UUID `json:"actorId"`
+		GroupID uuid.UUID `json:"groupId"`
+	}
+	if err := json.Unmarshal(msg.Payload, &changed); err != nil {
+		t.Fatalf("payload %s: %v", msg.Payload, err)
+	}
+	if changed.ActorID != testUserID || changed.GroupID != testGroupID {
+		t.Errorf("groupChanged payload = %s, want actor %s, group %s", msg.Payload, testUserID, testGroupID)
+	}
+
+	// Later broadcasts reach Anna and no longer Ben. Ben's pong comes first
+	// in his queue, so a pong as his next message proves nothing arrived.
+	srv.hub.Broadcast(testGroupID, []byte(`{"type":"itemsDeleted"}`))
+	requireMessage(t, anna, "itemsDeleted")
+	requirePong(t, ben)
 }
 
 func TestWS_pingPong(t *testing.T) {
