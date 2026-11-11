@@ -88,14 +88,17 @@ func run() error {
 	invites := group.NewInviteService(groupRepo)
 	// The group repository doubles as the list service's membership lookup.
 	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo)
-	// Items check access through the list service.
-	items := item.NewService(item.NewPostgresRepository(pool), lists, nil)
+	// The hub comes first: the broadcaster hands the events of the services
+	// to it.
+	hub := realtime.NewHub(realtime.DefaultMaxConnsPerUser, realtime.DefaultSendBuffer)
+	broadcaster := httpapi.NewBroadcaster(hub)
+	// Items check access through the list service and publish their changes
+	// to the broadcaster.
+	items := item.NewService(item.NewPostgresRepository(pool), lists, broadcaster)
 	itemClock, err := newItemClock()
 	if err != nil {
 		return err
 	}
-
-	hub := realtime.NewHub(realtime.DefaultMaxConnsPerUser, realtime.DefaultSendBuffer)
 
 	// Declared with the interface type and only assigned when configured:
 	// an interface holding a nil *auth.GoogleProvider would not compare
