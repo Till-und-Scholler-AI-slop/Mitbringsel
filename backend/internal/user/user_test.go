@@ -11,8 +11,8 @@ import (
 var errRepo = errors.New("repository failure")
 
 // fakeRepo keeps users in a map keyed by subject. Like the real repository,
-// Get returns ErrNotFound for unknown IDs and an upsert keeps the ID of an
-// existing subject.
+// Get returns ErrNotFound for unknown IDs, an upsert keeps the ID of an
+// existing subject, and a login without a name keeps the stored name.
 type fakeRepo struct {
 	bySubject map[string]User
 	// lastUpsert is the identity the service passed on, after normalising.
@@ -47,7 +47,9 @@ func (r *fakeRepo) UpsertByGoogleSub(_ context.Context, identity Identity) (User
 		u = User{ID: uuid.New(), Locale: LocaleDE, Theme: ThemeSystem}
 	}
 	u.Email = identity.Email
-	u.DisplayName = identity.Name
+	if identity.nameGiven || !ok {
+		u.DisplayName = identity.Name
+	}
 	u.AvatarURL = identity.AvatarURL
 	r.bySubject[identity.Subject] = u
 	return u, nil
@@ -64,12 +66,12 @@ func TestService_SignIn(t *testing.T) {
 		{
 			name:     "complete identity is stored as is",
 			identity: Identity{Subject: "sub-1", Email: "anna@example.com", Name: "Anna", AvatarURL: "https://example.com/a.png"},
-			want:     Identity{Subject: "sub-1", Email: "anna@example.com", Name: "Anna", AvatarURL: "https://example.com/a.png"},
+			want:     Identity{Subject: "sub-1", Email: "anna@example.com", Name: "Anna", AvatarURL: "https://example.com/a.png", nameGiven: true},
 		},
 		{
 			name:     "surrounding whitespace is trimmed",
 			identity: Identity{Subject: " sub-1 ", Email: " anna@example.com ", Name: " Anna Müller ", AvatarURL: " https://example.com/a.png "},
-			want:     Identity{Subject: "sub-1", Email: "anna@example.com", Name: "Anna Müller", AvatarURL: "https://example.com/a.png"},
+			want:     Identity{Subject: "sub-1", Email: "anna@example.com", Name: "Anna Müller", AvatarURL: "https://example.com/a.png", nameGiven: true},
 		},
 		{
 			name:     "missing name falls back to email local part",
@@ -119,6 +121,36 @@ func TestService_SignIn(t *testing.T) {
 			}
 			if got.DisplayName != tt.want.Name {
 				t.Errorf("DisplayName = %q, want %q", got.DisplayName, tt.want.Name)
+			}
+		})
+	}
+}
+
+func TestService_SignIn_keepsStoredName(t *testing.T) {
+	tests := []struct {
+		name     string
+		nameSent string
+		want     string
+	}{
+		{name: "missing name keeps the stored one", nameSent: "", want: "Anna Schäfer"},
+		{name: "blank name keeps the stored one", nameSent: "   ", want: "Anna Schäfer"},
+		{name: "new name replaces the stored one", nameSent: "Anna S.", want: "Anna S."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewService(newFakeRepo())
+			ctx := context.Background()
+			if _, err := svc.SignIn(ctx, Identity{Subject: "sub-1", Email: "anna@example.com", Name: "Anna Schäfer"}); err != nil {
+				t.Fatalf("first SignIn() error = %v", err)
+			}
+
+			got, err := svc.SignIn(ctx, Identity{Subject: "sub-1", Email: "anna@example.com", Name: tt.nameSent})
+			if err != nil {
+				t.Fatalf("second SignIn() error = %v", err)
+			}
+			if got.DisplayName != tt.want {
+				t.Errorf("DisplayName = %q, want %q", got.DisplayName, tt.want)
 			}
 		})
 	}

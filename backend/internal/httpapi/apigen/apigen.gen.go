@@ -226,7 +226,7 @@ type CreateItemRequest struct {
 type DevLoginRequest struct {
 	Email string `json:"email"`
 
-	// Name Optional; the part of the email before the @ if empty.
+	// Name Optional. If empty, a new user gets the part of the email before the @, and an existing user keeps the name stored before.
 	Name string `json:"name,omitempty"`
 }
 
