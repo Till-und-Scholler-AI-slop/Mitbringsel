@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { ref } from 'vue'
 
 import { ApiError } from '@/services/api/client'
 import type { GroupsService } from '@/services/api/groups'
-import type { Group, GroupMember, Role } from '@/types/api'
+import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
+import type { Group, GroupMember, Role, ServerMessage } from '@/types/api'
 
 import { defineGroupsStore } from '../groups'
 
@@ -46,11 +48,34 @@ function fakeService(
   }
 }
 
-/** The signed-in user as a ref, so tests can switch the user. */
+/**
+ * The signed-in user as a ref, so tests can switch the user, the server
+ * events, so tests can send them, and a spy in place of the lists store.
+ */
 function setup(service: GroupsService, userId: string | null = ANNA) {
   const user = ref(userId)
-  const store = defineGroupsStore(service, () => user.value)()
-  return { store, user }
+  const events = createFakeServerEvents()
+  const forgetLists = vi.fn()
+  const store = defineGroupsStore(service, () => user.value, events, forgetLists)()
+  return { store, user, events, forgetLists }
+}
+
+// Messages as another member's change makes the server send them.
+const changed = (groupId: string): ServerMessage => ({
+  type: 'groupChanged',
+  payload: { groupId, actorId: BEN },
+})
+const removedFrom = (groupId: string): ServerMessage => ({
+  type: 'groupRemoved',
+  payload: { groupId, reason: 'removed', actorId: BEN },
+})
+const READY: ServerMessage = { type: 'ready' }
+
+/** A request that answers only when the test says so. */
+function pending<T>() {
+  let answer: (value: T) => void = () => undefined
+  const promise = new Promise<T>((resolve) => (answer = resolve))
+  return { promise, answer }
 }
 
 beforeEach(() => {
@@ -252,5 +277,229 @@ describe('groups store: members', () => {
       code: 'FORBIDDEN',
     })
     expect(store.byId('g1')?.members.find((m) => m.userId === BEN)?.role).toBe('member')
+  })
+})
+
+describe('groups store: own writes and lists', () => {
+  it('forgets the lists of a group it deletes or leaves', async () => {
+    const service = fakeService([group('g1', 'WG', 'member'), group('g2', 'Büro')])
+    const { store, forgetLists } = setup(service, BEN)
+    await store.load()
+
+    await store.leave('g1')
+    await store.remove('g2')
+
+    expect(forgetLists.mock.calls).toEqual([['g1'], ['g2']])
+  })
+
+  it('adds a created group only once when the reload after its groupChanged was faster', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store, events } = setup(service)
+    await store.load()
+    const creating = pending<Group>()
+    service.create.mockReturnValueOnce(creating.promise)
+    service.list.mockResolvedValueOnce([group('g1', 'WG'), group('g-new', 'Büro')])
+
+    const result = store.create('Büro')
+    events.emit(changed('g-new'))
+    await flushPromises()
+    creating.answer(group('g-new', 'Büro'))
+    await result
+
+    expect(store.groups.map((g) => g.id)).toEqual(['g1', 'g-new'])
+  })
+
+  it('does not bring back an old user’s group with a late write answer', async () => {
+    const service = fakeService()
+    const creating = pending<Group>()
+    service.create.mockReturnValueOnce(creating.promise)
+    const { store, user } = setup(service)
+
+    const result = store.create('Büro')
+    user.value = BEN
+    await Promise.resolve()
+    creating.answer(group('g-new', 'Büro'))
+    await result
+
+    expect(store.groups).toEqual([])
+  })
+
+  it('does not bring back a group the user was removed from while renaming', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const renaming = pending<Group>()
+    service.rename.mockReturnValueOnce(renaming.promise)
+    const { store, events } = setup(service)
+    await store.load()
+
+    const result = store.rename('g1', 'Neu')
+    events.emit(removedFrom('g1'))
+    renaming.answer(group('g1', 'Neu'))
+    await result
+
+    expect(store.groups).toEqual([])
+  })
+})
+
+describe('groups store: live events', () => {
+  it('registers its handlers and removes them on dispose', () => {
+    const { store, events } = setup(fakeService())
+
+    expect(events.count('groupChanged')).toBe(1)
+    expect(events.count('groupRemoved')).toBe(1)
+    expect(events.count('ready')).toBe(1)
+
+    store.$dispose()
+
+    expect(events.count('groupChanged')).toBe(0)
+    expect(events.count('groupRemoved')).toBe(0)
+    expect(events.count('ready')).toBe(0)
+  })
+
+  it('reloads on groupChanged and takes the new name and role', async () => {
+    const service = fakeService([group('g1', 'WG', 'member')])
+    const { store, events } = setup(service)
+    await store.load()
+    service.list.mockResolvedValueOnce([group('g1', 'WG Kaiserstraße', 'admin')])
+
+    events.emit(changed('g1'))
+    await flushPromises()
+
+    expect(service.list).toHaveBeenCalledTimes(2)
+    expect(store.byId('g1')).toMatchObject({ name: 'WG Kaiserstraße', role: 'admin' })
+  })
+
+  it('shows a group it was just added to after the reload', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store, events } = setup(service)
+    await store.load()
+    service.list.mockResolvedValueOnce([group('g1', 'WG'), group('g2', 'Familie')])
+
+    events.emit(changed('g2'))
+    await flushPromises()
+
+    expect(store.groups.map((g) => g.id)).toEqual(['g1', 'g2'])
+  })
+
+  it('does not load on groupChanged or ready before anything was loaded', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store, events } = setup(service)
+
+    events.emit(changed('g1'))
+    events.emit(READY)
+    await flushPromises()
+
+    expect(service.list).not.toHaveBeenCalled()
+    expect(store.status).toBe('idle')
+  })
+
+  it('reloads after ready without a spinner', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store, events } = setup(service)
+    await store.load()
+    const reloading = pending<Group[]>()
+    service.list.mockReturnValueOnce(reloading.promise)
+
+    events.emit(READY)
+
+    expect(store.status).toBe('ready')
+    reloading.answer([group('g1', 'Neu')])
+    await flushPromises()
+    expect(store.byId('g1')?.name).toBe('Neu')
+  })
+
+  it('drops the group and its lists on groupRemoved', async () => {
+    const { store, events, forgetLists } = setup(
+      fakeService([group('g1', 'WG'), group('g2', 'Büro')]),
+    )
+    await store.load()
+
+    events.emit(removedFrom('g1'))
+
+    expect(store.groups.map((g) => g.id)).toEqual(['g2'])
+    expect(forgetLists).toHaveBeenCalledWith('g1')
+  })
+
+  it('does not bring back a removed group with a load that started before', async () => {
+    const service = fakeService([group('g1', 'WG'), group('g2', 'Büro')])
+    const { store, events } = setup(service)
+    await store.load()
+    const reloading = pending<Group[]>()
+    service.list.mockReturnValueOnce(reloading.promise)
+
+    const loading = store.load()
+    events.emit(removedFrom('g1'))
+    reloading.answer([group('g1', 'WG'), group('g2', 'Büro')])
+    await loading
+
+    expect(store.groups.map((g) => g.id)).toEqual(['g2'])
+  })
+
+  it('shows a group again after the user is invited back', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store, events } = setup(service)
+    await store.load()
+    events.emit(removedFrom('g1'))
+
+    await store.load()
+
+    expect(store.groups.map((g) => g.id)).toEqual(['g1'])
+  })
+
+  it('forgets the lists of a group a reload no longer lists (missed groupRemoved)', async () => {
+    const service = fakeService([group('g1', 'WG'), group('g2', 'Büro')])
+    const { store, forgetLists } = setup(service)
+    await store.load()
+    service.list.mockResolvedValueOnce([group('g2', 'Büro')])
+
+    await store.load()
+
+    expect(store.groups.map((g) => g.id)).toEqual(['g2'])
+    expect(forgetLists).toHaveBeenCalledWith('g1')
+  })
+
+  it('keeps a group created while a load was on its way', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store } = setup(service)
+    await store.load()
+    const reloading = pending<Group[]>()
+    service.list.mockReturnValueOnce(reloading.promise)
+
+    const loading = store.load()
+    await store.create('Büro')
+    reloading.answer([group('g1', 'WG')])
+    await loading
+
+    expect(store.groups.map((g) => g.id)).toEqual(['g1', 'g-new'])
+  })
+
+  it('keeps a rename answer that is newer than the load answer', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store } = setup(service)
+    await store.load()
+    const reloading = pending<Group[]>()
+    service.list.mockReturnValueOnce(reloading.promise)
+
+    const loading = store.load()
+    await store.rename('g1', 'Neu')
+    reloading.answer([group('g1', 'WG')])
+    await loading
+
+    expect(store.byId('g1')?.name).toBe('Neu')
+  })
+
+  it('drops the answer of a load that started before the last applied one', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store } = setup(service)
+    await store.load()
+    const first = pending<Group[]>()
+    service.list.mockReturnValueOnce(first.promise)
+    service.list.mockResolvedValueOnce([group('g1', 'Neu')])
+
+    const older = store.load()
+    await store.load()
+    first.answer([group('g1', 'Alt')])
+    await older
+
+    expect(store.byId('g1')?.name).toBe('Neu')
   })
 })

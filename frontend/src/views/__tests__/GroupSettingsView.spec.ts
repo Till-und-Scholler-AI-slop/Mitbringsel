@@ -283,4 +283,27 @@ describe('GroupSettingsView', () => {
     expect(router.currentRoute.value.params.groupId).toBe('g1')
     wrapper.unmount()
   })
+
+  it('goes to the start page when the household disappears', async () => {
+    service.list.mockResolvedValue([group('member')])
+    const { wrapper, router } = await mountView()
+    service.list.mockResolvedValue([])
+
+    const { useGroupsStore } = await import('@/stores/groups')
+    await useGroupsStore().load()
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('home')
+    wrapper.unmount()
+  })
+
+  it('stays on a household it does not know and shows "not found"', async () => {
+    service.list.mockResolvedValue([group('member')])
+
+    const { wrapper, router } = await mountView('unknown')
+
+    expect(router.currentRoute.value.name).toBe('group-settings')
+    expect(wrapper.text()).toContain('not found')
+    wrapper.unmount()
+  })
 })

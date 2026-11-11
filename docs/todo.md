@@ -43,8 +43,9 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 ## Start
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
-- [ ] **Zähler und letzte Aktivität auf den Haushalt-Karten:** Die Chips auf den Karten (Iteration 1) zeigen die Zahl offener Artikel; `List` liefert sie nicht, dafür braucht die API ein Feld oder einen eigenen Endpunkt. Die letzte Aktivität („Mehmet hat Hafermilch abgehakt“) braucht den Sync (Phase 5). Die Listen selbst lädt die Startseite einmal pro Sitzung; Listen, die andere anlegen, erscheinen erst nach dem Neuladen der Seite, bis der Sync sie bringt.
+- [ ] **Zähler und letzte Aktivität auf den Haushalt-Karten:** Die Chips auf den Karten (Iteration 1) zeigen die Zahl offener Artikel; `List` liefert sie nicht, dafür braucht die API ein Feld oder einen eigenen Endpunkt. Die letzte Aktivität („Mehmet hat Hafermilch abgehakt“) braucht den Sync (Phase 5).
 - [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5, Schritt 9).
+- [ ] **Hinweis beim Rauswurf aus einem Haushalt:** Wird man entfernt oder der Haushalt gelöscht, während er offen ist, wechselt die App nur still zur Startseite (`useLeaveRemovedGroup`). Mit `BaseToast` einen Hinweis zeigen („Du wurdest aus ‚WG Kaiserstraße 12‘ entfernt“ bzw. „… wurde gelöscht“); den Grund liefert `groupRemoved` (`reason`), den Namen hat der Gruppen-Store vor dem Verwerfen.
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
 ## Verwalten
