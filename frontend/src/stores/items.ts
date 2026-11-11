@@ -1,10 +1,13 @@
-import { ref, watch } from 'vue'
+import { ref, toRaw, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { itemsService, type ItemsService } from '@/services/api/items'
 import { useAuthStore } from '@/stores/auth'
 import type { CreateItemRequest, Item, UpdateItemRequest } from '@/types/api'
+
+// The error code of the API for an item that does not exist (anymore).
+const ITEM_NOT_FOUND = 'ITEM_NOT_FOUND'
 
 /** idle: not loaded yet. error: the last load failed (items may still be shown). */
 export type ItemsStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -31,13 +34,23 @@ interface ListItems {
  * Checking is the one action that does not wait for the server: it happens
  * in the shop, on a bad connection, and a checkbox that reacts late feels
  * broken. setChecked() changes the item at once and takes the answer of the
- * server afterwards; if the request fails, it puts the old state back.
- * Everything else waits for the server, as the user presses a button in a
- * form anyway.
+ * server afterwards; if the request fails, it goes back to the newest state
+ * the server has sent. Everything else waits for the server, as the user
+ * presses a button in a form anyway.
+ *
+ * Answers of the server arrive in any order and from several places (load,
+ * the answer to a write). Each carries a serverSeq, which only grows, so the
+ * store applies a state only if it is not older than what it has. A deleted
+ * item stays deleted: the store remembers its ID and ignores every later
+ * state of it.
  */
 export function defineItemsStore(service: ItemsService, currentUserId: () => string | null) {
   return defineStore('items', () => {
     const byList = ref<Record<string, ListItems>>({})
+
+    // Everything below is bookkeeping for the rules above. It is not shown,
+    // so it lives in plain Maps and Sets next to the reactive state, and
+    // reset() empties it.
 
     // Bumped by reset(). A load that started before it is outdated when it
     // answers and must not put the old user's items back.
@@ -49,10 +62,34 @@ export function defineItemsStore(service: ItemsService, currentUserId: () => str
     const latestCheck = new Map<string, number>()
     let checkCounter = 0
 
+    // While a setChecked() runs, the item on screen shows the tap. This holds
+    // the newest state the server has told us about, which is what the item
+    // becomes when the request ends, whichever way.
+    const checkBase = new Map<string, Item>()
+
+    // IDs of items known to be deleted. Deleting wins over every edit, so a
+    // late state of such an item is dropped whatever its serverSeq.
+    const tombstones = new Set<string>()
+
+    // A logical clock instead of timestamps: it only counts, so it cannot go
+    // backwards or tie. touchedAt says when an item last got a state from the
+    // server; a load remembers the clock at its start. An item that was
+    // touched after that start may be missing from the answer only because
+    // the answer is older than the item.
+    let clock = 0
+    const touchedAt = new Map<string, number>()
+    // The start of the newest load whose answer was applied, per list. An
+    // answer of a load that started before it is outdated.
+    const appliedLoadStart = new Map<string, number>()
+
     function reset() {
       generation++
       byList.value = {}
       latestCheck.clear()
+      checkBase.clear()
+      tombstones.clear()
+      touchedAt.clear()
+      appliedLoadStart.clear()
     }
 
     watch(currentUserId, reset)
@@ -98,24 +135,188 @@ export function defineItemsStore(service: ItemsService, currentUserId: () => str
       return undefined
     }
 
+    // The order of the server: oldest first, ties by ID. Dates are compared
+    // as instants, not as text: the server drops trailing zeros of the
+    // fraction, so "…:00.5Z" and "…:00.25Z" do not sort as strings.
+    function compareItems(a: Item, b: Item): number {
+      const byTime = Date.parse(a.createdAt) - Date.parse(b.createdAt)
+      if (byTime !== 0) {
+        return byTime
+      }
+      if (a.id === b.id) {
+        return 0
+      }
+      return a.id < b.id ? -1 : 1
+    }
+
+    function insertSorted(entry: ListItems, item: Item) {
+      const index = entry.items.findIndex((other) => compareItems(other, item) > 0)
+      if (index === -1) {
+        entry.items.push(item)
+      } else {
+        entry.items.splice(index, 0, item)
+      }
+    }
+
+    // The state with the higher serverSeq. At a tie `a` wins: callers pass
+    // the one that arrived later.
+    function newer(a: Item, b: Item): Item {
+      return a.serverSeq >= b.serverSeq ? a : b
+    }
+
+    // The server's item, with the checked fields of the tap on screen.
+    function withCheckOf(server: Item, shown: Item): Item {
+      return {
+        ...server,
+        checked: shown.checked,
+        checkedBy: shown.checkedBy,
+        checkedAt: shown.checkedAt,
+      }
+    }
+
+    function touch(itemId: string) {
+      touchedAt.set(itemId, ++clock)
+    }
+
     /**
-     * Loads the items of a list. If this fails, the items loaded before stay:
-     * an unreachable server should not empty the screen.
+     * The one place where a state from the server (event or answer) enters
+     * the store. An event must have a greater serverSeq than the item we
+     * hold; an answer may be equal, because it can be the very state we hold
+     * (e.g. the answer to create after the event of the same create).
+     */
+    function takeServerItem(item: Item, mode: 'event' | 'answer') {
+      const entry = byList.value[item.listId]
+      // A list we do not show: nothing to update, and loading it later gets
+      // the current state anyway.
+      if (!entry || tombstones.has(item.id)) {
+        return
+      }
+      const index = entry.items.findIndex((i) => i.id === item.id)
+      const local = entry.items[index]
+      if (local) {
+        const outdated =
+          mode === 'event' ? item.serverSeq <= local.serverSeq : item.serverSeq < local.serverSeq
+        if (outdated) {
+          return
+        }
+      }
+      touch(item.id)
+
+      let shown = item
+      if (local && latestCheck.has(item.id)) {
+        // A tap is waiting for its answer: keep what the user sees, but
+        // remember the server's state for when the request ends.
+        const base = checkBase.get(item.id)
+        checkBase.set(item.id, base ? newer(item, base) : item)
+        shown = withCheckOf(item, local)
+      }
+      if (local) {
+        entry.items[index] = shown
+      } else {
+        insertSorted(entry, shown)
+      }
+    }
+
+    // Forgets an item for good, until reset(). `entry` is the list it was in,
+    // if we know one.
+    function forget(itemId: string, entry: ListItems | undefined) {
+      tombstones.add(itemId)
+      checkBase.delete(itemId)
+      if (entry) {
+        entry.items = entry.items.filter((item) => item.id !== itemId)
+      }
+    }
+
+    // The request of the newest tap ended: `stored` is its answer, or null if
+    // it failed. The item becomes the newest state the server told us about.
+    function settleCheck(itemId: string, stored: Item | null) {
+      const base = checkBase.get(itemId)
+      checkBase.delete(itemId)
+      latestCheck.delete(itemId)
+      const final = stored && base ? newer(stored, base) : (stored ?? base)
+      if (final) {
+        takeServerItem(final, 'answer')
+      }
+    }
+
+    // False if the user changed since `started`, or if the answer of a load
+    // that started later was applied already. Otherwise this load is now the
+    // newest one applied.
+    function isCurrentLoad(started: number, listId: string, startedAt: number): boolean {
+      if (started !== generation || startedAt < (appliedLoadStart.get(listId) ?? 0)) {
+        return false
+      }
+      appliedLoadStart.set(listId, startedAt)
+      return true
+    }
+
+    // Puts the answer of a load into the list; see load().
+    function mergeLoaded(entry: ListItems, loaded: Item[], startedAt: number) {
+      // The raw array: its items are the plain objects, not the reactive
+      // proxies around them, which must not end up inside the new array.
+      const local = new Map(toRaw(entry.items).map((item) => [item.id, item]))
+      const merged: Item[] = []
+
+      for (const server of loaded) {
+        if (tombstones.has(server.id)) {
+          continue
+        }
+        const held = local.get(server.id)
+        local.delete(server.id)
+        if (!held) {
+          merged.push(server)
+        } else if (held.serverSeq > server.serverSeq) {
+          // The answer is older than what we have.
+          merged.push(held)
+        } else if (latestCheck.has(server.id)) {
+          const base = checkBase.get(server.id)
+          const newest = base ? newer(server, base) : server
+          checkBase.set(server.id, newest)
+          merged.push(withCheckOf(newest, held))
+        } else {
+          merged.push(server)
+        }
+      }
+
+      // What the answer does not list is gone on the server, unless it came
+      // to us after this load started: then the answer may predate it.
+      for (const [id, held] of local) {
+        if ((touchedAt.get(id) ?? 0) > startedAt) {
+          merged.push(held)
+        } else {
+          tombstones.add(id)
+          checkBase.delete(id)
+        }
+      }
+
+      entry.items = merged.sort(compareItems)
+    }
+
+    /**
+     * Loads the items of a list and merges them into what the store has,
+     * instead of replacing it: the answer may be older than a write that
+     * finished while the request was on its way. A list that is loaded
+     * already keeps its status `ready` meanwhile, so reloading shows no
+     * spinner. If this fails, the items loaded before stay: an unreachable
+     * server should not empty the screen.
      */
     async function load(listId: string) {
       const started = generation
+      const startedAt = ++clock
       const entry = ensure(listId)
-      entry.status = 'loading'
+      if (entry.status !== 'ready') {
+        entry.status = 'loading'
+      }
       entry.errorCode = null
       try {
         const loaded = await service.list(listId)
-        if (started !== generation) {
+        if (!isCurrentLoad(started, listId, startedAt)) {
           return
         }
-        entry.items = loaded
+        mergeLoaded(entry, loaded, startedAt)
         entry.status = 'ready'
       } catch (err) {
-        if (started !== generation) {
+        if (!isCurrentLoad(started, listId, startedAt)) {
           return
         }
         entry.status = 'error'
@@ -123,16 +324,18 @@ export function defineItemsStore(service: ItemsService, currentUserId: () => str
       }
     }
 
-    /** Adds an item at the end and returns it. */
+    /**
+     * Adds an item and returns it. The item comes from the answer of the
+     * server; if it is in the store already, it is not added twice.
+     */
     async function create(listId: string, request: CreateItemRequest): Promise<Item> {
+      const started = generation
       const item = await service.create(listId, request)
-      const entry = ensure(listId)
-      // Sending the same ID twice answers the stored item again; do not list it twice.
-      const index = entry.items.findIndex((i) => i.id === item.id)
-      if (index === -1) {
-        entry.items.push(item)
-      } else {
-        entry.items[index] = item
+      // After a reset the old user's item must not come back: ensure() would
+      // create the list anew.
+      if (started === generation) {
+        ensure(listId)
+        takeServerItem(item, 'answer')
       }
       return item
     }
@@ -142,25 +345,34 @@ export function defineItemsStore(service: ItemsService, currentUserId: () => str
      * stored it. Waits for the server; use setChecked() for the checkbox.
      */
     async function update(itemId: string, change: UpdateItemRequest) {
-      replace(await service.update(itemId, change))
+      const started = generation
+      const stored = await service.update(itemId, change)
+      if (started === generation) {
+        takeServerItem(stored, 'answer')
+      }
     }
 
     /**
      * Checks or unchecks an item at once and confirms with the server. If
-     * the request fails, the old state comes back and the error is thrown.
+     * the request fails, the item goes back to the newest state the server
+     * has sent and the error is thrown, unless the item was deleted by
+     * someone else meanwhile.
      */
     async function setChecked(itemId: string, checked: boolean) {
+      const started = generation
       const item = byId(itemId)
       if (!item) {
         // Not in the store (anymore): nothing to show early, just send it.
-        replace(await service.update(itemId, { checked }))
+        const stored = await service.update(itemId, { checked })
+        if (started === generation) {
+          takeServerItem(stored, 'answer')
+        }
         return
       }
 
-      const before = {
-        checked: item.checked,
-        checkedBy: item.checkedBy,
-        checkedAt: item.checkedAt,
+      // The first tap of a series: the item still shows the server's state.
+      if (!latestCheck.has(itemId)) {
+        checkBase.set(itemId, { ...toRaw(item) })
       }
       // The same fields the server sets; its answer replaces them below.
       item.checked = checked
@@ -171,43 +383,45 @@ export function defineItemsStore(service: ItemsService, currentUserId: () => str
       latestCheck.set(itemId, mine)
       try {
         const stored = await service.update(itemId, { checked })
+        if (started !== generation) {
+          return
+        }
         if (latestCheck.get(itemId) === mine) {
-          replace(stored)
+          settleCheck(itemId, stored)
+        } else {
+          // An older tap, answered after a newer one. While the newer one
+          // runs, this is one more state to remember; once it has ended,
+          // this counts as an event and is dropped unless it is newer.
+          takeServerItem(stored, 'event')
         }
       } catch (err) {
+        if (started !== generation) {
+          throw err
+        }
+        if (err instanceof ApiError && err.code === ITEM_NOT_FOUND) {
+          // Someone else deleted the item; their event may not be here yet.
+          forget(itemId, byList.value[item.listId])
+        }
         if (latestCheck.get(itemId) === mine) {
-          // Only roll back the item we changed. If a reload has replaced it
-          // meanwhile, it holds fresher data from the server than `before`.
-          const current = byId(itemId)
-          if (current === item) {
-            Object.assign(current, before)
-          }
+          settleCheck(itemId, null)
+        }
+        if (tombstones.has(itemId)) {
+          // Deleted by another member: the item disappears anyway, so there
+          // is nothing to report.
+          return
         }
         throw err
-      } finally {
-        if (latestCheck.get(itemId) === mine) {
-          latestCheck.delete(itemId)
-        }
       }
     }
 
     async function remove(itemId: string) {
+      const started = generation
       // Looked up first: the item is gone from the answer, and the list is
       // needed to drop it from the right place.
       const listId = byId(itemId)?.listId
       await service.remove(itemId)
-      if (listId !== undefined) {
-        const entry = ensure(listId)
-        entry.items = entry.items.filter((item) => item.id !== itemId)
-      }
-    }
-
-    // The answer of the server is the truth, so it replaces the local copy.
-    function replace(item: Item) {
-      const entry = byList.value[item.listId]
-      const index = entry?.items.findIndex((i) => i.id === item.id) ?? -1
-      if (entry && index !== -1) {
-        entry.items[index] = item
+      if (started === generation) {
+        forget(itemId, listId === undefined ? undefined : byList.value[listId])
       }
     }
 
