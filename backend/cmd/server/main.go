@@ -87,7 +87,7 @@ func run() error {
 	groups := group.NewService(groupRepo)
 	invites := group.NewInviteService(groupRepo)
 	// The group repository doubles as the list service's membership lookup.
-	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo)
+	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo, nil)
 	// The hub comes first: the broadcaster hands the events of the services
 	// to it.
 	hub := realtime.NewHub(realtime.DefaultMaxConnsPerUser, realtime.DefaultSendBuffer)

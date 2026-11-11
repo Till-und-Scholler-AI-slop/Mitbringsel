@@ -19,6 +19,20 @@ type fakeRepo struct {
 	lists map[uuid.UUID]List
 	// fail makes every method return errRepo.
 	fail bool
+	// failWrites makes only the methods that store something fail, so the
+	// service gets past its own lookup first.
+	failWrites bool
+	// writes counts the calls that store something, successful or not.
+	writes int
+}
+
+// write counts a storing call and reports whether it should fail.
+func (r *fakeRepo) write() error {
+	r.writes++
+	if r.failWrites {
+		return errRepo
+	}
+	return nil
 }
 
 func newFakeRepo() *fakeRepo {
@@ -28,6 +42,9 @@ func newFakeRepo() *fakeRepo {
 func (r *fakeRepo) Create(_ context.Context, groupID uuid.UUID, name string) (List, error) {
 	if r.fail {
 		return List{}, errRepo
+	}
+	if err := r.write(); err != nil {
+		return List{}, err
 	}
 	now := time.Now()
 	l := List{ID: uuid.New(), GroupID: groupID, Name: name, CreatedAt: now, UpdatedAt: now}
@@ -64,6 +81,9 @@ func (r *fakeRepo) Rename(_ context.Context, listID uuid.UUID, name string) (Lis
 	if err != nil {
 		return List{}, err
 	}
+	if err := r.write(); err != nil {
+		return List{}, err
+	}
 	l.Name = name
 	r.lists[listID] = l
 	return l, nil
@@ -72,6 +92,9 @@ func (r *fakeRepo) Rename(_ context.Context, listID uuid.UUID, name string) (Lis
 func (r *fakeRepo) SetArchived(_ context.Context, listID uuid.UUID, archived bool) (List, error) {
 	l, err := r.Get(context.Background(), listID)
 	if err != nil {
+		return List{}, err
+	}
+	if err := r.write(); err != nil {
 		return List{}, err
 	}
 	switch {
@@ -89,8 +112,31 @@ func (r *fakeRepo) Delete(_ context.Context, listID uuid.UUID) error {
 	if _, err := r.Get(context.Background(), listID); err != nil {
 		return err
 	}
+	if err := r.write(); err != nil {
+		return err
+	}
 	delete(r.lists, listID)
 	return nil
+}
+
+// listEvent is one call to the publisher.
+type listEvent struct {
+	kind  string // "changed" or "deleted"
+	actor uuid.UUID
+	list  List
+}
+
+// fakePublisher records what the service publishes.
+type fakePublisher struct {
+	events []listEvent
+}
+
+func (p *fakePublisher) ListChanged(_ context.Context, actor uuid.UUID, l List) {
+	p.events = append(p.events, listEvent{"changed", actor, l})
+}
+
+func (p *fakePublisher) ListDeleted(_ context.Context, actor uuid.UUID, l List) {
+	p.events = append(p.events, listEvent{"deleted", actor, l})
 }
 
 // fakeMembers maps group ID to user ID to role.
@@ -109,6 +155,7 @@ func (m fakeMembers) MemberRole(_ context.Context, groupID, userID uuid.UUID) (g
 type fixture struct {
 	svc      *Service
 	repo     *fakeRepo
+	pub      *fakePublisher
 	groupID  uuid.UUID
 	owner    uuid.UUID
 	admin    uuid.UUID
@@ -119,6 +166,7 @@ type fixture struct {
 func newFixture() fixture {
 	f := fixture{
 		repo:     newFakeRepo(),
+		pub:      &fakePublisher{},
 		groupID:  uuid.New(),
 		owner:    uuid.New(),
 		admin:    uuid.New(),
@@ -130,7 +178,7 @@ func newFixture() fixture {
 		f.admin:  group.RoleAdmin,
 		f.member: group.RoleMember,
 	}}
-	f.svc = NewService(f.repo, members)
+	f.svc = NewService(f.repo, members, f.pub)
 	return f
 }
 
@@ -368,5 +416,253 @@ func TestService_repositoryFailure(t *testing.T) {
 	}
 	if _, err := f.svc.ListForGroup(ctx, f.member, f.groupID, false); !errors.Is(err, errRepo) {
 		t.Errorf("ListForGroup() error = %v, want %v", err, errRepo)
+	}
+}
+
+func TestService_publishes(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name string
+		// setup stores the list the action works on.
+		setup func(t *testing.T, f fixture) List
+		act   func(f fixture, l List) error
+		// wantKind is "changed", "deleted" or "" for no event. An event
+		// always carries the acting user and the list.
+		wantKind string
+		// wantWrite says whether the repository stored anything.
+		wantWrite bool
+		wantErr   error
+		// check looks at the published list besides its ID.
+		check func(t *testing.T, got List)
+	}{
+		{
+			name: "create",
+			act: func(f fixture, _ List) error {
+				_, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt")
+				return err
+			},
+			wantKind:  "changed",
+			wantWrite: true,
+			check: func(t *testing.T, got List) {
+				if got.Name != "Supermarkt" {
+					t.Errorf("published name = %q, want Supermarkt", got.Name)
+				}
+			},
+		},
+		{
+			name:      "rename",
+			setup:     func(t *testing.T, f fixture) List { return f.newList(t, "Old") },
+			act:       func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.member, l.ID, " New "); return err },
+			wantKind:  "changed",
+			wantWrite: true,
+			check: func(t *testing.T, got List) {
+				if got.Name != "New" {
+					t.Errorf("published name = %q, want the stored name New", got.Name)
+				}
+			},
+		},
+		{
+			name:      "archive",
+			setup:     func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act:       func(f fixture, l List) error { _, err := f.svc.Archive(ctx, f.member, l.ID); return err },
+			wantKind:  "changed",
+			wantWrite: true,
+			check: func(t *testing.T, got List) {
+				if !got.Archived() {
+					t.Error("published list is not archived")
+				}
+			},
+		},
+		{
+			name: "unarchive",
+			setup: func(t *testing.T, f fixture) List {
+				l := f.newList(t, "Supermarkt")
+				l, err := f.repo.SetArchived(ctx, l.ID, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return l
+			},
+			act:       func(f fixture, l List) error { _, err := f.svc.Unarchive(ctx, f.member, l.ID); return err },
+			wantKind:  "changed",
+			wantWrite: true,
+			check: func(t *testing.T, got List) {
+				if got.Archived() {
+					t.Error("published list is still archived")
+				}
+			},
+		},
+		{
+			name:      "delete by the owner",
+			setup:     func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act:       func(f fixture, l List) error { return f.svc.Delete(ctx, f.owner, l.ID) },
+			wantKind:  "deleted",
+			wantWrite: true,
+			check: func(t *testing.T, got List) {
+				if got.GroupID == uuid.Nil || got.Name != "Supermarkt" {
+					t.Errorf("published %+v, want the list as it was, with its group", got)
+				}
+			},
+		},
+		{
+			name:    "create with an invalid name",
+			act:     func(f fixture, _ List) error { _, err := f.svc.Create(ctx, f.member, f.groupID, " "); return err },
+			wantErr: ErrInvalidName,
+		},
+		{
+			name: "create by an outsider",
+			act: func(f fixture, _ List) error {
+				_, err := f.svc.Create(ctx, f.outsider, f.groupID, "Supermarkt")
+				return err
+			},
+			wantErr: ErrNotFound,
+		},
+		{
+			name:    "rename with an invalid name",
+			setup:   func(t *testing.T, f fixture) List { return f.newList(t, "Old") },
+			act:     func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.member, l.ID, ""); return err },
+			wantErr: ErrInvalidName,
+		},
+		{
+			name:    "rename by an outsider",
+			setup:   func(t *testing.T, f fixture) List { return f.newList(t, "Old") },
+			act:     func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.outsider, l.ID, "New"); return err },
+			wantErr: ErrNotFound,
+		},
+		{
+			name:  "rename to the same name",
+			setup: func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act:   func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.member, l.ID, " Supermarkt "); return err },
+		},
+		{
+			name: "archive an archived list",
+			setup: func(t *testing.T, f fixture) List {
+				l := f.newList(t, "Supermarkt")
+				l, err := f.repo.SetArchived(ctx, l.ID, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return l
+			},
+			act: func(f fixture, l List) error { _, err := f.svc.Archive(ctx, f.member, l.ID); return err },
+		},
+		{
+			name:  "unarchive an active list",
+			setup: func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act:   func(f fixture, l List) error { _, err := f.svc.Unarchive(ctx, f.member, l.ID); return err },
+		},
+		{
+			name:    "archive by an outsider",
+			setup:   func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act:     func(f fixture, l List) error { _, err := f.svc.Archive(ctx, f.outsider, l.ID); return err },
+			wantErr: ErrNotFound,
+		},
+		{
+			name:    "delete by a member",
+			setup:   func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act:     func(f fixture, l List) error { return f.svc.Delete(ctx, f.member, l.ID) },
+			wantErr: ErrForbidden,
+		},
+		{
+			name:    "delete by an outsider",
+			setup:   func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act:     func(f fixture, l List) error { return f.svc.Delete(ctx, f.outsider, l.ID) },
+			wantErr: ErrNotFound,
+		},
+		{
+			name:  "create fails in the repository",
+			setup: func(t *testing.T, f fixture) List { f.repo.failWrites = true; return List{} },
+			act: func(f fixture, _ List) error {
+				_, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt")
+				return err
+			},
+			wantWrite: true,
+			wantErr:   errRepo,
+		},
+		{
+			name: "rename fails in the repository",
+			setup: func(t *testing.T, f fixture) List {
+				l := f.newList(t, "Old")
+				f.repo.failWrites = true
+				return l
+			},
+			act:       func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.member, l.ID, "New"); return err },
+			wantWrite: true,
+			wantErr:   errRepo,
+		},
+		{
+			name: "delete fails in the repository",
+			setup: func(t *testing.T, f fixture) List {
+				l := f.newList(t, "Supermarkt")
+				f.repo.failWrites = true
+				return l
+			},
+			act:       func(f fixture, l List) error { return f.svc.Delete(ctx, f.owner, l.ID) },
+			wantWrite: true,
+			wantErr:   errRepo,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture()
+			var l List
+			if tt.setup != nil {
+				l = tt.setup(t, f)
+			}
+			// The setup's own writes do not count.
+			f.repo.writes = 0
+
+			err := tt.act(f, l)
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tt.wantErr)
+			}
+			if wrote := f.repo.writes > 0; wrote != tt.wantWrite {
+				t.Errorf("repository writes = %d, want written = %v", f.repo.writes, tt.wantWrite)
+			}
+			if tt.wantKind == "" {
+				if len(f.pub.events) != 0 {
+					t.Errorf("published %+v, want nothing", f.pub.events)
+				}
+				return
+			}
+			if len(f.pub.events) != 1 {
+				t.Fatalf("published %d events, want 1: %+v", len(f.pub.events), f.pub.events)
+			}
+			ev := f.pub.events[0]
+			if ev.kind != tt.wantKind || ev.list.GroupID != f.groupID {
+				t.Errorf("published %+v, want %q in the group", ev, tt.wantKind)
+			}
+			if tt.wantKind == "changed" && ev.list != f.repo.lists[ev.list.ID] {
+				t.Errorf("published %+v, want the stored list %+v", ev.list, f.repo.lists[ev.list.ID])
+			}
+			if l.ID != uuid.Nil && ev.list.ID != l.ID {
+				t.Errorf("published list %v, want %v", ev.list.ID, l.ID)
+			}
+			if tt.check != nil {
+				tt.check(t, ev.list)
+			}
+		})
+	}
+}
+
+func TestNewService_nilPublisher(t *testing.T) {
+	f := newFixture()
+	svc := NewService(f.repo, fakeMembers{f.groupID: {f.owner: group.RoleOwner}}, nil)
+	ctx := context.Background()
+
+	l, err := svc.Create(ctx, f.owner, f.groupID, "Supermarkt")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := svc.Rename(ctx, f.owner, l.ID, "Baumarkt"); err != nil {
+		t.Fatalf("Rename() error = %v", err)
+	}
+	if _, err := svc.Archive(ctx, f.owner, l.ID); err != nil {
+		t.Fatalf("Archive() error = %v", err)
+	}
+	if err := svc.Delete(ctx, f.owner, l.ID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
 	}
 }

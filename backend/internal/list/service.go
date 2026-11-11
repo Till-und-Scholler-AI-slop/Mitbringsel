@@ -12,6 +12,27 @@ import (
 	"mitbringsel/internal/group"
 )
 
+// Publisher tells the members of a group about a list change once it is
+// stored. It is best effort: it must not block and has no error to return,
+// because the change is stored either way. ctx is the request's and may be
+// cancelled at any moment, so an implementation must not depend on it staying
+// alive (use context.WithoutCancel for work that outlives the request).
+type Publisher interface {
+	// ListChanged gets the list as stored after a create, rename, archive
+	// or unarchive.
+	ListChanged(ctx context.Context, actor uuid.UUID, l List)
+	// ListDeleted gets the list as it was before the deletion; ID and
+	// GroupID are what matters.
+	ListDeleted(ctx context.Context, actor uuid.UUID, l List)
+}
+
+// noPublisher is the Publisher for callers without live connections (the
+// seed command, tests). It does nothing.
+type noPublisher struct{}
+
+func (noPublisher) ListChanged(context.Context, uuid.UUID, List) {}
+func (noPublisher) ListDeleted(context.Context, uuid.UUID, List) {}
+
 // Service holds the rules for lists. Every method takes the acting user
 // (actor) and checks what they may do, so a handler cannot forget it.
 //
@@ -20,12 +41,17 @@ import (
 type Service struct {
 	repo    Repository
 	members MemberLookup
+	pub     Publisher
 }
 
 // NewService returns a service backed by the given repository. members is
-// usually the group repository.
-func NewService(repo Repository, members MemberLookup) *Service {
-	return &Service{repo: repo, members: members}
+// usually the group repository. pub is told about every change after it is
+// stored; nil means nobody listens.
+func NewService(repo Repository, members MemberLookup, pub Publisher) *Service {
+	if pub == nil {
+		pub = noPublisher{}
+	}
+	return &Service{repo: repo, members: members, pub: pub}
 }
 
 // Create adds a list to the group.
@@ -43,6 +69,7 @@ func (s *Service) Create(ctx context.Context, actor, groupID uuid.UUID, name str
 	if err != nil {
 		return List{}, fmt.Errorf("create list: %w", err)
 	}
+	s.pub.ListChanged(ctx, actor, l)
 	return l, nil
 }
 
@@ -65,19 +92,28 @@ func (s *Service) Get(ctx context.Context, actor, listID uuid.UUID) (List, error
 	return l, err
 }
 
-// Rename changes the name of a list.
+// Rename changes the name of a list. Giving it the name it has already
+// changes nothing: no write, no new serverSeq, no event.
 func (s *Service) Rename(ctx context.Context, actor, listID uuid.UUID, name string) (List, error) {
-	if _, _, err := s.find(ctx, actor, listID); err != nil {
-		return List{}, err
-	}
-	name, err := normalizeName(name)
+	current, _, err := s.find(ctx, actor, listID)
 	if err != nil {
 		return List{}, err
+	}
+	name, err = normalizeName(name)
+	if err != nil {
+		return List{}, err
+	}
+	// The check reads the list before writing, so a rename that races with
+	// another one may skip or repeat a write. That is fine: the request
+	// counts as executed at the moment of the read.
+	if current.Name == name {
+		return current, nil
 	}
 	l, err := s.repo.Rename(ctx, listID, name)
 	if err != nil {
 		return List{}, fmt.Errorf("rename list: %w", err)
 	}
+	s.pub.ListChanged(ctx, actor, l)
 	return l, nil
 }
 
@@ -91,30 +127,42 @@ func (s *Service) Unarchive(ctx context.Context, actor, listID uuid.UUID) (List,
 	return s.setArchived(ctx, actor, listID, false)
 }
 
+// setArchived does nothing if the list is in the wanted state already (the
+// read-then-write caveat of Rename applies).
 func (s *Service) setArchived(ctx context.Context, actor, listID uuid.UUID, archived bool) (List, error) {
-	if _, _, err := s.find(ctx, actor, listID); err != nil {
+	current, _, err := s.find(ctx, actor, listID)
+	if err != nil {
 		return List{}, err
+	}
+	if current.Archived() == archived {
+		return current, nil
 	}
 	l, err := s.repo.SetArchived(ctx, listID, archived)
 	if err != nil {
 		return List{}, fmt.Errorf("set list archived: %w", err)
 	}
+	s.pub.ListChanged(ctx, actor, l)
 	return l, nil
 }
 
 // Delete removes a list and all its items. Only the owner and admins of the
 // group may do this.
 func (s *Service) Delete(ctx context.Context, actor, listID uuid.UUID) error {
-	_, role, err := s.find(ctx, actor, listID)
+	l, role, err := s.find(ctx, actor, listID)
 	if err != nil {
 		return err
 	}
 	if role != group.RoleOwner && role != group.RoleAdmin {
 		return ErrForbidden
 	}
+	// Two deletes at once: the second finds no row and returns ErrNotFound
+	// from the repository, so only the first one publishes.
 	if err := s.repo.Delete(ctx, listID); err != nil {
 		return fmt.Errorf("delete list: %w", err)
 	}
+	// The items go with the list without an event of their own: clients
+	// drop them together with the list.
+	s.pub.ListDeleted(ctx, actor, l)
 	return nil
 }
 
