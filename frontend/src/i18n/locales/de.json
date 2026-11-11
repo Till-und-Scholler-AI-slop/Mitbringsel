@@ -206,7 +206,11 @@
       "check": "abhaken",
       "uncheck": "zurückholen",
       "addedBy": "von {name}",
-      "checkedBy": "abgehakt von {name}"
+      "checkedBy": "abgehakt von {name}",
+      "justChanged": "{name} · gerade geändert",
+      "justChangedAnon": "Gerade geändert",
+      "justChangedBy": "gerade von {name} geändert",
+      "justChangedByAnon": "gerade geändert"
     },
     "done": {
       "title": "Erledigt ({count})"

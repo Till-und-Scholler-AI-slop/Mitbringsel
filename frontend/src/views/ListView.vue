@@ -27,6 +27,7 @@ import { listToOpen, rememberLastList } from '@/services/lastList'
 import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
+import { useRecentChangesStore } from '@/stores/recentChanges'
 import type { Group, Item, List } from '@/types/api'
 
 // noLists: the household has no active list to open.
@@ -44,6 +45,7 @@ const router = useRouter()
 const groups = useGroupsStore()
 const lists = useListsStore()
 const items = useItemsStore()
+const recentChanges = useRecentChangesStore()
 
 const createOpen = ref(false)
 const createGroupOpen = ref(false)
@@ -110,6 +112,14 @@ function personOf(item: Item) {
   const id = item.checked ? item.checkedBy : item.createdBy
   const member = members.value.find((m) => m.userId === id)
   return member ? { name: member.displayName, avatarUrl: member.avatarUrl } : null
+}
+
+// Who else just changed an item; the name is null for a member we do not
+// know yet (joined after the household was loaded).
+function recentOf(item: Item) {
+  const id = recentChanges.changedBy(item.id)
+  if (!id) return null
+  return { name: members.value.find((m) => m.userId === id)?.displayName ?? null }
 }
 
 // A direct visit of the URL has to load what the screens before would have
@@ -309,6 +319,7 @@ function openCreated(created: List) {
                 :key="item.id"
                 :item="item"
                 :person="personOf(item)"
+                :recent="recentOf(item)"
                 @toggle="toggle(item)"
               />
             </ul>

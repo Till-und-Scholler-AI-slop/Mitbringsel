@@ -206,7 +206,11 @@
       "check": "check off",
       "uncheck": "bring back",
       "addedBy": "by {name}",
-      "checkedBy": "checked by {name}"
+      "checkedBy": "checked by {name}",
+      "justChanged": "{name} · just changed",
+      "justChangedAnon": "Just changed",
+      "justChangedBy": "just changed by {name}",
+      "justChangedByAnon": "just changed"
     },
     "done": {
       "title": "Done ({count})"
