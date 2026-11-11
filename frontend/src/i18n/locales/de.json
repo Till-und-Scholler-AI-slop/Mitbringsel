@@ -361,5 +361,12 @@
     "start": "Start",
     "households": "Haushalte",
     "lists": "Listen von {name}"
+  },
+  "sync": {
+    "synced": "Synchron",
+    "syncedLong": "Alles synchron",
+    "offline": "Offline",
+    "syncedHint": "Alle sehen denselben Stand.",
+    "offlineHint": "Du siehst den letzten Stand. Ändern geht erst wieder mit Verbindung."
   }
 }

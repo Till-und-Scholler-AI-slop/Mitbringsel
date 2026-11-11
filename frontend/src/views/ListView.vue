@@ -10,6 +10,7 @@ import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import AppFrame from '@/components/layout/AppFrame.vue'
+import SyncStatus from '@/components/layout/SyncStatus.vue'
 import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
 import HouseholdSwitcher from '@/components/list/HouseholdSwitcher.vue'
 import ItemRow from '@/components/list/ItemRow.vue'
@@ -187,10 +188,14 @@ function openCreated(created: List) {
       <!-- On the phone a green header; on the desktop the plain top of the
          page, as the sidebar holds the way back to the start page. -->
       <header class="bar">
-        <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
-          <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
-          <BrandLogo small flat aria-hidden="true" />
-        </RouterLink>
+        <!-- Phone only: on the desktop the sidebar holds both. -->
+        <div class="top">
+          <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
+            <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
+            <BrandLogo small flat aria-hidden="true" />
+          </RouterLink>
+          <SyncStatus />
+        </div>
 
         <div v-if="group" class="household">
           <HouseholdSwitcher
@@ -383,8 +388,14 @@ function openCreated(created: List) {
   color: var(--color-on-brand);
 }
 
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .home {
-  align-self: flex-start;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -530,7 +541,7 @@ function openCreated(created: List) {
     color: var(--color-text);
   }
 
-  .home {
+  .top {
     display: none;
   }
 

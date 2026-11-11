@@ -6,7 +6,7 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
-- [ ] **Dialoge von Verwalten nach dem Design** (`verwalten-aktionen-hell`, `verwalten-entfernen-hell`, `verwalten-umbenennen-hell`, `verwalten-umbenennen-zulang-*`): Mitglied-Aktionen, Entfernen-Bestätigung und Umbenennen angleichen; die Seite selbst ist angeglichen, die Dialoge noch im alten Stil. Den Sync-Chip „Alles synchron“ im Kopf gibt es erst mit dem Sync.
+- [ ] **Dialoge von Verwalten nach dem Design** (`verwalten-aktionen-hell`, `verwalten-entfernen-hell`, `verwalten-umbenennen-hell`, `verwalten-umbenennen-zulang-*`): Mitglied-Aktionen, Entfernen-Bestätigung und Umbenennen angleichen; die Seite selbst ist angeglichen, die Dialoge noch im alten Stil.
 - [ ] **Desktop-Varianten von Verwalten und Einladung** (`verwalten-desktop-*`, `markt2-einladung-desktop-*`): Verwalten zweispaltig, Einladung mit Kopf und Karte nebeneinander. `GroupSettingsView` und `InviteView` sind vorerst einspaltig.
 - [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): aktiver Chip mit Innenschatten und Druck-/Rückfeder-Animation, erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
 
@@ -44,8 +44,8 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
 - [ ] **Zähler und letzte Aktivität auf den Haushalt-Karten:** Die Chips auf den Karten (Iteration 1) zeigen die Zahl offener Artikel; `List` liefert sie nicht, dafür braucht die API ein Feld oder einen eigenen Endpunkt. Die letzte Aktivität („Mehmet hat Hafermilch abgehakt“) braucht den Sync (Phase 5).
-- [ ] **Sync-Anzeige im Kopf:** Der Status-Chip (synchron, offline, ausstehend) fehlt; `BaseSyncIndicator` kommt mit dem Live-Sync (Phase 5, Schritt 9).
 - [ ] **Hinweis beim Rauswurf aus einem Haushalt:** Wird man entfernt oder der Haushalt gelöscht, während er offen ist, wechselt die App nur still zur Startseite (`useLeaveRemovedGroup`). Mit `BaseToast` einen Hinweis zeigen („Du wurdest aus ‚WG Kaiserstraße 12‘ entfernt“ bzw. „… wurde gelöscht“); den Grund liefert `groupRemoved` (`reason`), den Namen hat der Gruppen-Store vor dem Verwerfen.
+- [ ] **Sync-Chip in Phase 6:** `BaseSyncIndicator` kennt nur „Synchron“ und „Offline“. Mit der Outbox den gelben Zustand „n ausstehend“ und „Offline · n ausstehend“ ergänzen und den Hinweis in der Seitenleiste auf die Texte aus dem Design umstellen („Änderungen bleiben auf diesem Gerät und gehen raus, sobald du wieder online bist.“, „Wird gerade an die WG übertragen …“).
 - [ ] **Health-Store ungenutzt:** Die Startseite zeigt den Serverstatus nicht mehr. `stores/health.ts` samt Service und Tests ist aktuell nirgends eingebunden; entscheiden, ob er gelöscht oder für eine Statusanzeige genutzt wird.
 
 ## Verwalten
@@ -59,5 +59,5 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 ## Komponenten
 
-- [ ] **Fehlende Basis-Komponenten:** In den [Konventionen](conventions.md) stehen `BaseCheckbox`, `BaseSelect`, `BaseTextarea` und `BaseToast`, die es noch nicht gibt (`BaseModal` und `BaseBottomSheet` deckt `BaseDialog` ab, `BaseSyncIndicator` kommt mit dem Sync in Phase 5). Bauen, sobald ein Screen sie braucht.
+- [ ] **Fehlende Basis-Komponenten:** In den [Konventionen](conventions.md) stehen `BaseCheckbox`, `BaseSelect`, `BaseTextarea` und `BaseToast`, die es noch nicht gibt (`BaseModal` und `BaseBottomSheet` deckt `BaseDialog` ab). Bauen, sobald ein Screen sie braucht.
 - [ ] **`BaseButton`-Größen:** Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen). Die Variante `danger` gibt es seit dem Verwalten-Screen.

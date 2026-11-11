@@ -361,5 +361,12 @@
     "start": "Start",
     "households": "Households",
     "lists": "Lists of {name}"
+  },
+  "sync": {
+    "synced": "Synced",
+    "syncedLong": "All synced",
+    "offline": "Offline",
+    "syncedHint": "Everyone sees the same state.",
+    "offlineHint": "You see the last known state. Changes need a connection again."
   }
 }

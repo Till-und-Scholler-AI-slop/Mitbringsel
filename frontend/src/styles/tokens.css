@@ -113,6 +113,8 @@
   --color-house-text: #ffffff;
   --color-offline-bg: #16181d;
   --color-offline-text: #ffffff;
+  /* The offline chip sits on the green header, so its edge is light. */
+  --color-offline-border: #ffffff;
   --color-spinner-track: rgb(22 24 29 / 0.15);
   --color-scrim: rgb(22 24 29 / 0.45);
 
@@ -165,6 +167,7 @@
     --color-house-text: #16181d;
     --color-offline-bg: #0f1626;
     --color-offline-text: #f2f5fa;
+    --color-offline-border: #dce3ee;
     --color-spinner-track: rgb(242 245 250 / 0.2);
     --color-scrim: rgb(0 0 0 / 0.55);
 
@@ -212,6 +215,7 @@
   --color-house-text: #16181d;
   --color-offline-bg: #0f1626;
   --color-offline-text: #f2f5fa;
+  --color-offline-border: #dce3ee;
   --color-spinner-track: rgb(242 245 250 / 0.2);
   --color-scrim: rgb(0 0 0 / 0.55);
 

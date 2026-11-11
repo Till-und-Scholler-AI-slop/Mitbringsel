@@ -7,7 +7,7 @@ import { setUnauthenticatedHandler } from '@/services/api/client'
 import type { LiveSocket, ServerMessageHandler, SyncStatus } from '@/services/sync/socket'
 import type { ServerMessage, ServerMessageType } from '@/types/api'
 
-import { defineSyncStore } from '../sync'
+import { CONNECTING_GRACE_MS, defineSyncStore } from '../sync'
 
 const ANNA = '0190a8c4-0000-7000-8000-00000000000a'
 const BEN = '0190a8c4-0000-7000-8000-00000000000b'
@@ -158,6 +158,70 @@ describe('sync store: state', () => {
     await nextTick()
 
     expect(store.lastReadyAt).toBeNull()
+  })
+})
+
+describe('sync store: indicator', () => {
+  it('is hidden while nobody is signed in', () => {
+    const { store } = setup()
+
+    expect(store.indicator).toBe('hidden')
+  })
+
+  it('says synced while connected and offline while offline', async () => {
+    const { store, socket } = setup(ANNA)
+
+    socket.setStatus('connected')
+    await nextTick()
+    expect(store.indicator).toBe('synced')
+
+    socket.setStatus('offline')
+    await nextTick()
+    expect(store.indicator).toBe('offline')
+  })
+
+  it('counts connecting as synced during the grace period, then as offline', async () => {
+    vi.useFakeTimers()
+    const { store, socket } = setup(ANNA)
+
+    socket.setStatus('connecting')
+    await nextTick()
+    vi.advanceTimersByTime(CONNECTING_GRACE_MS - 1)
+    expect(store.indicator).toBe('synced')
+
+    vi.advanceTimersByTime(1)
+    expect(store.indicator).toBe('offline')
+  })
+
+  it('does not flash offline when a reconnect is quick', async () => {
+    vi.useFakeTimers()
+    const { store, socket } = setup(ANNA)
+    socket.setStatus('connected')
+    await nextTick()
+
+    socket.setStatus('connecting')
+    await nextTick()
+    vi.advanceTimersByTime(CONNECTING_GRACE_MS / 2)
+    socket.setStatus('connected')
+    await nextTick()
+    vi.advanceTimersByTime(CONNECTING_GRACE_MS)
+
+    expect(store.indicator).toBe('synced')
+  })
+
+  it('starts a new grace period at every new connecting', async () => {
+    vi.useFakeTimers()
+    const { store, socket } = setup(ANNA)
+    socket.setStatus('connecting')
+    await nextTick()
+    vi.advanceTimersByTime(CONNECTING_GRACE_MS)
+    socket.setStatus('connected')
+    await nextTick()
+
+    socket.setStatus('connecting')
+    await nextTick()
+
+    expect(store.indicator).toBe('synced')
   })
 })
 
