@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -264,6 +265,29 @@ func TestService_List(t *testing.T) {
 	none, err := f.svc.List(ctx, f.outsider)
 	if err != nil || none == nil || len(none) != 0 {
 		t.Errorf("List() for outsider = %v, %v; want an empty, non-nil slice", none, err)
+	}
+}
+
+func TestService_GroupIDs(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	other, err := f.svc.Create(ctx, f.member, "Zuhause")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	got, err := f.svc.GroupIDs(ctx, f.member)
+	if err != nil {
+		t.Fatalf("GroupIDs() error = %v", err)
+	}
+	// The repository does not promise an order.
+	if len(got) != 2 || !slices.Contains(got, f.group) || !slices.Contains(got, other.ID) {
+		t.Errorf("GroupIDs() = %v, want %v and %v", got, f.group, other.ID)
+	}
+
+	none, err := f.svc.GroupIDs(ctx, f.outsider)
+	if err != nil || none == nil || len(none) != 0 {
+		t.Errorf("GroupIDs() for outsider = %v, %v; want an empty, non-nil slice", none, err)
 	}
 }
 

@@ -73,6 +73,23 @@ func (s *Service) List(ctx context.Context, actor uuid.UUID) ([]Details, error) 
 	return out, nil
 }
 
+// GroupIDs returns the IDs of the groups the actor is a member of. It is
+// List without the members, for callers that only need to know where the
+// actor belongs, such as the live connection.
+func (s *Service) GroupIDs(ctx context.Context, actor uuid.UUID) ([]uuid.UUID, error) {
+	memberships, err := s.repo.ListForUser(ctx, actor)
+	if err != nil {
+		return nil, fmt.Errorf("list groups: %w", err)
+	}
+
+	// make instead of a nil slice, so "no groups" is empty and not nil.
+	ids := make([]uuid.UUID, len(memberships))
+	for i, m := range memberships {
+		ids[i] = m.Group.ID
+	}
+	return ids, nil
+}
+
 // Get returns one group. Non-members get ErrNotFound.
 func (s *Service) Get(ctx context.Context, actor, groupID uuid.UUID) (Details, error) {
 	role, err := roleOf(ctx, s.repo, groupID, actor)
