@@ -17,6 +17,7 @@ import (
 	"mitbringsel/internal/auth"
 	"mitbringsel/internal/config"
 	"mitbringsel/internal/group"
+	"mitbringsel/internal/item"
 	"mitbringsel/internal/realtime"
 )
 
@@ -69,6 +70,9 @@ type wsTestOptions struct {
 	sessions *fakeWSSessions
 	cfg      wsConfig
 	maxConns int
+	// items builds the item service of the server from the Broadcaster that
+	// is wired to its hub. Nil: the server has no item routes.
+	items func(pub item.Publisher) ItemService
 }
 
 // wsTestServer is the router behind a real listener.
@@ -101,11 +105,17 @@ func newWSTestServer(t *testing.T, opts wsTestOptions) *wsTestServer {
 	}
 
 	hub := realtime.NewHub(opts.maxConns, realtime.DefaultSendBuffer)
+	var items ItemService
+	if opts.items != nil {
+		items = opts.items(NewBroadcaster(hub))
+	}
 	router := newRouter(Deps{
 		Env:           config.EnvDevelopment,
 		DB:            fakePinger{},
 		Sessions:      opts.sessions,
 		Groups:        opts.groups,
+		Items:         items,
+		ItemClock:     fakeItemClock{},
 		Hub:           hub,
 		PublicBaseURL: wsTestBaseURL,
 	}, opts.cfg)
@@ -417,6 +427,110 @@ func TestWS_twoUsersShareAGroup(t *testing.T) {
 
 	requireMessage(t, anna, "groupChanged")
 	requireMessage(t, ben, "groupChanged")
+}
+
+// publishingItems is a fake item service that publishes like the real one:
+// it answers with the canned item of the embedded fakeItems, then tells the
+// publisher. The real service logic is covered in the item package.
+type publishingItems struct {
+	*fakeItems
+	pub item.Publisher
+}
+
+func (p publishingItems) Update(ctx context.Context, actor, itemID uuid.UUID, c item.Change, clock item.HLC) (item.Item, error) {
+	it, err := p.fakeItems.Update(ctx, actor, itemID, c, clock)
+	if err == nil {
+		p.pub.ItemChanged(ctx, testGroupID, actor, it)
+	}
+	return it, err
+}
+
+func (p publishingItems) Delete(ctx context.Context, actor, itemID uuid.UUID) (item.Item, error) {
+	it, err := p.fakeItems.Delete(ctx, actor, itemID)
+	if err == nil {
+		p.pub.ItemDeleted(ctx, testGroupID, actor, it)
+	}
+	return it, err
+}
+
+// sendREST sends a request to the server as the user with the token. It
+// sends no Origin header: with one, CrossOriginProtection would refuse the
+// PATCH and DELETE, because the test server listens on 127.0.0.1 and not on
+// the host of the Origin. Without Origin and Sec-Fetch-Site the request
+// counts as not coming from a browser and passes.
+func sendREST(t *testing.T, srv *wsTestServer, token, method, path, body string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), method, srv.url+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header = wsHeader(token, "")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp
+}
+
+func TestWS_itemEventsReachTheGroup(t *testing.T) {
+	// The fake is only touched by the handler goroutines; the test does not
+	// read fakeItems.calls, which would be a data race.
+	srv := newWSTestServer(t, wsTestOptions{
+		groups: wsGroups(),
+		items: func(pub item.Publisher) ItemService {
+			return publishingItems{fakeItems: &fakeItems{items: []item.Item{testItem()}}, pub: pub}
+		},
+	})
+	anna := connectWS(t, srv, wsTestToken)
+	ben := connectWS(t, srv, wsOtherToken)
+	requireMessage(t, anna, "ready")
+	requireMessage(t, ben, "ready")
+
+	resp := sendREST(t, srv, wsTestToken, http.MethodPatch, itemPathFor(), `{"name":"Mehl"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PATCH status = %d, want 200", resp.StatusCode)
+	}
+
+	// The actor's own connection gets the event, too: its tab discards it
+	// because the serverSeq is the one of the REST answer.
+	for name, conn := range map[string]*websocket.Conn{"anna": anna, "ben": ben} {
+		msg := requireMessage(t, conn, "itemChanged")
+		var payload struct {
+			ActorID uuid.UUID `json:"actorId"`
+			GroupID uuid.UUID `json:"groupId"`
+			Item    struct {
+				ID uuid.UUID `json:"id"`
+			} `json:"item"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			t.Fatalf("%s: payload %s: %v", name, msg.Payload, err)
+		}
+		if payload.ActorID != testUserID || payload.GroupID != testGroupID || payload.Item.ID != testItemID {
+			t.Errorf("%s: payload = %s, want actor %s, group %s, item %s", name, msg.Payload, testUserID, testGroupID, testItemID)
+		}
+	}
+
+	resp = sendREST(t, srv, wsTestToken, http.MethodDelete, itemPathFor(), "")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE status = %d, want 204", resp.StatusCode)
+	}
+
+	for name, conn := range map[string]*websocket.Conn{"anna": anna, "ben": ben} {
+		msg := requireMessage(t, conn, "itemDeleted")
+		var payload struct {
+			ActorID uuid.UUID `json:"actorId"`
+			ItemID  uuid.UUID `json:"itemId"`
+			ListID  uuid.UUID `json:"listId"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			t.Fatalf("%s: payload %s: %v", name, msg.Payload, err)
+		}
+		if payload.ActorID != testUserID || payload.ItemID != testItemID || payload.ListID != testListID {
+			t.Errorf("%s: payload = %s, want actor %s, item %s, list %s", name, msg.Payload, testUserID, testItemID, testListID)
+		}
+	}
 }
 
 func TestWS_pingPong(t *testing.T) {
