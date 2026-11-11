@@ -22,7 +22,6 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Owner-Übergabe:** Der Owner kann die Gruppe nur löschen, nicht übergeben (siehe [Überblick](overview.md)). Nachrüsten, falls sich das im Alltag als Lücke zeigt.
 - [ ] **Limit für Gruppen pro Nutzer:** `POST /api/v1/groups` legt beliebig viele Gruppen an; jeder angemeldete Nutzer könnte die Tabelle füllen. Vor dem öffentlichen Start eine Obergrenze (z.B. pro Nutzer und Mitglieder pro Gruppe) im Service festlegen, mit eigenem Fehlercode.
 - [ ] **Limit für Listen pro Gruppe:** `Service.Create` im Paket `list` legt beliebig viele Listen an. Zusammen mit dem Gruppen-Limit eine Obergrenze im Service festlegen, mit eigenem Fehlercode.
-- [ ] **Abgelaufene Einladungen aufräumen:** Abgelaufene und widerrufene Zeilen in `group_invites` werden nur ignoriert, nie gelöscht. Mit dem Aufräum-Job für Sessions (Phase 5, Schritt 10) umsetzen.
 
 ## Artikel
 
@@ -30,7 +29,7 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Artikel anlegen, bearbeiten und löschen in der UI:** Die Listenansicht kann nur abhaken. `create`, `update` und `remove` im Artikel-Store sind fertig und getestet, aber ohne Oberfläche. Design: Bottom Sheet auf dem Smartphone, Panel auf dem Desktop.
 - [ ] **Uhr-Symbol in der Artikelzeile:** Das Design markiert noch nicht synchronisierte Artikel mit einer Uhr („Noch nicht synchronisiert“). Kommt mit der Outbox in Phase 6.
 - [ ] **Abgehakte gesammelt entfernen:** Die Übersicht verlangt "abgehakte Artikel können gesammelt entfernt werden". Phase 5, Schritt 11: REST-Endpunkt `POST /lists/{listId}/items/remove-checked`, eine Transaktion, pro Artikel ein Tombstone und eine `serverSeq`, ein Ereignis `itemsDeleted`.
-- [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Phase 6, zusammen mit `sync` und dem Aufräum-Job für `processed_ops`; danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
+- [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Phase 6, zusammen mit `sync` und dem Aufräum-Job für `processed_ops` (als weitere `cleanup.Task`); danach muss ein Client mit zu alter `serverSeq` einen vollständigen Abgleich bekommen.
 - [ ] **Listen-Tombstones oder Neuabgleich für `sync`:** Listen werden hart gelöscht (kaskadierend, kein Tombstone), ein Client mit alter `serverSeq` erfährt von gelöschten Listen also nichts. Für `sync` in Phase 6 entweder Listen-Tombstones einführen oder einen vollständigen Neuabgleich der Listen verlangen.
 
 ## Live-Sync

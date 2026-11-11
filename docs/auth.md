@@ -37,6 +37,7 @@ Die Google-Endpunkte sind fest im Code hinterlegt statt beim Start aus Googles D
 
 - Sessions liegen in PostgreSQL (Tabelle `sessions`), im Cookie steht nur eine zufällige Session-ID. Gespeichert wird ein Hash der ID.
 - Laufzeit 30 Tage, gleitend verlängert bei Nutzung (höchstens einmal pro Stunde, damit nicht jeder Request schreibt). Bei jeder Verlängerung setzt `requireUser` das Cookie mit der neuen Ablaufzeit neu, sonst würde der Browser es nach den ersten 30 Tagen trotz Nutzung verwerfen. Logout löscht die Session serverseitig.
+- Abgelaufene Sessions löscht der Aufräum-Job des Servers (`internal/cleanup`, beim Start und dann stündlich). Für den Nutzer ändert das nichts: Eine abgelaufene Session wird schon vorher wie eine unbekannte abgewiesen.
 - Cookie-Name auf Staging und Production `__Host-session`: Das Präfix erzwingt `Secure`, `Path=/` und kein `Domain`-Attribut, sodass andere Dienste auf Subdomains von `tinowolter.com` das Cookie weder setzen noch überschreiben können. Lokal (`http://localhost`, ohne HTTPS) heißt es `session`.
 - Die Middleware `requireUser` in `httpapi` prüft die Session pro Route und legt die User-ID in den Request-Context. Unbekannte oder abgelaufene Sessions ergeben `401 UNAUTHENTICATED`, Datenbankfehler `500 INTERNAL_ERROR`, damit ein kurzer Ausfall niemanden abmeldet. Die Middleware liegt in `httpapi` und nicht in `auth`, weil sie HTTP übersetzt und `auth` sonst `httpapi` importieren müsste, das selbst `auth` nutzt.
 - Schreibende REST-Requests werden zusätzlich zu `SameSite` gegen CSRF geprüft: `http.CrossOriginProtection` aus der Standardbibliothek liegt um den ganzen Router und lehnt POST, PUT, PATCH und DELETE ab, die laut `Sec-Fetch-Site` (ältere Browser: `Origin` gegen `Host`) von einer anderen Seite kommen. Antwort: `403 CROSS_ORIGIN_REQUEST`. GET verändert deshalb nie etwas.
@@ -74,6 +75,7 @@ Warum die eigene Origin-Prüfung: `http.CrossOriginProtection` lässt GET durch,
 - `GET /invites/{token}` braucht keine Anmeldung, damit die Seite hinter dem Link die Einladung zeigen kann. Wer den Token hat, sieht Gruppenname, die einladende Person, die Mitgliederzahl und die ersten vier Mitglieder mit Vornamen und Avatar; die vollständige Liste bleibt hinter dem Login. Die Antwort trägt `Cache-Control: no-store`.
 - Wer den Link öffnet, meldet sich bei Bedarf mit Google an und tritt mit `POST /invites/{token}/accept` als Member bei. Wer schon Mitglied ist, behält seine Rolle.
 - Unbekannte Token antworten `404 INVITE_NOT_FOUND`, abgelaufene oder widerrufene `410 INVITE_EXPIRED`. Das verrät nichts, weil sich 256-Bit-Token nicht erraten lassen.
+- Der Aufräum-Job löscht abgelaufene und widerrufene Einladungen 30 Tage nach Ablauf bzw. Widerruf. Bis dahin sagt ein alter Link noch „abgelaufen“ (`410`), danach „ungültig“ (`404`).
 - Der Token steht im Pfad und damit in Zugriffslogs eines Reverse Proxys. Der Go-Server loggt keine Pfade; ein Traefik-Access-Log sollte die Pfade unter `/api/v1/invites/` nicht aufzeichnen.
 
 ## Lokale Entwicklung

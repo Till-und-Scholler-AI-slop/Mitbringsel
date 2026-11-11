@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -78,6 +79,42 @@ func TestPostgresSessionRepository(t *testing.T) {
 	t.Run("delete unknown hash", func(t *testing.T) {
 		if err := repo.Delete(ctx, hashToken("NEVER-STORED")); err != nil {
 			t.Errorf("Delete() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("delete expired removes exactly the expired sessions", func(t *testing.T) {
+		// Far before the sessions of the other subtests expire, so the
+		// count below only sees the sessions made here.
+		now := testStart.Add(time.Hour)
+		cases := []struct {
+			name      string
+			expiresAt time.Time
+			wantGone  bool
+		}{
+			{"expired-before", now.Add(-time.Hour), true},
+			{"expired-at-now", now, true},
+			{"still-valid", now.Add(time.Second), false},
+		}
+		for _, c := range cases {
+			s := newStoredSession(t, queries, c.name)
+			s.ExpiresAt = c.expiresAt
+			if err := repo.Create(ctx, s); err != nil {
+				t.Fatalf("Create(%s) error = %v", c.name, err)
+			}
+		}
+
+		n, err := repo.DeleteExpired(ctx, now)
+		if err != nil {
+			t.Fatalf("DeleteExpired() error = %v", err)
+		}
+		if n != 2 {
+			t.Errorf("DeleteExpired() = %d, want 2", n)
+		}
+		for _, c := range cases {
+			_, err := repo.Get(ctx, hashToken("token-"+c.name))
+			if gone := errors.Is(err, ErrSessionNotFound); gone != c.wantGone {
+				t.Errorf("session %s gone = %v, want %v (error %v)", c.name, gone, c.wantGone, err)
+			}
 		}
 	})
 
