@@ -9,7 +9,7 @@ Getestet wird, was kaputtgehen darf, ohne dass man es sofort merkt: Sync- und Ko
 | LWW-Merge und HLC (Go und TypeScript) | Unit, tabellengetrieben | Gleichzeitige Änderungen an verschiedenen und gleichen Feldern, Gleichstand, Löschen gewinnt, Uhr in der Zukunft |
 | Services | Unit mit Fake-Repositories | Nicht-Mitglied darf nicht lesen oder schreiben, Rechte von Owner, Admin und Member, abgelaufene Einladung |
 | Repositories und Migrationen | Integration gegen echtes Postgres (`testcontainers-go`) | Queries, Constraints, `server_seq`, Idempotenz über `processed_ops` |
-| WebSocket-Hub | Integration | Phase 5: zwei Clients, Änderung von A kommt bei B an; Entfernen aus der Gruppe; langsamer Client. Wiederverbinden mit `sync` kommt in Phase 6 |
+| WebSocket-Hub | Unit und Integration | Unit (`realtime`): Räume, langsamer Client, Limit, Rennen beim Verbinden; Integration mit zwei Clients ab Schritt 3. Phase 5: zwei Clients, Änderung von A kommt bei B an; Entfernen aus der Gruppe; langsamer Client. Wiederverbinden mit `sync` kommt in Phase 6 |
 | HTTP-Handler | `httptest` | Statuscodes, Fehlerformat, Validierung |
 | Outbox und Sync-Service (Frontend) | Unit mit Vitest, IndexedDB-Fake | Reihenfolge, erneutes Senden, Rollback bei Ablehnung |
 | Stores und Basis-Komponenten | Vitest + Vue Test Utils | Props, Events, Zustände von `BaseButton`, `BaseInput` |
