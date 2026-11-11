@@ -106,8 +106,9 @@ type InviteRepository interface {
 	// them, oldest membership first.
 	PreviewMembers(ctx context.Context, groupID uuid.UUID, max int) (count int, members []PreviewMember, err error)
 	// AddMemberIfAbsent makes the user a member, or does nothing if they
-	// already are one (their role stays).
-	AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) error
+	// already are one (their role stays). added tells which of the two
+	// happened.
+	AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) (added bool, err error)
 }
 
 // InviteService creates, lists, revokes and redeems invite links.
@@ -204,7 +205,7 @@ func (s *InviteService) Accept(ctx context.Context, actor uuid.UUID, token strin
 	if err != nil {
 		return Group{}, err
 	}
-	if err := s.repo.AddMemberIfAbsent(ctx, target.Group.ID, actor, RoleMember); err != nil {
+	if _, err := s.repo.AddMemberIfAbsent(ctx, target.Group.ID, actor, RoleMember); err != nil {
 		return Group{}, fmt.Errorf("join group: %w", err)
 	}
 	return target.Group, nil

@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const addGroupMemberIfAbsent = `-- name: AddGroupMemberIfAbsent :exec
+const addGroupMemberIfAbsent = `-- name: AddGroupMemberIfAbsent :execrows
 INSERT INTO group_members (group_id, user_id, role)
 VALUES ($1, $2, $3)
 ON CONFLICT (group_id, user_id) DO NOTHING
@@ -25,10 +25,14 @@ type AddGroupMemberIfAbsentParams struct {
 }
 
 // Two people opening the same link at once, or one person twice, must not
-// fail on the primary key: being a member already is the goal.
-func (q *Queries) AddGroupMemberIfAbsent(ctx context.Context, arg AddGroupMemberIfAbsentParams) error {
-	_, err := q.db.Exec(ctx, addGroupMemberIfAbsent, arg.GroupID, arg.UserID, arg.Role)
-	return err
+// fail on the primary key: being a member already is the goal. The row count
+// tells the caller whether someone was added (1) or already was a member (0).
+func (q *Queries) AddGroupMemberIfAbsent(ctx context.Context, arg AddGroupMemberIfAbsentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addGroupMemberIfAbsent, arg.GroupID, arg.UserID, arg.Role)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const countActiveGroupInvites = `-- name: CountActiveGroupInvites :one

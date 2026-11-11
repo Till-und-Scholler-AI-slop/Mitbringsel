@@ -87,11 +87,12 @@ func (r *fakeInviteRepo) PreviewMembers(_ context.Context, groupID uuid.UUID, ma
 	return count, members, nil
 }
 
-func (r *fakeInviteRepo) AddMemberIfAbsent(_ context.Context, groupID, userID uuid.UUID, role Role) error {
-	if _, ok := r.roles[groupID][userID]; !ok {
-		r.roles[groupID][userID] = role
+func (r *fakeInviteRepo) AddMemberIfAbsent(_ context.Context, groupID, userID uuid.UUID, role Role) (bool, error) {
+	if _, ok := r.roles[groupID][userID]; ok {
+		return false, nil
 	}
-	return nil
+	r.roles[groupID][userID] = role
+	return true, nil
 }
 
 // inviteFixture is one group with an owner, an admin and a member, a second

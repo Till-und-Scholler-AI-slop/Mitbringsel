@@ -291,6 +291,30 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("AddMemberIfAbsent reports whether it added someone", func(t *testing.T) {
+		anna := newTestUser(t, pool, "absent-anna")
+		ben := newTestUser(t, pool, "absent-ben")
+		created, err := svc.Create(ctx, anna, "Absent")
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+
+		// The first call adds, the second finds Ben and keeps his role.
+		for i, want := range []bool{true, false} {
+			added, err := repo.AddMemberIfAbsent(ctx, created.ID, ben, RoleMember)
+			if err != nil || added != want {
+				t.Fatalf("AddMemberIfAbsent() call %d = %v, %v; want %v", i+1, added, err, want)
+			}
+		}
+		// A member who has a higher role already is not added, nor demoted.
+		if added, err := repo.AddMemberIfAbsent(ctx, created.ID, anna, RoleMember); err != nil || added {
+			t.Errorf("AddMemberIfAbsent() for the owner = %v, %v; want false", added, err)
+		}
+		if role, _ := repo.MemberRole(ctx, created.ID, anna); role != RoleOwner {
+			t.Errorf("owner role after AddMemberIfAbsent() = %q, want %q", role, RoleOwner)
+		}
+	})
+
 	// The invite service on the real repository: hashing, expiry in SQL,
 	// the group scope of revoke and the idempotent join.
 	t.Run("invites end to end", func(t *testing.T) {

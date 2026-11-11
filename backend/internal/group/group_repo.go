@@ -251,12 +251,13 @@ func (r *PostgresRepository) PreviewMembers(ctx context.Context, groupID uuid.UU
 	return int(count), members, nil
 }
 
-func (r *PostgresRepository) AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) error {
-	return r.q.AddGroupMemberIfAbsent(ctx, sqlcgen.AddGroupMemberIfAbsentParams{
+func (r *PostgresRepository) AddMemberIfAbsent(ctx context.Context, groupID, userID uuid.UUID, role Role) (bool, error) {
+	n, err := r.q.AddGroupMemberIfAbsent(ctx, sqlcgen.AddGroupMemberIfAbsentParams{
 		GroupID: groupID,
 		UserID:  userID,
 		Role:    string(role),
 	})
+	return n == 1, err
 }
 
 // deref turns a nullable text column into "" for NULL.
