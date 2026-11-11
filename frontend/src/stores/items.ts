@@ -1,8 +1,9 @@
-import { ref, toRaw, watch } from 'vue'
+import { onScopeDispose, ref, toRaw, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { itemsService, type ItemsService } from '@/services/api/items'
+import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
 import type { CreateItemRequest, Item, UpdateItemRequest } from '@/types/api'
 
@@ -20,8 +21,9 @@ interface ListItems {
 }
 
 /**
- * Builds the store around a service and a getter for the ID of the signed-in
- * user, like defineListsStore. The store forgets everything when that ID
+ * Builds the store around a service, a getter for the ID of the signed-in
+ * user and the source of server events (the live socket; tests pass a fake),
+ * like defineListsStore. The store forgets everything when that ID
  * changes (logout, expired session, another user).
  *
  * The store keeps the items of each list apart, in the order of the server
@@ -43,8 +45,16 @@ interface ListItems {
  * store applies a state only if it is not older than what it has. A deleted
  * item stays deleted: the store remembers its ID and ignores every later
  * state of it.
+ *
+ * Changes of other members arrive as events and go the same way as answers.
+ * Events are best effort, so after every (re)connect of the socket the store
+ * loads again what it has loaded; see docs/sync.md.
  */
-export function defineItemsStore(service: ItemsService, currentUserId: () => string | null) {
+export function defineItemsStore(
+  service: ItemsService,
+  currentUserId: () => string | null,
+  events: ServerEvents = liveSocket,
+) {
   return defineStore('items', () => {
     const byList = ref<Record<string, ListItems>>({})
 
@@ -225,6 +235,24 @@ export function defineItemsStore(service: ItemsService, currentUserId: () => str
       if (entry) {
         entry.items = entry.items.filter((item) => item.id !== itemId)
       }
+    }
+
+    /**
+     * A deletion announced by the server. `serverSeq` is null when we only
+     * know that the item is gone, not when.
+     */
+    function takeDeletion(listId: string, itemId: string, serverSeq: number | null) {
+      const entry = byList.value[listId]
+      if (!entry || tombstones.has(itemId)) {
+        return
+      }
+      const local = entry.items.find((item) => item.id === itemId)
+      // Cannot happen with the server's numbering (a deletion has a greater
+      // serverSeq than any change before it), but costs one line to be sure.
+      if (local && serverSeq !== null && local.serverSeq >= serverSeq) {
+        return
+      }
+      forget(itemId, entry)
     }
 
     // The request of the newest tap ended: `stored` is its answer, or null if
@@ -424,6 +452,36 @@ export function defineItemsStore(service: ItemsService, currentUserId: () => str
         forget(itemId, listId === undefined ? undefined : byList.value[listId])
       }
     }
+
+    // The setup function runs in the effect scope of the store, so
+    // onScopeDispose() runs at $dispose(): the handlers must not outlive the
+    // store, as the socket outlives it.
+    const unsubscribes = [
+      events.on('itemChanged', ({ payload }) => takeServerItem(payload.item, 'event')),
+      events.on('itemDeleted', ({ payload }) =>
+        takeDeletion(payload.listId, payload.itemId, payload.serverSeq),
+      ),
+      events.on('itemsDeleted', ({ payload }) => {
+        for (const deleted of payload.items) {
+          takeDeletion(payload.listId, deleted.itemId, deleted.serverSeq)
+        }
+      }),
+      // Events are best effort and the connection may have been down:
+      // everything we have loaded (or are loading) may be outdated. Lists
+      // never loaded stay untouched; ListView loads them when opened.
+      events.on('ready', () => {
+        for (const [listId, entry] of Object.entries(byList.value)) {
+          if (entry.status !== 'idle') {
+            void load(listId)
+          }
+        }
+      }),
+    ]
+    onScopeDispose(() => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
+      }
+    })
 
     return {
       itemsOf,
