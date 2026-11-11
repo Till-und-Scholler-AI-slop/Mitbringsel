@@ -67,7 +67,7 @@ Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im Git
 - nginx im `web`-Image: SPA-Fallback auf `index.html` für Deep-Links, gehashte Dateien unter `/assets/` mit `Cache-Control: immutable`, alles andere mit `no-cache` (wichtig für den späteren Service Worker), gzip.
 - `make docker-build` baut beide Images lokal (Tag `dev`, änderbar per `IMAGE_TAG`).
 - Tägliches Backup der Production-Datenbank per `pg_dump` mit Aufbewahrung von 14 Tagen.
-- Für lokale Entwicklung gibt es eine eigene `docker-compose.dev.yml` (nur Postgres) und ein `Makefile` mit `make dev`, `make test`, `make seed`, `make migrate`, `make docker-build`.
+- Für lokale Entwicklung gibt es eine eigene `docker-compose.dev.yml` (nur Postgres) und ein `Makefile` mit `make dev`, `make test`, `make seed`, `make migrate`, `make docker-build`. Der Seed-Befehl (`backend/cmd/seed`) ist nicht im Backend-Image, weil das Dockerfile nur `./cmd/server` baut; auf Staging und Production lässt er sich damit nicht starten.
 
 ## CI/CD mit GitHub Actions
 
