@@ -81,17 +81,17 @@ func run() error {
 	queries := sqlcgen.New(pool)
 	sessions := auth.NewSessionService(auth.NewPostgresSessionRepository(queries))
 	users := user.NewService(user.NewPostgresRepository(queries))
-	// Unlike the other repositories, this one takes the pool: it starts the
-	// transactions that keep a group and its owner together.
-	groupRepo := group.NewPostgresRepository(pool)
-	groups := group.NewService(groupRepo, nil)
-	invites := group.NewInviteService(groupRepo, nil)
-	// The group repository doubles as the list service's membership lookup.
-	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo, nil)
 	// The hub comes first: the broadcaster hands the events of the services
 	// to it.
 	hub := realtime.NewHub(realtime.DefaultMaxConnsPerUser, realtime.DefaultSendBuffer)
 	broadcaster := httpapi.NewBroadcaster(hub)
+	// Unlike the other repositories, this one takes the pool: it starts the
+	// transactions that keep a group and its owner together.
+	groupRepo := group.NewPostgresRepository(pool)
+	groups := group.NewService(groupRepo, broadcaster)
+	invites := group.NewInviteService(groupRepo, broadcaster)
+	// The group repository doubles as the list service's membership lookup.
+	lists := list.NewService(list.NewPostgresRepository(queries), groupRepo, broadcaster)
 	// Items check access through the list service and publish their changes
 	// to the broadcaster.
 	items := item.NewService(item.NewPostgresRepository(pool), lists, broadcaster)
