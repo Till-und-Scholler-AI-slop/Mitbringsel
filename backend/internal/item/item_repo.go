@@ -92,13 +92,7 @@ func (r *PostgresRepository) ListForList(ctx context.Context, listID uuid.UUID) 
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Item, len(rows))
-	for i, row := range rows {
-		if out[i], err = fromRow(row); err != nil {
-			return nil, err
-		}
-	}
-	return out, nil
+	return fromRows(rows)
 }
 
 func (r *PostgresRepository) Apply(ctx context.Context, itemID uuid.UUID, u Update) (Item, error) {
@@ -136,6 +130,17 @@ func (r *PostgresRepository) MarkDeleted(ctx context.Context, itemID uuid.UUID) 
 	return fromRow(row)
 }
 
+func (r *PostgresRepository) MarkCheckedDeleted(ctx context.Context, listID uuid.UUID, itemIDs []uuid.UUID) ([]Item, error) {
+	rows, err := r.q.MarkCheckedItemsDeleted(ctx, sqlcgen.MarkCheckedItemsDeletedParams{
+		ListID:  listID,
+		ItemIds: itemIDs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return fromRows(rows)
+}
+
 func fromRow(row sqlcgen.Item) (Item, error) {
 	var clocks Clocks
 	if err := json.Unmarshal(row.FieldClocks, &clocks); err != nil {
@@ -162,6 +167,18 @@ func fromRow(row sqlcgen.Item) (Item, error) {
 		Clocks:    clocks,
 		ServerSeq: row.ServerSeq,
 	}, nil
+}
+
+// fromRows translates every row with fromRow.
+func fromRows(rows []sqlcgen.Item) ([]Item, error) {
+	out := make([]Item, len(rows))
+	for i, row := range rows {
+		var err error
+		if out[i], err = fromRow(row); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 func unitToText(u *Unit) *string {

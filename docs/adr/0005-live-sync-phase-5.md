@@ -22,7 +22,7 @@ Offen war, wie weit der WebSocket in Phase 5 gehen soll. Schreiben über den Web
 - **Eine Backend-Instanz** pro Umgebung. PostgreSQL `LISTEN/NOTIFY` kommt nur bei Bedarf.
 - **Listen werden hart gelöscht** (kaskadierend, kein Tombstone). Artikel haben in `Item` kein `deletedAt`, deshalb gibt es das eigene Ereignis `itemDeleted`.
 - **Aufräum-Job in Phase 5** nur für abgelaufene Sessions und alte Einladungen. Tombstones (30 Tage) und `processed_ops` folgen in Phase 6 zusammen mit `sync`.
-- **„Abgehakte gesammelt entfernen“** ist in Phase 5 der letzte Schritt: REST `POST /lists/{listId}/items/remove-checked`, eine Transaktion, ein Tombstone und eine `serverSeq` pro Artikel, ein Ereignis `itemsDeleted`.
+- **„Abgehakte gesammelt entfernen“** ist in Phase 5 der letzte Schritt: REST `POST /lists/{listId}/items/remove-checked`, eine Transaktion, ein Tombstone und eine `serverSeq` pro Artikel, ein Ereignis `itemsDeleted`. Nachtrag (Schritt 11): Der Client schickt die IDs der Artikel, die er als abgehakt zeigt, und der Server löscht nur die, die noch abgehakt sind. Das Frontend sendet erst nach einigen Sekunden, damit „Rückgängig“ ohne Wiederherstellen auf dem Server auskommt (Löschen gewinnt, [ADR 0004](0004-lww-pro-feld.md)); „alle gerade abgehakten“ würde in dieser Zeit auch Artikel löschen, die jemand anderes eben erst abgehakt hat.
 
 Verworfene Alternativen:
 

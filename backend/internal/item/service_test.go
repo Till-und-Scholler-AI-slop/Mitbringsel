@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -135,6 +136,26 @@ func (r *fakeRepo) MarkDeleted(ctx context.Context, itemID uuid.UUID) (Item, err
 	return it, nil
 }
 
+func (r *fakeRepo) MarkCheckedDeleted(_ context.Context, listID uuid.UUID, itemIDs []uuid.UUID) ([]Item, error) {
+	if r.fail {
+		return nil, errRepo
+	}
+	var out []Item
+	for _, id := range itemIDs {
+		it, ok := r.items[id]
+		if !ok || it.ListID != listID || !it.Checked || it.Deleted() {
+			continue
+		}
+		deletedAt := at
+		it.DeletedAt = &deletedAt
+		r.seq++
+		it.ServerSeq = r.seq
+		r.items[id] = it
+		out = append(out, it)
+	}
+	return out, nil
+}
+
 // fakeGroupID is the group every fake list belongs to.
 var fakeGroupID = uuid.MustParse("0190a8c4-0000-7000-8000-0000000000a1")
 
@@ -146,9 +167,18 @@ type publishedEvent struct {
 	item    Item
 }
 
+// publishedBatch is one call to ItemsDeleted.
+type publishedBatch struct {
+	groupID    uuid.UUID
+	listID     uuid.UUID
+	actor      uuid.UUID
+	tombstones []Item
+}
+
 // fakePublisher records what the service publishes.
 type fakePublisher struct {
-	events []publishedEvent
+	events  []publishedEvent
+	batches []publishedBatch
 }
 
 func (p *fakePublisher) ItemChanged(_ context.Context, groupID, actor uuid.UUID, it Item) {
@@ -157,6 +187,10 @@ func (p *fakePublisher) ItemChanged(_ context.Context, groupID, actor uuid.UUID,
 
 func (p *fakePublisher) ItemDeleted(_ context.Context, groupID, actor uuid.UUID, it Item) {
 	p.events = append(p.events, publishedEvent{"deleted", groupID, actor, it})
+}
+
+func (p *fakePublisher) ItemsDeleted(_ context.Context, groupID, listID, actor uuid.UUID, tombstones []Item) {
+	p.batches = append(p.batches, publishedBatch{groupID, listID, actor, tombstones})
 }
 
 // fakeLists says which users may see which lists.
@@ -831,6 +865,126 @@ func TestService_Delete(t *testing.T) {
 	})
 }
 
+// check checks the item through the service.
+func (f fixture) check(t *testing.T, it Item) Item {
+	t.Helper()
+	checked, err := f.svc.Update(context.Background(), f.member, it.ID, Change{Checked: Some(true)}, f.clock(t, 1, "anna"))
+	if err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	return checked
+}
+
+// idsOf returns the IDs of the items, sorted, to compare results that come
+// in no particular order.
+func idsOf(items []Item) []uuid.UUID {
+	ids := make([]uuid.UUID, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	slices.SortFunc(ids, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
+	return ids
+}
+
+func TestService_RemoveChecked(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("deletes the named items that are still checked and publishes them once", func(t *testing.T) {
+		f := newFixture()
+		milk := f.check(t, f.create(t))
+		bread := f.check(t, f.create(t))
+		open := f.create(t)                // named, but not checked
+		unnamed := f.check(t, f.create(t)) // checked, but not named
+		gone := f.check(t, f.create(t))    // named, but deleted already
+		if _, err := f.svc.Delete(ctx, f.member, gone.ID); err != nil {
+			t.Fatal(err)
+		}
+		foreign := Item{ID: uuid.New(), ListID: f.otherID, Name: "Fremd", Checked: true}
+		f.repo.items[foreign.ID] = foreign
+
+		got, err := f.svc.RemoveChecked(ctx, f.member, f.listID,
+			[]uuid.UUID{milk.ID, bread.ID, open.ID, gone.ID, foreign.ID, uuid.New()})
+		if err != nil {
+			t.Fatalf("RemoveChecked() error = %v", err)
+		}
+
+		if want := idsOf([]Item{milk, bread}); !slices.Equal(idsOf(got), want) {
+			t.Errorf("deleted %v, want %v", idsOf(got), want)
+		}
+		for _, it := range got {
+			if !it.Deleted() || it.ServerSeq <= milk.ServerSeq {
+				t.Errorf("%s = %+v, want a tombstone with a new serverSeq", it.Name, it)
+			}
+		}
+		for _, kept := range []Item{open, unnamed, foreign} {
+			if f.repo.items[kept.ID].Deleted() {
+				t.Errorf("%s was deleted", kept.ID)
+			}
+		}
+		want := []publishedBatch{{fakeGroupID, f.listID, f.member, got}}
+		if !reflect.DeepEqual(f.pub.batches, want) {
+			t.Errorf("published %+v, want %+v", f.pub.batches, want)
+		}
+	})
+
+	t.Run("nothing to delete publishes nothing", func(t *testing.T) {
+		f := newFixture()
+		open := f.create(t)
+
+		for name, ids := range map[string][]uuid.UUID{"no IDs": {}, "nothing checked": {open.ID}} {
+			got, err := f.svc.RemoveChecked(ctx, f.member, f.listID, ids)
+			if err != nil || len(got) != 0 {
+				t.Errorf("%s: RemoveChecked() = %+v, %v, want nothing", name, got, err)
+			}
+		}
+		if len(f.pub.batches) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.batches)
+		}
+	})
+
+	t.Run("an outsider is not found and deletes nothing", func(t *testing.T) {
+		f := newFixture()
+		milk := f.check(t, f.create(t))
+
+		// Even with too many IDs: access comes first.
+		for _, ids := range [][]uuid.UUID{{milk.ID}, make([]uuid.UUID, MaxRemoveItems+1)} {
+			if _, err := f.svc.RemoveChecked(ctx, f.outsider, f.listID, ids); !errors.Is(err, ErrNotFound) {
+				t.Errorf("error = %v, want %v", err, ErrNotFound)
+			}
+		}
+		if f.repo.items[milk.ID].Deleted() || len(f.pub.batches) != 0 {
+			t.Errorf("the outsider deleted %+v and published %+v", f.repo.items[milk.ID], f.pub.batches)
+		}
+	})
+
+	t.Run("more than MaxRemoveItems IDs are refused", func(t *testing.T) {
+		f := newFixture()
+		milk := f.check(t, f.create(t))
+		ids := make([]uuid.UUID, MaxRemoveItems+1)
+		ids[0] = milk.ID
+
+		if _, err := f.svc.RemoveChecked(ctx, f.member, f.listID, ids); !errors.Is(err, ErrTooManyItems) {
+			t.Errorf("error = %v, want %v", err, ErrTooManyItems)
+		}
+		if _, err := f.svc.RemoveChecked(ctx, f.member, f.listID, ids[:MaxRemoveItems]); err != nil {
+			t.Errorf("exactly MaxRemoveItems: error = %v", err)
+		}
+	})
+
+	t.Run("a repository failure is returned and publishes nothing", func(t *testing.T) {
+		f := newFixture()
+		milk := f.check(t, f.create(t))
+		f.repo.fail = true
+
+		if _, err := f.svc.RemoveChecked(ctx, f.member, f.listID, []uuid.UUID{milk.ID}); !errors.Is(err, errRepo) {
+			t.Errorf("error = %v, want %v", err, errRepo)
+		}
+		if len(f.pub.batches) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.batches)
+		}
+	})
+}
+
 func TestNewService_nilPublisher(t *testing.T) {
 	f := newFixture()
 	svc := NewService(f.repo, fakeLists{f.listID: {f.member: true}}, nil)
@@ -842,6 +996,12 @@ func TestNewService_nilPublisher(t *testing.T) {
 	}
 	if _, err := svc.Update(ctx, f.member, id, Change{Name: Some("Hafermilch")}, f.clock(t, 1, "anna")); err != nil {
 		t.Fatalf("Update() error = %v", err)
+	}
+	if _, err := svc.Update(ctx, f.member, id, Change{Checked: Some(true)}, f.clock(t, 2, "anna")); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if _, err := svc.RemoveChecked(ctx, f.member, f.listID, []uuid.UUID{id}); err != nil {
+		t.Fatalf("RemoveChecked() error = %v", err)
 	}
 	if _, err := svc.Delete(ctx, f.member, id); err != nil {
 		t.Fatalf("Delete() error = %v", err)

@@ -237,6 +237,69 @@ func (q *Queries) ListItemsForList(ctx context.Context, listID uuid.UUID) ([]Ite
 	return items, nil
 }
 
+const markCheckedItemsDeleted = `-- name: MarkCheckedItemsDeleted :many
+WITH target AS (
+    SELECT i.id FROM items i
+    WHERE i.list_id = $1::uuid
+      AND i.id = ANY($2::uuid[])
+      AND i.checked
+      AND i.deleted_at IS NULL
+    ORDER BY i.id
+    FOR UPDATE
+)
+UPDATE items
+SET deleted_at = now(),
+    server_seq = nextval('change_seq')
+FROM target
+WHERE items.id = target.id
+RETURNING items.id, items.list_id, items.name, items.quantity, items.unit, items.note, items.checked, items.checked_by, items.checked_at, items.created_by, items.created_at, items.deleted_at, items.field_clocks, items.server_seq
+`
+
+type MarkCheckedItemsDeletedParams struct {
+	ListID  uuid.UUID
+	ItemIds []uuid.UUID
+}
+
+// Tombstones for those of the given items that are still checked and not
+// deleted, in one statement: all or none. Each row draws its own server_seq.
+// The rows are locked in ID order first, so two of these at once cannot
+// deadlock. A row another transaction changes meanwhile is checked again
+// once that one commits: an item unchecked in the meantime stays.
+func (q *Queries) MarkCheckedItemsDeleted(ctx context.Context, arg MarkCheckedItemsDeletedParams) ([]Item, error) {
+	rows, err := q.db.Query(ctx, markCheckedItemsDeleted, arg.ListID, arg.ItemIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.ID,
+			&i.ListID,
+			&i.Name,
+			&i.Quantity,
+			&i.Unit,
+			&i.Note,
+			&i.Checked,
+			&i.CheckedBy,
+			&i.CheckedAt,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.DeletedAt,
+			&i.FieldClocks,
+			&i.ServerSeq,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markItemDeleted = `-- name: MarkItemDeleted :one
 UPDATE items
 SET deleted_at = COALESCE(deleted_at, now()),

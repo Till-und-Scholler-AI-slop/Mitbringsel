@@ -3,11 +3,14 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"slices"
 	"testing"
 
 	"github.com/google/uuid"
+
+	"mitbringsel/internal/item"
 )
 
 // fakeHub records what the Broadcaster hands over.
@@ -150,6 +153,29 @@ func TestBroadcaster_ItemDeleted(t *testing.T) {
 	requireString(t, "itemId", payload["itemId"], testItemID.String())
 	if got := string(payload["serverSeq"]); got != "43" {
 		t.Errorf("serverSeq = %s, want 43", got)
+	}
+}
+
+func TestBroadcaster_ItemsDeleted(t *testing.T) {
+	hub := &fakeHub{}
+	b := &Broadcaster{hub: hub}
+	first, second := testItem(), testItem()
+	first.ServerSeq = 43
+	second.ID = uuid.MustParse("0190a8c4-0000-7000-8000-0000000000f2")
+	second.ServerSeq = 44
+
+	b.ItemsDeleted(context.Background(), testGroupID, testListID, testMemberID, []item.Item{first, second})
+
+	_, top, payload := requireOneBroadcast(t, hub)
+	requireKeys(t, "message", top, "type", "payload")
+	requireKeys(t, "payload", payload, "actorId", "groupId", "listId", "items")
+	requireString(t, "type", top["type"], "itemsDeleted")
+	requireString(t, "actorId", payload["actorId"], testMemberID.String())
+	requireString(t, "groupId", payload["groupId"], testGroupID.String())
+	requireString(t, "listId", payload["listId"], testListID.String())
+	want := fmt.Sprintf(`[{"itemId":%q,"serverSeq":43},{"itemId":%q,"serverSeq":44}]`, first.ID, second.ID)
+	if got := string(payload["items"]); got != want {
+		t.Errorf("items = %s, want %s", got, want)
 	}
 }
 

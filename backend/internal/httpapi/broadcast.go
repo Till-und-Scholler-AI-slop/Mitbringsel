@@ -68,6 +68,24 @@ func (b *Broadcaster) ItemDeleted(ctx context.Context, groupID, actor uuid.UUID,
 	})
 }
 
+// ItemsDeleted tells the group that several items of one list were deleted
+// at once, in one message: the client handles each like an itemDeleted.
+func (b *Broadcaster) ItemsDeleted(ctx context.Context, groupID, listID, actor uuid.UUID, tombstones []item.Item) {
+	deleted := make([]apigen.DeletedItem, len(tombstones))
+	for i, it := range tombstones {
+		deleted[i] = apigen.DeletedItem{ItemID: it.ID, ServerSeq: it.ServerSeq}
+	}
+	b.broadcast(ctx, groupID, apigen.ItemsDeletedMessage{
+		Type: apigen.ItemsDeletedMessageTypeItemsDeleted,
+		Payload: apigen.ItemsDeletedPayload{
+			ActorID: actor,
+			GroupID: groupID,
+			ListID:  listID,
+			Items:   deleted,
+		},
+	})
+}
+
 // broadcast encodes msg and queues it for the room of the group. A message
 // that cannot be encoded is logged and dropped: the change is stored, and
 // clients catch up on their next reload. ctx only carries the request's log

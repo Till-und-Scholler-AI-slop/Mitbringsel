@@ -396,6 +396,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/lists/{listId}/items/remove-checked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: components["parameters"]["ListId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete the checked items of a list at once
+         * @description Every member may do this, also in an archived list. The client sends
+         *     the items it shows as checked; the server deletes those that belong
+         *     to the list and are still checked. An item that someone unchecked
+         *     meanwhile stays, and so does one checked after the client looked.
+         *     IDs of other lists, unknown or deleted items are skipped without an
+         *     error. The answer lists what was deleted; the group gets one
+         *     `itemsDeleted` event, none if nothing was deleted.
+         */
+        post: operations["removeCheckedItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/items/{itemId}": {
         parameters: {
             query?: never;
@@ -685,6 +713,13 @@ export interface components {
              */
             note?: string | null;
         };
+        RemoveCheckedItemsRequest: {
+            /** @description At most 500 items, otherwise `INVALID_REQUEST`. An empty array deletes nothing. */
+            itemIds: string[];
+        };
+        RemovedItems: {
+            items: components["schemas"]["DeletedItem"][];
+        };
         /**
          * @description At least one field. `quantity`, `unit` and `note` accept `null` to
          *     remove the value; for `name` and `checked`, `null` is an invalid
@@ -864,7 +899,7 @@ export interface components {
             actorId: string;
             items: components["schemas"]["DeletedItem"][];
         };
-        /** @description One deleted item of an `itemsDeleted` event. */
+        /** @description One deleted item, in an `itemsDeleted` event or the answer of `removeCheckedItems`. */
         DeletedItem: {
             /** Format: uuid */
             itemId: string;
@@ -1659,6 +1694,36 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    removeCheckedItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listId: components["parameters"]["ListId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveCheckedItemsRequest"];
+            };
+        };
+        responses: {
+            /** @description The items that were deleted, in no particular order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemovedItems"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             500: components["responses"]["Error"];
         };
     };

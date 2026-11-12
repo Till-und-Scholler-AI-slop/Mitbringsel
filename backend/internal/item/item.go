@@ -15,6 +15,9 @@ const (
 	MaxNoteLength = 500
 	// MaxQuantity is a sanity limit: nobody buys more than this of anything.
 	MaxQuantity = 100_000
+	// MaxRemoveItems is how many items one RemoveChecked may name. It keeps
+	// the request and the statement small; no shopping trip checks more.
+	MaxRemoveItems = 500
 )
 
 var (
@@ -38,6 +41,9 @@ var (
 	ErrInvalidNote = errors.New("invalid note")
 	// ErrEmptyChange means an update names no field at all.
 	ErrEmptyChange = errors.New("change contains no field")
+	// ErrTooManyItems means a RemoveChecked names more than MaxRemoveItems
+	// items.
+	ErrTooManyItems = errors.New("too many items")
 )
 
 // Unit is how a quantity is measured. The set is fixed (docs/data-model.md);
@@ -200,4 +206,9 @@ type Repository interface {
 	// MarkDeleted turns the item into a tombstone. For a tombstone already,
 	// it changes nothing.
 	MarkDeleted(ctx context.Context, itemID uuid.UUID) (Item, error)
+	// MarkCheckedDeleted turns those of the given items into tombstones that
+	// belong to the list, are checked and not deleted yet, all at once. It
+	// returns the new tombstones in no particular order; IDs it skips are
+	// not an error.
+	MarkCheckedDeleted(ctx context.Context, listID uuid.UUID, itemIDs []uuid.UUID) ([]Item, error)
 }

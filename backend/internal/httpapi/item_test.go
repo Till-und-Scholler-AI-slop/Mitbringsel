@@ -80,6 +80,11 @@ func (f *fakeItems) Delete(_ context.Context, actor, itemID uuid.UUID) (item.Ite
 	return f.first()
 }
 
+func (f *fakeItems) RemoveChecked(_ context.Context, actor, listID uuid.UUID, itemIDs []uuid.UUID) ([]item.Item, error) {
+	f.record("RemoveChecked %s %s %v", actor, listID, itemIDs)
+	return f.items, f.err
+}
+
 // describeChange writes the fields a change sets, one "field=value" each;
 // null stands for "remove the value".
 func describeChange(c item.Change) string {
@@ -162,6 +167,53 @@ func itemRequest(t *testing.T, items ItemService, method, path, body string) *ht
 func listItemsPathFor() string { return listPathFor("/items") }
 
 func itemPathFor() string { return "/api/v1/items/" + testItemID.String() }
+
+func removeCheckedPathFor() string { return listPathFor("/items/remove-checked") }
+
+func TestRemoveCheckedItems(t *testing.T) {
+	t.Run("passes the IDs on and answers the deleted items", func(t *testing.T) {
+		other := uuid.MustParse("0190a8c4-0000-7000-8000-0000000000f2")
+		tombstone := testItem()
+		tombstone.DeletedAt = ptr(itemTime)
+		tombstone.ServerSeq = 43
+		items := &fakeItems{items: []item.Item{tombstone}}
+		body := fmt.Sprintf(`{"itemIds":[%q,%q]}`, testItemID, other)
+
+		rec := itemRequest(t, items, http.MethodPost, removeCheckedPathFor(), body)
+
+		want := fmt.Sprintf(`{"items":[{"itemId":%q,"serverSeq":43}]}`, testItemID)
+		if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != want {
+			t.Errorf("status = %d, body = %s, want 200 %s", rec.Code, got, want)
+		}
+		wantCall := fmt.Sprintf("RemoveChecked %s %s [%s %s]", testUserID, testListID, testItemID, other)
+		if len(items.calls) != 1 || items.calls[0] != wantCall {
+			t.Errorf("calls = %q, want [%q]", items.calls, wantCall)
+		}
+	})
+
+	t.Run("nothing deleted is an empty array, not null", func(t *testing.T) {
+		rec := itemRequest(t, &fakeItems{}, http.MethodPost, removeCheckedPathFor(), `{"itemIds":[]}`)
+
+		if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != `{"items":[]}` {
+			t.Errorf("status = %d, body = %s", rec.Code, got)
+		}
+	})
+
+	t.Run("500 IDs fit into the body", func(t *testing.T) {
+		ids := make([]string, item.MaxRemoveItems)
+		for i := range ids {
+			ids[i] = fmt.Sprintf("%q", uuid.New())
+		}
+		// Indented like a pretty-printing client would send it.
+		body := "{\n  \"itemIds\": [\n    " + strings.Join(ids, ",\n    ") + "\n  ]\n}"
+
+		rec := itemRequest(t, &fakeItems{}, http.MethodPost, removeCheckedPathFor(), body)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, body = %s, want 200", rec.Code, rec.Body)
+		}
+	})
+}
 
 func TestItemResponses(t *testing.T) {
 	tests := []struct {
@@ -414,6 +466,7 @@ func TestItemErrors(t *testing.T) {
 		{"invalid note", item.ErrInvalidNote, http.StatusBadRequest, "ITEM_NOTE_INVALID"},
 		{"invalid id", item.ErrInvalidID, http.StatusBadRequest, "INVALID_REQUEST"},
 		{"empty change", item.ErrEmptyChange, http.StatusBadRequest, "INVALID_REQUEST"},
+		{"too many items", item.ErrTooManyItems, http.StatusBadRequest, "INVALID_REQUEST"},
 		{"database failure", errors.New("connection refused"), http.StatusInternalServerError, "INTERNAL_ERROR"},
 	}
 	routes := []struct {
@@ -427,6 +480,7 @@ func TestItemErrors(t *testing.T) {
 		{"get", http.MethodGet, itemPathFor(), ""},
 		{"update", http.MethodPatch, itemPathFor(), `{"name":"x"}`},
 		{"delete", http.MethodDelete, itemPathFor(), ""},
+		{"remove checked", http.MethodPost, removeCheckedPathFor(), `{"itemIds":[]}`},
 	}
 
 	for _, route := range routes {
@@ -467,6 +521,13 @@ func TestItemBadRequests(t *testing.T) {
 		{"update with name null", http.MethodPatch, itemPathFor(), `{"name":null}`},
 		{"update with checked null", http.MethodPatch, itemPathFor(), `{"checked":null}`},
 		{"update with oversized body", http.MethodPatch, itemPathFor(), `{"note":"` + strings.Repeat("a", maxGroupBodyBytes) + `"}`},
+		{"remove checked with list ID that is no UUID", http.MethodPost, "/api/v1/lists/nope/items/remove-checked", `{"itemIds":[]}`},
+		// itemIds is required; an empty array is fine, a missing one is not.
+		{"remove checked without itemIds", http.MethodPost, removeCheckedPathFor(), `{}`},
+		{"remove checked with itemIds null", http.MethodPost, removeCheckedPathFor(), `{"itemIds":null}`},
+		{"remove checked with an ID that is no UUID", http.MethodPost, removeCheckedPathFor(), `{"itemIds":["nope"]}`},
+		{"remove checked without body", http.MethodPost, removeCheckedPathFor(), ""},
+		{"remove checked with oversized body", http.MethodPost, removeCheckedPathFor(), `{"itemIds":[],"x":"` + strings.Repeat("a", maxRemoveCheckedBodyBytes) + `"}`},
 	}
 
 	for _, tt := range tests {
@@ -498,6 +559,7 @@ func TestItemRoutesNeedLogin(t *testing.T) {
 		{http.MethodGet, itemPathFor()},
 		{http.MethodPatch, itemPathFor()},
 		{http.MethodDelete, itemPathFor()},
+		{http.MethodPost, removeCheckedPathFor()},
 	}
 
 	for _, route := range routes {
@@ -535,6 +597,7 @@ func TestItemWrongMethod(t *testing.T) {
 	}{
 		{listItemsPathFor(), http.MethodDelete, "GET, POST"},
 		{itemPathFor(), http.MethodPost, "GET, PATCH, DELETE"},
+		{removeCheckedPathFor(), http.MethodGet, "POST"},
 	}
 
 	for _, tt := range tests {
