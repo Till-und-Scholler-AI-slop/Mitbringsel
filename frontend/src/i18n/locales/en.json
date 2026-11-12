@@ -3,6 +3,9 @@
     "close": "Close",
     "retry": "Try again"
   },
+  "toast": {
+    "close": "Close message"
+  },
   "app": {
     "name": "Mitbringsel"
   },
