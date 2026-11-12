@@ -250,9 +250,14 @@ func pathUUID(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, b
 // decodeBody reads a small JSON object into v. On failure it has answered
 // 400 already and returns false.
 func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
+	return decodeBodyMax(w, r, v, maxGroupBodyBytes)
+}
+
+// decodeBodyMax is decodeBody for a body of at most limit bytes.
+func decodeBodyMax(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 	// Decode fails once the limit is reached, so an oversized body ends up
 	// as INVALID_REQUEST like any other broken one.
-	r.Body = http.MaxBytesReader(w, r.Body, maxGroupBodyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidRequest)
 		return false

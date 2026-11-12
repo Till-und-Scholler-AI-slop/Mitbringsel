@@ -14,8 +14,14 @@ import (
 )
 
 const (
-	listItemsPath = listPath + "/items"
-	itemPath      = "/api/v1/items/{itemId}"
+	listItemsPath     = listPath + "/items"
+	removeCheckedPath = listItemsPath + "/remove-checked"
+	itemPath          = "/api/v1/items/{itemId}"
+
+	// maxRemoveCheckedBodyBytes leaves room for item.MaxRemoveItems IDs: one
+	// is 39 bytes in JSON (36 characters, the quotes and a comma), 500 of
+	// them about 19 KiB, plus whitespace a client may add.
+	maxRemoveCheckedBodyBytes = 32 << 10 // 32 KiB
 )
 
 // ItemService is everything the handlers need from items.
@@ -26,6 +32,7 @@ type ItemService interface {
 	Get(ctx context.Context, actor, itemID uuid.UUID) (item.Item, error)
 	Update(ctx context.Context, actor, itemID uuid.UUID, change item.Change, clock item.HLC) (item.Item, error)
 	Delete(ctx context.Context, actor, itemID uuid.UUID) (item.Item, error)
+	RemoveChecked(ctx context.Context, actor, listID uuid.UUID, itemIDs []uuid.UUID) ([]item.Item, error)
 }
 
 // ItemClock issues the clocks for changes made over REST.
@@ -265,6 +272,39 @@ func deleteItemHandler(items ItemService) http.HandlerFunc {
 	}
 }
 
+// removeCheckedItemsHandler deletes the checked items the client names and
+// answers which ones it deleted.
+func removeCheckedItemsHandler(items ItemService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actor, listID, ok := actorAndListFrom(w, r)
+		if !ok {
+			return
+		}
+		var req apigen.RemoveCheckedItemsRequest
+		if !decodeBodyMax(w, r, &req, maxRemoveCheckedBodyBytes) {
+			return
+		}
+		// itemIds is required: a missing field or null decodes to nil, an
+		// empty array to an empty slice.
+		if req.ItemIds == nil {
+			writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidRequest)
+			return
+		}
+
+		deleted, err := items.RemoveChecked(r.Context(), actor, listID, req.ItemIds)
+		if err != nil {
+			writeItemError(w, "remove checked items", err)
+			return
+		}
+
+		resp := apigen.RemovedItems{Items: make([]apigen.DeletedItem, len(deleted))}
+		for i, it := range deleted {
+			resp.Items[i] = apigen.DeletedItem{ItemID: it.ID, ServerSeq: it.ServerSeq}
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
 // actorAndItemFrom returns the logged-in user and the item ID from the path.
 // On failure it has answered already and returns false.
 func actorAndItemFrom(w http.ResponseWriter, r *http.Request) (actor, itemID uuid.UUID, ok bool) {
@@ -295,7 +335,7 @@ func writeItemError(w http.ResponseWriter, op string, err error) {
 		writeError(w, http.StatusBadRequest, apigen.ErrorCodeItemUnitInvalid)
 	case errors.Is(err, item.ErrInvalidNote):
 		writeError(w, http.StatusBadRequest, apigen.ErrorCodeItemNoteInvalid)
-	case errors.Is(err, item.ErrInvalidID), errors.Is(err, item.ErrEmptyChange):
+	case errors.Is(err, item.ErrInvalidID), errors.Is(err, item.ErrEmptyChange), errors.Is(err, item.ErrTooManyItems):
 		writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidRequest)
 	default:
 		slog.Error("items: "+op, "error", err)
