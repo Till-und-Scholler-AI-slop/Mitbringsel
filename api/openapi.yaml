@@ -699,6 +699,45 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /lists/{listId}/items/remove-checked:
+    parameters:
+      - $ref: "#/components/parameters/ListId"
+    post:
+      operationId: removeCheckedItems
+      summary: Delete the checked items of a list at once
+      description: |
+        Every member may do this, also in an archived list. The client sends
+        the items it shows as checked; the server deletes those that belong
+        to the list and are still checked. An item that someone unchecked
+        meanwhile stays, and so does one checked after the client looked.
+        IDs of other lists, unknown or deleted items are skipped without an
+        error. The answer lists what was deleted; the group gets one
+        `itemsDeleted` event, none if nothing was deleted.
+      tags: [items]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemoveCheckedItemsRequest"
+      responses:
+        "200":
+          description: The items that were deleted, in no particular order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemovedItems"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
   /items/{itemId}:
     parameters:
       - $ref: "#/components/parameters/ItemId"
@@ -1290,6 +1329,30 @@ components:
             At most 500 characters after trimming; blank counts as no note.
             Otherwise `ITEM_NOTE_INVALID`.
 
+    RemoveCheckedItemsRequest:
+      type: object
+      required: [itemIds]
+      properties:
+        itemIds:
+          type: array
+          maxItems: 500
+          description: At most 500 items, otherwise `INVALID_REQUEST`. An empty array deletes nothing.
+          items:
+            type: string
+            format: uuid
+            x-go-type: uuid.UUID
+            x-go-type-import:
+              path: github.com/google/uuid
+
+    RemovedItems:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeletedItem"
+
     UpdateItemRequest:
       type: object
       description: |
@@ -1674,7 +1737,7 @@ components:
 
     DeletedItem:
       type: object
-      description: One deleted item of an `itemsDeleted` event.
+      description: One deleted item, in an `itemsDeleted` event or the answer of `removeCheckedItems`.
       required: [itemId, serverSeq]
       properties:
         itemId:

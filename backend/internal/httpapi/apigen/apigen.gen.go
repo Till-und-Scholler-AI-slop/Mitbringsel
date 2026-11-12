@@ -405,7 +405,7 @@ type CreateItemRequest struct {
 	Unit *Unit `json:"unit,omitempty"`
 }
 
-// DeletedItem One deleted item of an `itemsDeleted` event.
+// DeletedItem One deleted item, in an `itemsDeleted` event or the answer of `removeCheckedItems`.
 type DeletedItem struct {
 	ItemID uuid.UUID `json:"itemId"`
 
@@ -793,6 +793,17 @@ type ReadyMessage struct {
 // ReadyMessageType defines model for ReadyMessage.Type.
 type ReadyMessageType string
 
+// RemoveCheckedItemsRequest defines model for RemoveCheckedItemsRequest.
+type RemoveCheckedItemsRequest struct {
+	// ItemIds At most 500 items, otherwise `INVALID_REQUEST`. An empty array deletes nothing.
+	ItemIds []uuid.UUID `json:"itemIds"`
+}
+
+// RemovedItems defines model for RemovedItems.
+type RemovedItems struct {
+	Items []DeletedItem `json:"items"`
+}
+
 // Role The owner created the group and is the only one. Admins help run
 // it; members use it.
 type Role string
@@ -909,3 +920,6 @@ type SetListArchivedJSONRequestBody = SetListArchivedRequest
 
 // CreateItemJSONRequestBody defines body for CreateItem for application/json ContentType.
 type CreateItemJSONRequestBody = CreateItemRequest
+
+// RemoveCheckedItemsJSONRequestBody defines body for RemoveCheckedItems for application/json ContentType.
+type RemoveCheckedItemsJSONRequestBody = RemoveCheckedItemsRequest
