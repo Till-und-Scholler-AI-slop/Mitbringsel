@@ -51,3 +51,25 @@ SET deleted_at = COALESCE(deleted_at, now()),
     server_seq = CASE WHEN deleted_at IS NULL THEN nextval('change_seq') ELSE server_seq END
 WHERE id = $1
 RETURNING *;
+
+-- name: MarkCheckedItemsDeleted :many
+-- Tombstones for those of the given items that are still checked and not
+-- deleted, in one statement: all or none. Each row draws its own server_seq.
+-- The rows are locked in ID order first, so two of these at once cannot
+-- deadlock. A row another transaction changes meanwhile is checked again
+-- once that one commits: an item unchecked in the meantime stays.
+WITH target AS (
+    SELECT i.id FROM items i
+    WHERE i.list_id = sqlc.arg(list_id)::uuid
+      AND i.id = ANY(sqlc.arg(item_ids)::uuid[])
+      AND i.checked
+      AND i.deleted_at IS NULL
+    ORDER BY i.id
+    FOR UPDATE
+)
+UPDATE items
+SET deleted_at = now(),
+    server_seq = nextval('change_seq')
+FROM target
+WHERE items.id = target.id
+RETURNING items.*;

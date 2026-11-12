@@ -62,6 +62,12 @@ func (p *storedSeqPublisher) ItemDeleted(ctx context.Context, _, _ uuid.UUID, it
 	p.record(ctx, it)
 }
 
+func (p *storedSeqPublisher) ItemsDeleted(ctx context.Context, _, _, _ uuid.UUID, tombstones []Item) {
+	for _, it := range tombstones {
+		p.record(ctx, it)
+	}
+}
+
 func (p *storedSeqPublisher) record(ctx context.Context, it Item) {
 	stored, err := p.repo.Get(ctx, it.ID)
 
@@ -72,6 +78,15 @@ func (p *storedSeqPublisher) record(ctx context.Context, it Item) {
 	if err != nil {
 		p.storeErrs = append(p.storeErrs, err)
 	}
+}
+
+// itemsWithIDs returns items that only carry the IDs, for idsOf.
+func itemsWithIDs(ids []uuid.UUID) []Item {
+	items := make([]Item, len(ids))
+	for i, id := range ids {
+		items[i] = Item{ID: id}
+	}
+	return items
 }
 
 // TestPostgresRepository shares one container across its subtests; each
@@ -266,6 +281,102 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("remove checked deletes the named checked items, each with its own server_seq", func(t *testing.T) {
+		anna, listID := newList(t, "remove-anna")
+		_, otherList := newList(t, "remove-ben")
+		create := func(list uuid.UUID, name string, checked bool) Item {
+			t.Helper()
+			it, err := repo.Create(ctx, Item{ID: newItemID(t), ListID: list, Name: name, Clocks: Clocks{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if checked {
+				if it, err = repo.Apply(ctx, it.ID, Update{Change: Change{Checked: Some(true)}, Clocks: Clocks{}}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			return it
+		}
+		milk := create(listID, "Milch", true)
+		bread := create(listID, "Brot", true)
+		open := create(listID, "Offen", false)
+		unnamed := create(listID, "Nicht genannt", true)
+		foreign := create(otherList, "Fremd", true)
+
+		got, err := svc.RemoveChecked(ctx, anna, listID, []uuid.UUID{milk.ID, bread.ID, open.ID, foreign.ID, newItemID(t)})
+		if err != nil {
+			t.Fatalf("RemoveChecked() error = %v", err)
+		}
+
+		if want := idsOf([]Item{milk, bread}); !slices.Equal(idsOf(got), want) {
+			t.Fatalf("deleted %v, want %v", idsOf(got), want)
+		}
+		if got[0].ServerSeq == got[1].ServerSeq {
+			t.Errorf("both tombstones have server_seq %d, want one each", got[0].ServerSeq)
+		}
+		for _, it := range got {
+			if !it.Deleted() || it.ServerSeq <= foreign.ServerSeq {
+				t.Errorf("%s = %+v, want a tombstone with a new server_seq", it.Name, it)
+			}
+		}
+		left, err := svc.ListForList(ctx, anna, listID)
+		if want := idsOf([]Item{open, unnamed}); err != nil || !slices.Equal(idsOf(left), want) {
+			t.Errorf("ListForList() = %v, %v, want %v", idsOf(left), err, want)
+		}
+		if f, err := repo.Get(ctx, foreign.ID); err != nil || f.Deleted() {
+			t.Errorf("item of another list = %+v, %v, want it kept", f, err)
+		}
+
+		again, err := svc.RemoveChecked(ctx, anna, listID, []uuid.UUID{milk.ID, bread.ID})
+		if err != nil || len(again) != 0 {
+			t.Errorf("second RemoveChecked() = %+v, %v, want nothing", again, err)
+		}
+	})
+
+	// Two members press "remove" at the same moment. The rows are locked in
+	// ID order, so neither waits for the other in a circle (a deadlock would
+	// fail one of them), and each item is deleted exactly once.
+	t.Run("concurrent remove checked deletes every item once", func(t *testing.T) {
+		anna, listID := newList(t, "remove-race-anna")
+		for round := range 10 {
+			var ids []uuid.UUID
+			for range 20 {
+				it, err := repo.Create(ctx, Item{ID: newItemID(t), ListID: listID, Name: "x", Clocks: Clocks{}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := repo.Apply(ctx, it.ID, Update{Change: Change{Checked: Some(true)}, Clocks: Clocks{}}); err != nil {
+					t.Fatal(err)
+				}
+				ids = append(ids, it.ID)
+			}
+			reversed := slices.Clone(ids)
+			slices.Reverse(reversed)
+
+			var wg sync.WaitGroup
+			start := make(chan struct{})
+			results := make([][]Item, 2)
+			for i, order := range [][]uuid.UUID{ids, reversed} {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					<-start
+					got, err := svc.RemoveChecked(ctx, anna, listID, order)
+					if err != nil {
+						t.Errorf("round %d: RemoveChecked() error = %v", round, err)
+					}
+					results[i] = got
+				}()
+			}
+			close(start)
+			wg.Wait()
+
+			if all := idsOf(append(results[0], results[1]...)); !slices.Equal(all, idsOf(itemsWithIDs(ids))) {
+				t.Fatalf("round %d: deleted %d items in total, want each of the %d once", round, len(all), len(ids))
+			}
+		}
+	})
+
 	t.Run("outsiders see nothing", func(t *testing.T) {
 		anna, listID := newList(t, "access-anna")
 		ben := newTestUser(t, pool, "access-ben")
@@ -339,15 +450,28 @@ func TestPostgresRepository(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		bread, err := pubSvc.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: "Brot"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		checked, err := pubSvc.Update(ctx, anna, bread.ID, Change{Checked: Some(true)}, clock(t, time.Minute, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		removed, err := pubSvc.RemoveChecked(ctx, anna, listID, []uuid.UUID{checked.ID})
+		if err != nil || len(removed) != 1 {
+			t.Fatalf("RemoveChecked() = %+v, %v, want one tombstone", removed, err)
+		}
 
 		pub.mu.Lock()
 		defer pub.mu.Unlock()
 		if len(pub.storeErrs) != 0 {
 			t.Fatalf("reading in the publisher failed: %v", pub.storeErrs)
 		}
-		want := []int64{it.ServerSeq, updated.ServerSeq, deleted.ServerSeq}
+		want := []int64{it.ServerSeq, updated.ServerSeq, deleted.ServerSeq,
+			bread.ServerSeq, checked.ServerSeq, removed[0].ServerSeq}
 		if !slices.Equal(pub.published, want) {
-			t.Errorf("published serverSeqs = %v, want %v (create, update, delete)", pub.published, want)
+			t.Errorf("published serverSeqs = %v, want %v (create, update, delete, create, check, remove checked)", pub.published, want)
 		}
 		if !slices.Equal(pub.stored, want) {
 			t.Errorf("serverSeqs in the database at publishing = %v, want %v", pub.stored, want)

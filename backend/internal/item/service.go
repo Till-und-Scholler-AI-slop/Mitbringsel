@@ -33,14 +33,18 @@ type Publisher interface {
 	// ItemDeleted gets the tombstone: ID, ListID and the ServerSeq of the
 	// deletion are what matters.
 	ItemDeleted(ctx context.Context, groupID, actor uuid.UUID, it Item)
+	// ItemsDeleted gets the tombstones of several items of one list that
+	// were deleted at once; never an empty slice.
+	ItemsDeleted(ctx context.Context, groupID, listID, actor uuid.UUID, tombstones []Item)
 }
 
 // noPublisher is the Publisher for callers without live connections (the
 // seed command, tests). It does nothing.
 type noPublisher struct{}
 
-func (noPublisher) ItemChanged(context.Context, uuid.UUID, uuid.UUID, Item) {}
-func (noPublisher) ItemDeleted(context.Context, uuid.UUID, uuid.UUID, Item) {}
+func (noPublisher) ItemChanged(context.Context, uuid.UUID, uuid.UUID, Item)               {}
+func (noPublisher) ItemDeleted(context.Context, uuid.UUID, uuid.UUID, Item)               {}
+func (noPublisher) ItemsDeleted(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, []Item) {}
 
 // Service holds the rules for items. Every method takes the acting user
 // (actor) and checks what they may do, so a handler cannot forget it.
@@ -223,6 +227,33 @@ func (s *Service) Delete(ctx context.Context, actor, itemID uuid.UUID) (Item, er
 	// publish twice with the same serverSeq; clients drop the second one.
 	if !found.Deleted() {
 		s.pub.ItemDeleted(ctx, l.GroupID, actor, deleted)
+	}
+	return deleted, nil
+}
+
+// RemoveChecked deletes the given items of a list at once ("remove checked
+// items"). The client names the items it showed as checked, so an item that
+// someone checked while the request was on its way stays. Only items that
+// are still checked are deleted: one unchecked meanwhile is needed again.
+// IDs of other lists, unknown or deleted items are skipped. It returns the
+// new tombstones, in no particular order; none if nothing was deleted.
+func (s *Service) RemoveChecked(ctx context.Context, actor, listID uuid.UUID, itemIDs []uuid.UUID) ([]Item, error) {
+	// Access first: an outsider must not learn anything about the rules.
+	l, err := s.requireList(ctx, actor, listID)
+	if err != nil {
+		return nil, err
+	}
+	if len(itemIDs) > MaxRemoveItems {
+		return nil, fmt.Errorf("%w: more than %d", ErrTooManyItems, MaxRemoveItems)
+	}
+
+	deleted, err := s.repo.MarkCheckedDeleted(ctx, listID, itemIDs)
+	if err != nil {
+		return nil, fmt.Errorf("remove checked items: %w", err)
+	}
+	// One event for all of them, and none if nothing changed.
+	if len(deleted) > 0 {
+		s.pub.ItemsDeleted(ctx, l.GroupID, listID, actor, deleted)
 	}
 	return deleted, nil
 }
