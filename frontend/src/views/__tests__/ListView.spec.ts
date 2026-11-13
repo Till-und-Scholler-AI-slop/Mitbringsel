@@ -36,6 +36,7 @@ const itemsService = vi.hoisted(() => ({
   create: vi.fn<ItemsService['create']>(),
   update: vi.fn<ItemsService['update']>(),
   remove: vi.fn<ItemsService['remove']>(),
+  removeChecked: vi.fn<ItemsService['removeChecked']>(),
 }))
 
 // vi.hoisted runs before the imports, so the fake has to be imported by hand.
@@ -702,6 +703,49 @@ describe('ListView: live changes', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe('home')
+    wrapper.unmount()
+  })
+})
+
+describe('ListView: removing done items', () => {
+  const makeItems = () => [
+    item('i1', 'Milch'),
+    item('i2', 'Eier', { checked: true, checkedBy: 'user-1' }),
+    item('i3', 'Brot', { checked: true, checkedBy: 'user-1' }),
+  ]
+
+  it('hides the done items at once and offers undo', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.done .remove').trigger('click')
+
+    expect(wrapper.find('.done').exists()).toBe(false)
+    expect(openNames(wrapper)).toEqual(['Milch'])
+    expect(wrapper.get('.toast .text').text()).toBe('2 items removed')
+    expect(itemsService.removeChecked).not.toHaveBeenCalled()
+
+    await wrapper.get('.toast .action').trigger('click')
+
+    expect(doneNames(wrapper)).toEqual(['Eier', 'Brot'])
+    expect(itemsService.removeChecked).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('sends the removal when the toast goes away', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    itemsService.removeChecked.mockImplementation((_listId, ids) =>
+      Promise.resolve(ids.map((itemId) => ({ itemId, serverSeq: 5 }))),
+    )
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.done .remove').trigger('click')
+    await wrapper.get('.toast .close').trigger('click')
+    await flushPromises()
+
+    expect(itemsService.removeChecked).toHaveBeenCalledWith('l1', ['i2', 'i3'])
+    expect(wrapper.find('.done').exists()).toBe(false)
+    expect(wrapper.find('.toast').exists()).toBe(false)
     wrapper.unmount()
   })
 })

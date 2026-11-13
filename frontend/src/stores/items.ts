@@ -2,7 +2,7 @@ import { onScopeDispose, ref, toRaw, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
-import { itemsService, type ItemsService } from '@/services/api/items'
+import { itemsService, MAX_REMOVE_CHECKED, type ItemsService } from '@/services/api/items'
 import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
 import type { CreateItemRequest, Item, UpdateItemRequest } from '@/types/api'
@@ -12,6 +12,24 @@ const ITEM_NOT_FOUND = 'ITEM_NOT_FOUND'
 
 /** idle: not loaded yet. error: the last load failed (items may still be shown). */
 export type ItemsStatus = 'idle' | 'loading' | 'ready' | 'error'
+
+/**
+ * Checked items hidden by startRemovingChecked() until the removal is sent
+ * or undone.
+ */
+export interface PendingRemoval {
+  /** The hidden items as they were when hidden, oldest first. */
+  items: Item[]
+  /**
+   * Sends the removal. What the server deleted is gone for good; the rest
+   * (e.g. unchecked by someone meanwhile) shows again. If a request fails,
+   * every item the server did not confirm shows again and the ApiError is
+   * thrown. Only the first call of commit() or undo() counts.
+   */
+  commit(): Promise<void>
+  /** Shows the items again without sending anything. */
+  undo(): void
+}
 
 /** The items of one list and how loading them went. */
 interface ListItems {
@@ -45,6 +63,12 @@ interface ListItems {
  * store applies a state only if it is not older than what it has. A deleted
  * item stays deleted: the store remembers its ID and ignores every later
  * state of it.
+ *
+ * Removing the checked items waits the other way round: the items disappear
+ * at once, but the request is only sent when the caller commits, a few
+ * seconds later, so "undo" never has to bring items back on the server
+ * (deleting wins, docs/adr/0004-lww-pro-feld.md). Until then the items stay
+ * in the store and are only hidden from the readers.
  *
  * Changes of other members arrive as events and go the same way as answers.
  * Events are best effort, so after every (re)connect of the socket the store
@@ -92,6 +116,11 @@ export function defineItemsStore(
     // answer of a load that started before it is outdated.
     const appliedLoadStart = new Map<string, number>()
 
+    // Items of a pending removal. Shown by the readers, so reactive. An item
+    // is hidden only while it is checked: one that someone unchecks meanwhile
+    // shows up again among the open items, and the server will skip it.
+    const hidden = ref(new Set<string>())
+
     function reset() {
       generation++
       byList.value = {}
@@ -100,6 +129,7 @@ export function defineItemsStore(
       tombstones.clear()
       touchedAt.clear()
       appliedLoadStart.clear()
+      hidden.value = new Set()
     }
 
     watch(currentUserId, reset)
@@ -111,9 +141,13 @@ export function defineItemsStore(
       return byList.value[listId]
     }
 
-    /** All items of the list, oldest first. */
+    function isHidden(item: Item): boolean {
+      return item.checked && hidden.value.has(item.id)
+    }
+
+    /** All items of the list, oldest first, without those being removed. */
     function itemsOf(listId: string): Item[] {
-      return byList.value[listId]?.items ?? []
+      return (byList.value[listId]?.items ?? []).filter((item) => !isHidden(item))
     }
 
     /** The items of the list that are not checked yet, oldest first. */
@@ -454,6 +488,68 @@ export function defineItemsStore(
     }
 
     /**
+     * Hides the checked items of the list at once and returns how to finish:
+     * commit() sends the removal, undo() shows the items again. Null if the
+     * list has no checked items. The IDs are taken now, so an item someone
+     * checks meanwhile is not removed with them.
+     */
+    function startRemovingChecked(listId: string): PendingRemoval | null {
+      const started = generation
+      const items = checkedItems(listId).map((item) => ({ ...toRaw(item) }))
+      if (items.length === 0) {
+        return null
+      }
+      const ids = items.map((item) => item.id)
+      for (const id of ids) {
+        hidden.value.add(id)
+      }
+      let settled = false
+
+      function show() {
+        for (const id of ids) {
+          hidden.value.delete(id)
+        }
+      }
+
+      async function commit() {
+        if (settled) {
+          return
+        }
+        settled = true
+        try {
+          // One request per block, as the server takes only so many IDs.
+          // Each answer is applied at once, so a failing later block does
+          // not bring back what an earlier one deleted.
+          for (let start = 0; start < ids.length; start += MAX_REMOVE_CHECKED) {
+            const block = ids.slice(start, start + MAX_REMOVE_CHECKED)
+            const deleted = await service.removeChecked(listId, block)
+            if (started !== generation) {
+              return
+            }
+            for (const gone of deleted) {
+              takeDeletion(listId, gone.itemId, gone.serverSeq)
+            }
+          }
+        } finally {
+          // After a reset the set belongs to the next user.
+          if (started === generation) {
+            show()
+          }
+        }
+      }
+
+      function undo() {
+        if (settled) {
+          return
+        }
+        settled = true
+        show()
+      }
+
+      return { items, commit, undo }
+    }
+
+    /**
      * Drops a list that is gone for us: deleted, or its group was left. The
      * lists store calls this, as it knows which lists belong to a group.
      * Without the entry, ready() does not load the list again and events for
@@ -507,6 +603,7 @@ export function defineItemsStore(
       update,
       setChecked,
       remove,
+      startRemovingChecked,
       forgetList,
     }
   })

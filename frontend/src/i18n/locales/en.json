@@ -216,7 +216,15 @@
       "justChangedByAnon": "just changed"
     },
     "done": {
-      "title": "Done ({count})"
+      "title": "Done ({count})",
+      "remove": "Remove",
+      "removeLong": "Remove done",
+      "removeHint": "Remove for all members",
+      "removeLabel": "Remove {count} done item for everyone | Remove {count} done items for everyone",
+      "removedOne": "“{name}” removed",
+      "removed": "{count} item removed | {count} items removed",
+      "undo": "Undo",
+      "removeFailed": "The done items could not be removed."
     },
     "noLists": {
       "title": "No list yet",
