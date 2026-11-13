@@ -74,13 +74,15 @@ function onFocusOut(event: FocusEvent) {
 </template>
 
 <style scoped>
-/* Phone: across the screen, above the safe area. Above the menus of the
-   page (z-index 10); dialogs are in the top layer and cover it anyway. */
+/* Phone: across the screen, above the safe area and above a bar the page
+   keeps at the bottom (--app-bottom-bar, set by AppFrame). Above the menus
+   of the page (z-index 10); dialogs are in the top layer and cover it
+   anyway. */
 .toasts {
   position: fixed;
   left: var(--space-3);
   right: var(--space-3);
-  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  bottom: calc(var(--space-4) + var(--app-bottom-bar, 0px) + env(safe-area-inset-bottom));
   z-index: 20;
   display: flex;
   flex-direction: column;

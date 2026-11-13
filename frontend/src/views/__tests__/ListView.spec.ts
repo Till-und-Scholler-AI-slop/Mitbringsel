@@ -428,8 +428,8 @@ describe('ListView: header', () => {
     const { wrapper, router } = await mountView()
 
     await wrapper.get('button[aria-label="New list"]').trigger('click')
-    await wrapper.get('input').setValue('Drogerie')
-    await wrapper.get('form').trigger('submit')
+    await wrapper.get('dialog input').setValue('Drogerie')
+    await wrapper.get('dialog form').trigger('submit')
     await flushPromises()
 
     expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie')
@@ -746,6 +746,31 @@ describe('ListView: removing done items', () => {
     expect(itemsService.removeChecked).toHaveBeenCalledWith('l1', ['i2', 'i3'])
     expect(wrapper.find('.done').exists()).toBe(false)
     expect(wrapper.find('.toast').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('ListView: quick add', () => {
+  it('adds an item to the open list', async () => {
+    itemsService.create.mockResolvedValue(item('i9', 'Hafermilch'))
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.add-bar input').setValue('Hafermilch')
+    await wrapper.get('form.add-bar').trigger('submit')
+    await flushPromises()
+
+    expect(itemsService.create).toHaveBeenCalledWith('l1', { name: 'Hafermilch' })
+    expect(openNames(wrapper)).toEqual(['Hafermilch'])
+    expect(wrapper.get('.frame').classes()).toContain('frame--bottom-bar')
+    wrapper.unmount()
+  })
+
+  it('has no quick add without a list', async () => {
+    listsService.list.mockResolvedValue([])
+    const { wrapper } = await mountAt('/groups/g1')
+
+    expect(wrapper.find('.add-bar').exists()).toBe(false)
+    expect(wrapper.get('.frame').classes()).not.toContain('frame--bottom-bar')
     wrapper.unmount()
   })
 })

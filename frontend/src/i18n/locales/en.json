@@ -231,6 +231,12 @@
       "undo": "Undo",
       "removeFailed": "The done items could not be removed."
     },
+    "quickAdd": {
+      "label": "Add item",
+      "placeholder": "What do we need?",
+      "enterHint": "Enter ↵",
+      "failed": "“{name}” could not be added"
+    },
     "noLists": {
       "title": "No list yet",
       "description": "Create a list, for example for the weekly shopping.",
