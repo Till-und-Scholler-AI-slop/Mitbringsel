@@ -110,6 +110,12 @@
   --color-muted-bg: #ece5ff;
   --color-done-border: transparent;
   --color-done-text: #4f4a6b;
+  /* Line between "Done (n)" and "Remove" in the head of the done section. */
+  --color-done-divider: #7c6fb0;
+  /* The danger pill (e.g. "Remove" of the done section) on hover and press. */
+  --color-danger-surface-hover: #ffe0e0;
+  --color-danger-surface-pressed: #ffcaca;
+  --shadow-pressed-inset: inset 0 2px 0 rgb(22 24 29 / 0.2);
   --color-qty-bg: #ffe1d6;
   --color-qty-text: #16181d;
   --color-qty-border: #16181d;
@@ -183,6 +189,10 @@
     --color-muted-bg: #1e1a36;
     --color-done-border: #3a3360;
     --color-done-text: #a9a3c8;
+    --color-done-divider: #6a62a0;
+    --color-danger-surface-hover: #3f1d2b;
+    --color-danger-surface-pressed: #55233a;
+    --shadow-pressed-inset: inset 0 2px 0 rgb(0 0 0 / 0.45);
     --color-qty-bg: #3a2430;
     --color-qty-text: #ffd0c2;
     --color-qty-border: #8a4a50;
@@ -249,6 +259,10 @@
   --color-muted-bg: #1e1a36;
   --color-done-border: #3a3360;
   --color-done-text: #a9a3c8;
+  --color-done-divider: #6a62a0;
+  --color-danger-surface-hover: #3f1d2b;
+  --color-danger-surface-pressed: #55233a;
+  --shadow-pressed-inset: inset 0 2px 0 rgb(0 0 0 / 0.45);
   --color-qty-bg: #3a2430;
   --color-qty-text: #ffd0c2;
   --color-qty-border: #8a4a50;

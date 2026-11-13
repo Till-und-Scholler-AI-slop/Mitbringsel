@@ -12,6 +12,7 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import AppFrame from '@/components/layout/AppFrame.vue'
 import SyncStatus from '@/components/layout/SyncStatus.vue'
 import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
+import DoneSection from '@/components/list/DoneSection.vue'
 import HouseholdSwitcher from '@/components/list/HouseholdSwitcher.vue'
 import ItemRow from '@/components/list/ItemRow.vue'
 import ListActionsDialog from '@/components/list/ListActionsDialog.vue'
@@ -21,6 +22,7 @@ import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
+import { useRemoveChecked } from '@/composables/useRemoveChecked'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { canManage } from '@/services/groupRoles'
 import { listToOpen, rememberLastList } from '@/services/lastList'
@@ -46,6 +48,7 @@ const groups = useGroupsStore()
 const lists = useListsStore()
 const items = useItemsStore()
 const recentChanges = useRecentChangesStore()
+const { removeChecked } = useRemoveChecked()
 
 const createOpen = ref(false)
 const createGroupOpen = ref(false)
@@ -55,7 +58,6 @@ const archiveOpen = ref(false)
 // of the two is set.
 const actionsId = ref<string | null>(null)
 const renamingId = ref<string | null>(null)
-const doneOpen = ref(true)
 // The error of the last tap on a checkbox that failed; the tap itself has
 // been undone by the store.
 const checkErrorCode = ref<string | null>(null)
@@ -324,31 +326,13 @@ function openCreated(created: List) {
               />
             </ul>
 
-            <section
+            <DoneSection
               v-if="done.length > 0"
-              class="done"
-              :aria-label="t('list.done.title', { count: done.length })"
-            >
-              <button
-                type="button"
-                class="done-toggle"
-                :aria-expanded="doneOpen"
-                aria-controls="done-items"
-                @click="doneOpen = !doneOpen"
-              >
-                <BaseIcon :name="doneOpen ? 'chevronUp' : 'chevronDown'" :size="20" />
-                {{ t('list.done.title', { count: done.length }) }}
-              </button>
-              <ul v-show="doneOpen" id="done-items" class="done-items">
-                <ItemRow
-                  v-for="item in done"
-                  :key="item.id"
-                  :item="item"
-                  :person="personOf(item)"
-                  @toggle="toggle(item)"
-                />
-              </ul>
-            </section>
+              :items="done"
+              :person-of="personOf"
+              @toggle="toggle"
+              @remove="removeChecked(listKey, $event)"
+            />
           </template>
         </template>
       </main>
@@ -457,38 +441,13 @@ function openCreated(created: List) {
   padding: var(--space-4) var(--space-3) var(--space-8);
 }
 
-.open,
-.done-items {
+.open {
   display: flex;
   flex-direction: column;
+  gap: var(--space-1-5);
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.open {
-  gap: var(--space-1-5);
-}
-
-.done {
-  padding: var(--space-1) 0 var(--space-2);
-  border: var(--border-width-sm) solid var(--color-done-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-done-bg);
-}
-
-.done-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  min-height: var(--size-touch);
-  padding: 0 var(--space-3) 0 var(--space-2);
-  border: 0;
-  background: transparent;
-  color: var(--color-text);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-heavy);
-  cursor: pointer;
 }
 
 .archived {
