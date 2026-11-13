@@ -6,6 +6,11 @@
   "toast": {
     "close": "Close message"
   },
+  "departed": {
+    "removed": "You were removed from ‘{name}’",
+    "deleted": "‘{name}’ was deleted",
+    "unknown": "You are no longer in ‘{name}’"
+  },
   "app": {
     "name": "Mitbringsel"
   },

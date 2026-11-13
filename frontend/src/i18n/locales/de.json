@@ -6,6 +6,11 @@
   "toast": {
     "close": "Meldung schließen"
   },
+  "departed": {
+    "removed": "Du wurdest aus ‚{name}‘ entfernt",
+    "deleted": "‚{name}‘ wurde gelöscht",
+    "unknown": "Du bist nicht mehr in ‚{name}‘"
+  },
   "app": {
     "name": "Mitbringsel"
   },
