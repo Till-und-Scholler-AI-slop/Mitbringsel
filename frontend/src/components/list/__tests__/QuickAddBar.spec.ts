@@ -143,4 +143,17 @@ describe('QuickAddBar', () => {
     expect(useToastsStore().toasts).toHaveLength(1)
     wrapper.unmount()
   })
+
+  it('hands what was typed to the form with details', async () => {
+    const wrapper = mountBar()
+    await wrapper.get('input').setValue(' Tomaten ')
+
+    await wrapper.get('.details').trigger('click')
+
+    expect(wrapper.emitted('details')).toEqual([['Tomaten']])
+    expect(wrapper.get('input').element.value).toBe('')
+    expect(itemsService.create).not.toHaveBeenCalled()
+    expect(wrapper.get('.details').attributes('aria-label')).toBe('Add with details')
+    wrapper.unmount()
+  })
 })

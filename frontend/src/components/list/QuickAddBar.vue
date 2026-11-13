@@ -14,7 +14,9 @@ const MAX_NAME_LENGTH = 100
 // Adds an item with just its name: type, Enter, type the next one (design
 // "markt2-liste", "markt2-desktop"). On the phone the bar sits at the bottom,
 // near the thumb; the page places it.
+// "With details" hands what was typed so far to the item form.
 const props = defineProps<{ listId: string }>()
+const emit = defineEmits<{ details: [name: string] }>()
 
 const { t } = useI18n()
 const errorText = useErrorText()
@@ -25,6 +27,11 @@ const name = ref('')
 // The field empties at once, so the next item can be typed while this one
 // is on its way; a slow shop network should not hold the user up. The item
 // shows when the server answers.
+function openDetails() {
+  emit('details', name.value.trim())
+  name.value = ''
+}
+
 async function add() {
   const trimmed = name.value.trim()
   if (!trimmed) return
@@ -61,6 +68,16 @@ async function add() {
       />
       <span class="hint" aria-hidden="true">{{ t('list.quickAdd.enterHint') }}</span>
     </label>
+    <button
+      type="button"
+      class="details"
+      :aria-label="t('list.quickAdd.details')"
+      :title="t('list.quickAdd.details')"
+      aria-haspopup="dialog"
+      @click="openDetails"
+    >
+      <BaseIcon name="sliders" :size="22" />
+    </button>
   </form>
 </template>
 
@@ -115,6 +132,36 @@ input::placeholder {
   color: var(--color-text-muted);
 }
 
+/* Round, in the sticker look of a primary button. */
+.details {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--size-quick-add);
+  height: var(--size-quick-add);
+  box-sizing: border-box;
+  border: var(--border-width-md) solid var(--color-primary-contrast);
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  box-shadow: var(--shadow-sticker);
+  cursor: pointer;
+  transition:
+    transform var(--duration-press) var(--easing-bounce),
+    box-shadow var(--duration-press);
+}
+
+.details:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .details {
+    transition: none;
+  }
+}
+
 /* A keyboard hint only makes sense with a keyboard. */
 .hint {
   display: none;
@@ -123,6 +170,11 @@ input::placeholder {
 @media (min-width: 48rem) {
   .quick-add {
     gap: var(--space-3);
+  }
+
+  .details {
+    width: var(--size-quick-add-desktop);
+    height: var(--size-quick-add-desktop);
   }
 
   .field {

@@ -235,7 +235,25 @@
       "label": "Add item",
       "placeholder": "What do we need?",
       "enterHint": "Enter ↵",
+      "details": "Add with details",
       "failed": "“{name}” could not be added"
+    },
+    "itemForm": {
+      "newTitle": "New item",
+      "newIn": "New in {list}",
+      "name": "Name",
+      "required": "required",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "note": "Note",
+      "optional": "optional",
+      "notePlaceholder": "e.g. the small cherry ones",
+      "nameEmpty": "Please enter a name.",
+      "quantityInvalid": "Please enter a number, e.g. 2 or 2.5.",
+      "decrease": "Decrease quantity",
+      "increase": "Increase quantity",
+      "add": "Add",
+      "cancel": "Cancel"
     },
     "noLists": {
       "title": "No list yet",

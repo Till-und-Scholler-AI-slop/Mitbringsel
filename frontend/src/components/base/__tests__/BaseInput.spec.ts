@@ -92,4 +92,10 @@ describe('BaseInput', () => {
   it('has no counter without a limit', () => {
     expect(mountInput().find('.counter').exists()).toBe(false)
   })
+
+  it('shows a word next to the label', () => {
+    const wrapper = mountInput({ aside: 'required' })
+
+    expect(wrapper.get('.aside').text()).toBe('required')
+  })
 })

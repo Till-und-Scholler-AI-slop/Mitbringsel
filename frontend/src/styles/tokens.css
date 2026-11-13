@@ -74,6 +74,8 @@
   /* The bar around it at the bottom of the phone screen (pill, 10px above,
      22px below); the toasts keep clear of it. */
   --size-quick-add-bar: 5.5rem;
+  /* The round minus and plus buttons and the field of the quantity. */
+  --size-stepper: 3.375rem;
 
   /* Fixed accent colors ("list colors"); text on them is always --color-on-accent. */
   --color-accent-tomato: #ff7a59;

@@ -13,6 +13,8 @@ const props = defineProps<{
   hint?: string
   /** Shows a "length/max" counter. */
   maxLength?: number
+  /** A short word next to the label, e.g. "required" or "optional". */
+  aside?: string
 }>()
 
 const model = defineModel<string>({ required: true })
@@ -35,6 +37,7 @@ const describedBy = computed(() => (props.error || props.hint ? messageId : unde
   <div class="field">
     <div class="label-row">
       <label :for="id" class="label">{{ label }}</label>
+      <span v-if="aside" class="aside">{{ aside }}</span>
       <span
         v-if="maxLength !== undefined"
         :class="['counter', { 'counter--over': overLimit }]"
@@ -81,6 +84,13 @@ const describedBy = computed(() => (props.error || props.hint ? messageId : unde
 .label {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
+}
+
+.aside {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
 }
 
 .counter {
