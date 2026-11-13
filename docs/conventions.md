@@ -34,7 +34,7 @@ Alles, was mehr als einmal vorkommt, wird eine Komponente in `components/base/` 
 | `BaseSelect` | Auswahl, z.B. für Einheiten |
 | `BaseCheckbox` | Abhaken von Artikeln |
 | `BaseModal` / `BaseBottomSheet` | Dialoge; Bottom Sheet auf dem Smartphone |
-| `BaseToast` | Hinweise, z.B. bei abgelehnten Änderungen |
+| `BaseToast` | Hinweise, z.B. bei abgelehnten Änderungen; gezeigt über `useToastsStore`, gestapelt in `AppToasts` |
 | `BaseAvatar` | Profilbild mit Initialen-Fallback |
 | `BaseEmptyState` | Leere Listen und Gruppen |
 | `BaseSyncIndicator` | Status online, offline, synchronisiert ausstehende Änderungen |

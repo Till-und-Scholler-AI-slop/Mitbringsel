@@ -3,12 +3,14 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AppSidebar from '@/components/layout/AppSidebar.vue'
+import AppToasts from '@/components/layout/AppToasts.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import type { Group } from '@/types/api'
 
 // The frame of the start page and the list view. From 48rem on the sidebar
 // stands left of the page; below, the page brings its own green header and
-// the sidebar is hidden (display: none, so screen readers skip it too).
+// the sidebar is hidden (display: none, so screen readers skip it too). The
+// toasts of the app show here, as only these pages have them so far.
 defineProps<{ groupId?: string; listId?: string }>()
 
 const router = useRouter()
@@ -33,6 +35,7 @@ function openCreated(group: Group) {
       <slot />
     </div>
     <CreateGroupDialog v-model:open="createOpen" @created="openCreated" />
+    <AppToasts />
   </div>
 </template>
 
@@ -54,7 +57,7 @@ function openCreated(group: Group) {
     top: 0;
     flex: none;
     display: flex;
-    width: 18.875rem;
+    width: var(--size-sidebar);
     height: 100vh;
     height: 100dvh;
     box-sizing: border-box;

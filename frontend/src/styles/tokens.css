@@ -64,6 +64,10 @@
 
   /* Minimum touch target (docs/design.md: at least 44 x 44 px, design: 48). */
   --size-touch: 3rem;
+  /* Width of the desktop sidebar; the toasts keep clear of it. */
+  --size-sidebar: 18.875rem;
+  /* Widest toast on the desktop. */
+  --size-toast-max: 30rem;
 
   /* Fixed accent colors ("list colors"); text on them is always --color-on-accent. */
   --color-accent-tomato: #ff7a59;
@@ -78,6 +82,9 @@
   --shadow-menu: 0 6px 0 rgb(0 0 0 / 0.25);
 
   --duration-press: 0.2s;
+  --duration-toast-in: 0.22s;
+  --duration-toast-out: 0.16s;
+  --easing-toast-in: cubic-bezier(0.2, 0.9, 0.3, 1);
   --easing-bounce: cubic-bezier(0.34, 1.8, 0.64, 1);
 }
 
@@ -120,6 +127,22 @@
   --shadow-recent: 0 0 0 3px #16181d, 0 0 0 7px #ff7a59;
   --color-spinner-track: rgb(22 24 29 / 0.15);
   --color-scrim: rgb(22 24 29 / 0.45);
+  /* Toasts: an ink surface that stands out from the light page. */
+  --color-toast-bg: #16181d;
+  --color-toast-text: #ffffff;
+  --color-toast-detail: #c9d2e0;
+  --color-toast-focus: #8fb0ff;
+  --color-toast-bar: #ff7a59;
+  --color-toast-bar-track: rgb(255 255 255 / 0.2);
+  --color-toast-action-border: #ff7a59;
+  --color-toast-error-border: #ff8a8a;
+  --color-toast-success-badge: #6bcb86;
+  --color-toast-success-badge-text: #16181d;
+  --color-toast-info-badge: #6ec1f0;
+  --color-toast-info-badge-text: #16181d;
+  --color-toast-error-badge: #ff8a8a;
+  --color-toast-error-badge-text: #16181d;
+  --shadow-toast: 0 6px 0 rgb(22 24 29 / 0.22);
 
   /* Google sign-in button, colors fixed by Google's branding guidelines. */
   --color-google-bg: #ffffff;
@@ -175,6 +198,22 @@
     --shadow-recent: 0 0 0 3px #ff7a59, 0 0 18px rgb(255 122 89 / 0.4);
     --color-spinner-track: rgb(242 245 250 / 0.2);
     --color-scrim: rgb(0 0 0 / 0.55);
+    /* Toasts: a light surface that stands out from the dark page. */
+    --color-toast-bg: #f2f5fa;
+    --color-toast-text: #16181d;
+    --color-toast-detail: #3d4757;
+    --color-toast-focus: #2457f5;
+    --color-toast-bar: #16181d;
+    --color-toast-bar-track: rgb(22 24 29 / 0.15);
+    --color-toast-action-border: #16181d;
+    --color-toast-error-border: #c0262d;
+    --color-toast-success-badge: #1f7a3a;
+    --color-toast-success-badge-text: #ffffff;
+    --color-toast-info-badge: #2457f5;
+    --color-toast-info-badge-text: #ffffff;
+    --color-toast-error-badge: #c0262d;
+    --color-toast-error-badge-text: #ffffff;
+    --shadow-toast: 0 6px 0 rgb(0 0 0 / 0.55);
 
     --color-google-bg: #131314;
     --color-google-border: #8e918f;
@@ -225,6 +264,22 @@
   --shadow-recent: 0 0 0 3px #ff7a59, 0 0 18px rgb(255 122 89 / 0.4);
   --color-spinner-track: rgb(242 245 250 / 0.2);
   --color-scrim: rgb(0 0 0 / 0.55);
+  /* Toasts: a light surface that stands out from the dark page. */
+  --color-toast-bg: #f2f5fa;
+  --color-toast-text: #16181d;
+  --color-toast-detail: #3d4757;
+  --color-toast-focus: #2457f5;
+  --color-toast-bar: #16181d;
+  --color-toast-bar-track: rgb(22 24 29 / 0.15);
+  --color-toast-action-border: #16181d;
+  --color-toast-error-border: #c0262d;
+  --color-toast-success-badge: #1f7a3a;
+  --color-toast-success-badge-text: #ffffff;
+  --color-toast-info-badge: #2457f5;
+  --color-toast-info-badge-text: #ffffff;
+  --color-toast-error-badge: #c0262d;
+  --color-toast-error-badge-text: #ffffff;
+  --shadow-toast: 0 6px 0 rgb(0 0 0 / 0.55);
 
   --color-google-bg: #131314;
   --color-google-border: #8e918f;

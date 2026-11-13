@@ -96,6 +96,8 @@ export const ICONS = {
     'm17 8 5 5',
     'm22 8-5 5',
   ],
+  // Lucide's "info" without the circle: it sits on a round badge.
+  info: ['M12 16v-4', 'M12 8h.01'],
   trash: [
     'M10 11v6',
     'M14 11v6',
