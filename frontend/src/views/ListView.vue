@@ -14,6 +14,7 @@ import SyncStatus from '@/components/layout/SyncStatus.vue'
 import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
 import DoneSection from '@/components/list/DoneSection.vue'
 import HouseholdSwitcher from '@/components/list/HouseholdSwitcher.vue'
+import ItemFormDialog from '@/components/list/ItemFormDialog.vue'
 import ItemRow from '@/components/list/ItemRow.vue'
 import ListActionsDialog from '@/components/list/ListActionsDialog.vue'
 import ListChips from '@/components/list/ListChips.vue'
@@ -55,6 +56,9 @@ const createOpen = ref(false)
 const createGroupOpen = ref(false)
 const joinOpen = ref(false)
 const archiveOpen = ref(false)
+// The item form for a new item, with the name typed into the quick-add bar.
+const newItemOpen = ref(false)
+const newItemName = ref('')
 // The list whose actions are open, and the one being renamed; at most one
 // of the two is set.
 const actionsId = ref<string | null>(null)
@@ -134,6 +138,7 @@ watch(
     actionsId.value = null
     renamingId.value = null
     archiveOpen.value = false
+    newItemOpen.value = false
     if (groups.status === 'idle') groups.load()
     if (lists.statusOf(groupId) === 'idle') lists.load(groupId)
     if (listId) items.load(listId)
@@ -180,6 +185,11 @@ watch(
 )
 
 useLeaveRemovedGroup(() => props.groupId)
+
+function openNewItem(name: string) {
+  newItemName.value = name
+  newItemOpen.value = true
+}
 
 function startRename(listId: string) {
   actionsId.value = null
@@ -288,7 +298,7 @@ function openCreated(created: List) {
         <template v-else>
           <!-- First in the DOM and on the desktop, so it comes first for the
              keyboard; on the phone CSS moves it to the bottom of the screen. -->
-          <QuickAddBar v-if="list" class="add-bar" :list-id="list.id" />
+          <QuickAddBar v-if="list" class="add-bar" :list-id="list.id" @details="openNewItem" />
 
           <p v-if="list?.archivedAt" class="archived">
             <BaseIcon name="archive" :size="18" /> {{ t('list.archivedBadge') }}
@@ -342,6 +352,13 @@ function openCreated(created: List) {
         </template>
       </main>
 
+      <ItemFormDialog
+        v-if="list"
+        v-model:open="newItemOpen"
+        :list-id="list.id"
+        :list-name="list.name"
+        :initial-name="newItemName"
+      />
       <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />
       <ListNameDialog
         v-if="renaming"

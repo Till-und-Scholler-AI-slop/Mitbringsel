@@ -235,7 +235,25 @@
       "label": "Artikel hinzufügen",
       "placeholder": "Was brauchen wir?",
       "enterHint": "Enter ↵",
+      "details": "Mit Details hinzufügen",
       "failed": "„{name}“ konnte nicht hinzugefügt werden"
+    },
+    "itemForm": {
+      "newTitle": "Neuer Artikel",
+      "newIn": "Neu in {list}",
+      "name": "Name",
+      "required": "Pflicht",
+      "quantity": "Menge",
+      "unit": "Einheit",
+      "note": "Notiz",
+      "optional": "optional",
+      "notePlaceholder": "z. B. die kleinen Cherry",
+      "nameEmpty": "Bitte gib einen Namen ein.",
+      "quantityInvalid": "Bitte gib eine Zahl ein, z. B. 2 oder 2,5.",
+      "decrease": "Menge verringern",
+      "increase": "Menge erhöhen",
+      "add": "Hinzufügen",
+      "cancel": "Abbrechen"
     },
     "noLists": {
       "title": "Noch keine Liste",

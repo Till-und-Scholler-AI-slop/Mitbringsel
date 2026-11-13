@@ -428,8 +428,8 @@ describe('ListView: header', () => {
     const { wrapper, router } = await mountView()
 
     await wrapper.get('button[aria-label="New list"]').trigger('click')
-    await wrapper.get('dialog input').setValue('Drogerie')
-    await wrapper.get('dialog form').trigger('submit')
+    await wrapper.get('dialog[open] input').setValue('Drogerie')
+    await wrapper.get('dialog[open] form').trigger('submit')
     await flushPromises()
 
     expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie')
@@ -771,6 +771,29 @@ describe('ListView: quick add', () => {
 
     expect(wrapper.find('.add-bar').exists()).toBe(false)
     expect(wrapper.get('.frame').classes()).not.toContain('frame--bottom-bar')
+    wrapper.unmount()
+  })
+
+  it('adds an item with details from the form', async () => {
+    itemsService.create.mockResolvedValue(item('i9', 'Tomaten', { quantity: 6, unit: 'piece' }))
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.add-bar input').setValue('Tomaten')
+    await wrapper.get('.add-bar .details').trigger('click')
+    const form = wrapper.get('dialog[open] form')
+    expect((form.get('input').element as HTMLInputElement).value).toBe('Tomaten')
+    await form.get('input[inputmode="decimal"]').setValue('6')
+    await form.trigger('submit')
+    await flushPromises()
+
+    expect(itemsService.create).toHaveBeenCalledWith('l1', {
+      name: 'Tomaten',
+      quantity: 6,
+      unit: 'piece',
+      note: null,
+    })
+    expect(openNames(wrapper)).toEqual(['Tomaten'])
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
     wrapper.unmount()
   })
 })
