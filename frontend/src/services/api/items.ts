@@ -1,4 +1,12 @@
-import type { CreateItemRequest, Item, ItemListResponse, UpdateItemRequest } from '@/types/api'
+import type {
+  CreateItemRequest,
+  DeletedItem,
+  Item,
+  ItemListResponse,
+  RemoveCheckedItemsRequest,
+  RemovedItems,
+  UpdateItemRequest,
+} from '@/types/api'
 
 import { apiDelete, apiGet, apiPatchJson, apiPostJson } from './client'
 
@@ -15,14 +23,28 @@ export interface ItemsService {
   update(itemId: string, change: UpdateItemRequest): Promise<Item>
   /** Every member may do this. Deleting twice is fine. */
   remove(itemId: string): Promise<void>
+  /**
+   * Every member may do this, also in an archived list. Deletes those of
+   * `itemIds` (at most MAX_REMOVE_CHECKED) that belong to the list and are
+   * still checked; answers what was deleted, in no particular order.
+   */
+  removeChecked(listId: string, itemIds: string[]): Promise<DeletedItem[]>
 }
+
+/** The most item IDs one removeChecked() call may send (api/openapi.yaml). */
+export const MAX_REMOVE_CHECKED = 500
 
 const listItemsPath = (listId: string) => `/lists/${listId}/items`
 const itemPath = (itemId: string) => `/items/${itemId}`
+const removeCheckedPath = (listId: string) => `/lists/${listId}/items/remove-checked`
 
 export const itemsService: ItemsService = {
   list: async (listId) => (await apiGet<ItemListResponse>(listItemsPath(listId))).items,
   create: (listId, item) => apiPostJson<Item>(listItemsPath(listId), item),
   update: (itemId, change) => apiPatchJson<Item>(itemPath(itemId), change),
   remove: (itemId) => apiDelete(itemPath(itemId)),
+  removeChecked: async (listId, itemIds) => {
+    const body: RemoveCheckedItemsRequest = { itemIds }
+    return (await apiPostJson<RemovedItems>(removeCheckedPath(listId), body)).items
+  },
 }

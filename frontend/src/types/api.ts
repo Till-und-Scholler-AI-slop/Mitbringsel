@@ -74,6 +74,15 @@ export type CreateItemRequest = Schemas['CreateItemRequest']
 /** Body of PATCH /api/v1/items/{itemId}: only the fields to change. */
 export type UpdateItemRequest = Schemas['UpdateItemRequest']
 
+/** Body of POST /api/v1/lists/{listId}/items/remove-checked. */
+export type RemoveCheckedItemsRequest = Schemas['RemoveCheckedItemsRequest']
+
+/** Response of POST /api/v1/lists/{listId}/items/remove-checked. */
+export type RemovedItems = Schemas['RemovedItems']
+
+/** One deleted item with the serverSeq of its deletion. */
+export type DeletedItem = Schemas['DeletedItem']
+
 /** How a quantity is measured (piece, g, kg, ml, l, pack). */
 export type Unit = Schemas['Unit']
 

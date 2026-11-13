@@ -73,4 +73,16 @@ describe('itemsService', () => {
     await expect(itemsService.remove('i1')).resolves.toBeUndefined()
     expect(fetch).toHaveBeenCalledWith('/api/v1/items/i1', { method: 'DELETE' })
   })
+
+  it('removes checked items and answers what was deleted', async () => {
+    const deleted = [{ itemId: 'i1', serverSeq: 7 }]
+    stubFetch(() => Response.json({ items: deleted }))
+
+    await expect(itemsService.removeChecked('l1', ['i1', 'i2'])).resolves.toEqual(deleted)
+    expect(fetch).toHaveBeenCalledWith('/api/v1/lists/l1/items/remove-checked', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"itemIds":["i1","i2"]}',
+    })
+  })
 })

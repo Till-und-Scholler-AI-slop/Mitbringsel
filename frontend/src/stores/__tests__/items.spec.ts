@@ -6,6 +6,7 @@ import { ref } from 'vue'
 import { ApiError } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
 import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
+import { MAX_REMOVE_CHECKED } from '@/services/api/items'
 import type { Item, ServerMessage } from '@/types/api'
 
 import { defineItemsStore } from '../items'
@@ -58,6 +59,15 @@ function fakeService(
       })
     }),
     remove: vi.fn(() => Promise.resolve()),
+    // Deletes what is checked in `initial`, as the server deletes only
+    // what is still checked.
+    removeChecked: vi.fn((listId: string, itemIds: string[]) =>
+      Promise.resolve(
+        initial
+          .filter((i) => i.listId === listId && i.checked && itemIds.includes(i.id))
+          .map((i) => ({ itemId: i.id, serverSeq: 10 })),
+      ),
+    ),
   }
 }
 
@@ -1187,5 +1197,180 @@ describe('items store: forgetList', () => {
     await store.load('l1')
 
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+})
+
+describe('items store: removing checked items', () => {
+  const shopping = () => [
+    item('i1', 'Milch'),
+    item('i2', 'Brot', 'l1', true),
+    item('i3', 'Eier', 'l1', true),
+  ]
+
+  it('hides the checked items at once and sends nothing yet', async () => {
+    const service = fakeService(shopping())
+    const { store } = setup(service)
+    await store.load('l1')
+
+    const removal = store.startRemovingChecked('l1')
+
+    expect(names(removal?.items ?? [])).toEqual(['Brot', 'Eier'])
+    expect(store.checkedItems('l1')).toEqual([])
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+    expect(names(store.openItems('l1'))).toEqual(['Milch'])
+    expect(service.removeChecked).not.toHaveBeenCalled()
+  })
+
+  it('answers null if no item is checked', async () => {
+    const { store } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    expect(store.startRemovingChecked('l1')).toBeNull()
+  })
+
+  it('deletes the items for good on commit', async () => {
+    const service = fakeService(shopping())
+    const { store, events } = setup(service)
+    await store.load('l1')
+
+    await store.startRemovingChecked('l1')?.commit()
+    // A late state of a deleted item must not bring it back.
+    events.emit(changed(later(item('i2', 'Brot', 'l1', true), 20)))
+
+    expect(service.removeChecked).toHaveBeenCalledWith('l1', ['i2', 'i3'])
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('shows an item again that the server did not delete', async () => {
+    const service = fakeService(shopping())
+    service.removeChecked.mockResolvedValueOnce([{ itemId: 'i2', serverSeq: 10 }])
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await store.startRemovingChecked('l1')?.commit()
+
+    expect(names(store.checkedItems('l1'))).toEqual(['Eier'])
+  })
+
+  it('shows the items again on undo and sends nothing', async () => {
+    const service = fakeService(shopping())
+    const { store } = setup(service)
+    await store.load('l1')
+
+    const removal = store.startRemovingChecked('l1')
+    removal?.undo()
+    await removal?.commit()
+
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot', 'Eier'])
+    expect(service.removeChecked).not.toHaveBeenCalled()
+  })
+
+  it('sends once, however often commit is called', async () => {
+    const service = fakeService(shopping())
+    const { store } = setup(service)
+    await store.load('l1')
+
+    const removal = store.startRemovingChecked('l1')
+    await Promise.all([removal?.commit(), removal?.commit()])
+    removal?.undo()
+
+    expect(service.removeChecked).toHaveBeenCalledTimes(1)
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('shows the items again and throws if the request fails', async () => {
+    const service = fakeService(shopping())
+    service.removeChecked.mockRejectedValueOnce(new ApiError('INTERNAL', 500))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await expect(store.startRemovingChecked('l1')?.commit()).rejects.toThrow(ApiError)
+
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot', 'Eier'])
+  })
+
+  it('shows an item that someone unchecks meanwhile among the open items', async () => {
+    const { store, events } = setup(fakeService(shopping()))
+    await store.load('l1')
+
+    store.startRemovingChecked('l1')
+    events.emit(changed(later(item('i2', 'Brot'), 2)))
+
+    expect(names(store.openItems('l1'))).toEqual(['Milch', 'Brot'])
+    expect(store.checkedItems('l1')).toEqual([])
+  })
+
+  it('leaves an item alone that is checked after the start', async () => {
+    const service = fakeService(shopping())
+    const { store } = setup(service)
+    await store.load('l1')
+
+    const removal = store.startRemovingChecked('l1')
+    await store.setChecked('i1', true)
+    await removal?.commit()
+
+    expect(service.removeChecked).toHaveBeenCalledWith('l1', ['i2', 'i3'])
+    expect(names(store.checkedItems('l1'))).toEqual(['Milch'])
+  })
+
+  it('takes the next removal without the items of the first', async () => {
+    const service = fakeService(shopping())
+    const { store } = setup(service)
+    await store.load('l1')
+
+    store.startRemovingChecked('l1')
+    await store.setChecked('i1', true)
+    const second = store.startRemovingChecked('l1')
+
+    expect(names(second?.items ?? [])).toEqual(['Milch'])
+  })
+
+  it('keeps the items hidden while the list loads again', async () => {
+    const { store, events } = setup(fakeService(shopping()))
+    await store.load('l1')
+
+    store.startRemovingChecked('l1')
+    events.emit(READY)
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('sends many items in blocks and keeps what an earlier block deleted', async () => {
+    const many = Array.from({ length: MAX_REMOVE_CHECKED + 1 }, (_, n) =>
+      item(`i${String(n).padStart(4, '0')}`, `Artikel ${n}`, 'l1', true),
+    )
+    const service = fakeService(many)
+    service.removeChecked
+      .mockImplementationOnce((_listId: string, ids: string[]) =>
+        Promise.resolve(ids.map((itemId) => ({ itemId, serverSeq: 10 }))),
+      )
+      .mockRejectedValueOnce(new ApiError('INTERNAL', 500))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await expect(store.startRemovingChecked('l1')?.commit()).rejects.toThrow(ApiError)
+
+    expect(service.removeChecked).toHaveBeenCalledTimes(2)
+    expect(service.removeChecked.mock.calls[0]?.[1]).toHaveLength(MAX_REMOVE_CHECKED)
+    expect(service.removeChecked.mock.calls[1]?.[1]).toEqual([many[MAX_REMOVE_CHECKED]?.id])
+    expect(names(store.itemsOf('l1'))).toEqual([`Artikel ${MAX_REMOVE_CHECKED}`])
+  })
+
+  it("does not apply a removal of the previous user's items", async () => {
+    const service = fakeService(shopping())
+    const answer = deferred<{ itemId: string; serverSeq: number }[]>()
+    service.removeChecked.mockReturnValueOnce(answer.promise)
+    const { store, user } = setup(service)
+    await store.load('l1')
+
+    const committing = store.startRemovingChecked('l1')?.commit()
+    user.value = BEN
+    await flushPromises()
+    await store.load('l1')
+    answer.resolve([{ itemId: 'i2', serverSeq: 10 }])
+    await committing
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot', 'Eier'])
   })
 })

@@ -36,6 +36,7 @@ const itemsService = vi.hoisted(() => ({
   create: vi.fn<ItemsService['create']>(),
   update: vi.fn<ItemsService['update']>(),
   remove: vi.fn<ItemsService['remove']>(),
+  removeChecked: vi.fn<ItemsService['removeChecked']>(),
 }))
 
 // vi.hoisted runs before the imports, so the fake has to be imported by hand.
