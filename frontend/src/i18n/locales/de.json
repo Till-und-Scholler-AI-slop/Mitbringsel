@@ -231,6 +231,12 @@
       "undo": "Rückgängig",
       "removeFailed": "Die erledigten Artikel konnten nicht entfernt werden."
     },
+    "quickAdd": {
+      "label": "Artikel hinzufügen",
+      "placeholder": "Was brauchen wir?",
+      "enterHint": "Enter ↵",
+      "failed": "„{name}“ konnte nicht hinzugefügt werden"
+    },
     "noLists": {
       "title": "Noch keine Liste",
       "description": "Lege eine Liste an, zum Beispiel für den Wocheneinkauf.",

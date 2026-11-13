@@ -68,6 +68,12 @@
   --size-sidebar: 18.875rem;
   /* Widest toast on the desktop. */
   --size-toast-max: 30rem;
+  /* The quick-add pill of the list view, phone and desktop. */
+  --size-quick-add: 3.5rem;
+  --size-quick-add-desktop: 3.75rem;
+  /* The bar around it at the bottom of the phone screen (pill, 10px above,
+     22px below); the toasts keep clear of it. */
+  --size-quick-add-bar: 5.5rem;
 
   /* Fixed accent colors ("list colors"); text on them is always --color-on-accent. */
   --color-accent-tomato: #ff7a59;

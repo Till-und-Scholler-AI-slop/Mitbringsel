@@ -18,6 +18,7 @@ import ItemRow from '@/components/list/ItemRow.vue'
 import ListActionsDialog from '@/components/list/ListActionsDialog.vue'
 import ListChips from '@/components/list/ListChips.vue'
 import ListNameDialog from '@/components/list/ListNameDialog.vue'
+import QuickAddBar from '@/components/list/QuickAddBar.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
@@ -195,7 +196,7 @@ function openCreated(created: List) {
 </script>
 
 <template>
-  <AppFrame :group-id="groupId" :list-id="listId">
+  <AppFrame :group-id="groupId" :list-id="listId" :bottom-bar="list !== undefined">
     <div class="page">
       <!-- On the phone a green header; on the desktop the plain top of the
          page, as the sidebar holds the way back to the start page. -->
@@ -285,6 +286,10 @@ function openCreated(created: List) {
         </BaseEmptyState>
 
         <template v-else>
+          <!-- First in the DOM and on the desktop, so it comes first for the
+             keyboard; on the phone CSS moves it to the bottom of the screen. -->
+          <QuickAddBar v-if="list" class="add-bar" :list-id="list.id" />
+
           <p v-if="list?.archivedAt" class="archived">
             <BaseIcon name="archive" :size="18" /> {{ t('list.archivedBadge') }}
           </p>
@@ -441,6 +446,24 @@ function openCreated(created: List) {
   padding: var(--space-4) var(--space-3) var(--space-8);
 }
 
+/* The quick-add bar brings its own space below. */
+.content:has(> .add-bar) {
+  padding-bottom: 0;
+}
+
+/* Phone: at the bottom of the screen, near the thumb, over the items that
+   scroll past below it; at the end of a short list it sits at the bottom
+   anyway (margin-top: auto). */
+.add-bar {
+  order: 1;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: auto calc(-1 * var(--space-3)) 0;
+  padding: 10px var(--space-3) calc(var(--space-5) + env(safe-area-inset-bottom));
+  background: var(--color-bg);
+}
+
 .open {
   display: flex;
   flex-direction: column;
@@ -519,9 +542,19 @@ function openCreated(created: List) {
     box-shadow: 0 0 0 2.5px var(--color-bg);
   }
 
-  .content {
+  .content,
+  .content:has(> .add-bar) {
     max-width: 51.25rem;
     padding: var(--space-5) var(--space-6) 3.5rem;
+  }
+
+  /* Above the list, where the design puts it. */
+  .add-bar {
+    order: 0;
+    position: static;
+    margin: 0;
+    padding: 0;
+    background: transparent;
   }
 }
 </style>
