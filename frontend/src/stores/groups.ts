@@ -31,6 +31,19 @@ export type GroupsStatus = 'idle' | 'loading' | 'ready' | 'error'
  * so a logical clock decides which state is newer, as in the lists store.
  * See docs/sync.md.
  */
+/**
+ * Why the user is no longer in a group: another member removed them or
+ * deleted it, they left or deleted it themselves (also in another tab), or
+ * a load no longer listed it, e.g. after an event missed while offline.
+ */
+export type DepartureCause = 'removed' | 'deleted' | 'self' | 'unknown'
+
+/** A group the user is no longer in, with its last known name. */
+export interface Departure {
+  name: string
+  cause: DepartureCause
+}
+
 export function defineGroupsStore(
   service: GroupsService,
   currentUserId: () => string | null,
@@ -55,6 +68,9 @@ export function defineGroupsStore(
     const removedAt = new Map<string, number>()
     // The start of the newest load whose answer was applied.
     let appliedLoadStart = 0
+    // Why each group went, read once by the screen that was showing it.
+    // Read only right after the group went, so not reactive.
+    const departures = new Map<string, Departure>()
 
     function reset() {
       generation++
@@ -63,6 +79,7 @@ export function defineGroupsStore(
       errorCode.value = null
       touchedAt.clear()
       removedAt.clear()
+      departures.clear()
       appliedLoadStart = 0
     }
 
@@ -70,6 +87,20 @@ export function defineGroupsStore(
 
     function byId(groupId: string): Group | undefined {
       return groups.value.find((group) => group.id === groupId)
+    }
+
+    /** Why the user is no longer in the group; undefined if they still are. */
+    function departureOf(groupId: string): Departure | undefined {
+      return byId(groupId) ? undefined : departures.get(groupId)
+    }
+
+    // Remembers why a group we show is going. A group that is gone already
+    // keeps its first cause: our own leave is followed by our own event.
+    function rememberDeparture(groupId: string, cause: DepartureCause) {
+      const group = byId(groupId)
+      if (group) {
+        departures.set(groupId, { name: group.name, cause })
+      }
     }
 
     // False if the user changed since `started`, or if the answer of a load
@@ -106,6 +137,7 @@ export function defineGroupsStore(
         if ((touchedAt.get(id) ?? 0) > startedAt) {
           merged.push(held)
         } else {
+          departures.set(id, { name: held.name, cause: 'unknown' })
           forgetLists(id)
         }
       }
@@ -159,7 +191,8 @@ export function defineGroupsStore(
 
     // The user is no longer in the group: left, removed, or it was deleted.
     // Its lists (and through them their items) go with it.
-    function takeRemoval(groupId: string) {
+    function takeRemoval(groupId: string, cause: DepartureCause) {
+      rememberDeparture(groupId, cause)
       removedAt.set(groupId, ++clock)
       touchedAt.delete(groupId)
       groups.value = groups.value.filter((group) => group.id !== groupId)
@@ -189,7 +222,7 @@ export function defineGroupsStore(
       const started = generation
       await service.remove(groupId)
       if (started === generation) {
-        takeRemoval(groupId)
+        takeRemoval(groupId, 'self')
       }
     }
 
@@ -202,7 +235,7 @@ export function defineGroupsStore(
       const started = generation
       await service.removeMember(groupId, userId)
       if (started === generation) {
-        takeRemoval(groupId)
+        takeRemoval(groupId, 'self')
       }
     }
 
@@ -237,7 +270,9 @@ export function defineGroupsStore(
     // store, as the socket outlives it.
     const unsubscribes = [
       events.on('groupChanged', reloadIfLoaded),
-      events.on('groupRemoved', ({ payload }) => takeRemoval(payload.groupId)),
+      events.on('groupRemoved', ({ payload }) =>
+        takeRemoval(payload.groupId, payload.actorId === currentUserId() ? 'self' : payload.reason),
+      ),
       // Events are best effort and the connection may have been down.
       events.on('ready', reloadIfLoaded),
     ]
@@ -252,6 +287,7 @@ export function defineGroupsStore(
       status,
       errorCode,
       byId,
+      departureOf,
       load,
       create,
       rename,

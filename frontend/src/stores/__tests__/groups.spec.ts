@@ -503,3 +503,83 @@ describe('groups store: live events', () => {
     expect(store.byId('g1')?.name).toBe('Neu')
   })
 })
+
+describe('groups store: why a group went', () => {
+  const removal = (reason: 'removed' | 'deleted', actorId: string): ServerMessage => ({
+    type: 'groupRemoved',
+    payload: { groupId: 'g1', reason, actorId },
+  })
+
+  it('knows nothing about a group the user is still in', async () => {
+    const { store } = setup(fakeService([group('g1', 'WG')]))
+    await store.load()
+
+    expect(store.departureOf('g1')).toBeUndefined()
+    expect(store.departureOf('unknown')).toBeUndefined()
+  })
+
+  it.each(['removed', 'deleted'] as const)(
+    'remembers the name when another member %s it',
+    async (reason) => {
+      const { store, events } = setup(fakeService([group('g1', 'WG')]))
+      await store.load()
+
+      events.emit(removal(reason, BEN))
+
+      expect(store.departureOf('g1')).toEqual({ name: 'WG', cause: reason })
+    },
+  )
+
+  it('counts an event of the user from another tab as their own doing', async () => {
+    const { store, events } = setup(fakeService([group('g1', 'WG')]))
+    await store.load()
+
+    events.emit(removal('deleted', ANNA))
+
+    expect(store.departureOf('g1')).toEqual({ name: 'WG', cause: 'self' })
+  })
+
+  it.each(['leave', 'remove'] as const)('counts %s as the own doing', async (action) => {
+    const { store, events } = setup(fakeService([group('g1', 'WG')]))
+    await store.load()
+
+    await store[action]('g1')
+    // The own event that follows does not change the cause.
+    events.emit(removal('removed', ANNA))
+
+    expect(store.departureOf('g1')).toEqual({ name: 'WG', cause: 'self' })
+  })
+
+  it('does not know why if a load no longer lists the group', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store } = setup(service)
+    await store.load()
+
+    service.list.mockResolvedValueOnce([])
+    await store.load()
+
+    expect(store.departureOf('g1')).toEqual({ name: 'WG', cause: 'unknown' })
+  })
+
+  it('forgets the departure when the group comes back', async () => {
+    const service = fakeService([group('g1', 'WG')])
+    const { store, events } = setup(service)
+    await store.load()
+    events.emit(removal('removed', BEN))
+
+    await store.load()
+
+    expect(store.departureOf('g1')).toBeUndefined()
+  })
+
+  it('forgets departures with the user', async () => {
+    const { store, events, user } = setup(fakeService([group('g1', 'WG')]))
+    await store.load()
+    events.emit(removal('removed', BEN))
+
+    user.value = BEN
+    await flushPromises()
+
+    expect(store.departureOf('g1')).toBeUndefined()
+  })
+})
