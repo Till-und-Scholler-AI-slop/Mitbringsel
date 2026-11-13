@@ -216,7 +216,15 @@
       "justChangedByAnon": "gerade geändert"
     },
     "done": {
-      "title": "Erledigt ({count})"
+      "title": "Erledigt ({count})",
+      "remove": "Entfernen",
+      "removeLong": "Erledigte entfernen",
+      "removeHint": "Für alle Mitglieder entfernen",
+      "removeLabel": "{count} erledigten Artikel für alle entfernen | {count} erledigte Artikel für alle entfernen",
+      "removedOne": "„{name}“ entfernt",
+      "removed": "{count} Artikel entfernt",
+      "undo": "Rückgängig",
+      "removeFailed": "Die erledigten Artikel konnten nicht entfernt werden."
     },
     "noLists": {
       "title": "Noch keine Liste",
