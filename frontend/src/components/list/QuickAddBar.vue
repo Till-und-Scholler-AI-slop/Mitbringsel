@@ -70,7 +70,7 @@ async function add() {
     </label>
     <button
       type="button"
-      class="details"
+      class="details press-sticker"
       :aria-label="t('list.quickAdd.details')"
       :title="t('list.quickAdd.details')"
       aria-haspopup="dialog"
@@ -132,7 +132,7 @@ input::placeholder {
   color: var(--color-text-muted);
 }
 
-/* Round, in the sticker look of a primary button. */
+/* Round, in the sticker look of a primary button (press-sticker). */
 .details {
   flex: none;
   display: grid;
@@ -146,20 +146,6 @@ input::placeholder {
   color: var(--color-primary-contrast);
   box-shadow: var(--shadow-sticker);
   cursor: pointer;
-  transition:
-    transform var(--duration-press) var(--easing-bounce),
-    box-shadow var(--duration-press);
-}
-
-.details:active {
-  transform: translateY(3px);
-  box-shadow: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .details {
-    transition: none;
-  }
 }
 
 /* A keyboard hint only makes sense with a keyboard. */

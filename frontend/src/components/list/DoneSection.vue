@@ -48,7 +48,7 @@ function onRemove(event: MouseEvent) {
       <span class="divider" aria-hidden="true"></span>
       <button
         type="button"
-        class="remove"
+        class="remove press-inset"
         :aria-label="t('list.done.removeLabel', { count: items.length })"
         :title="t('list.done.removeHint')"
         @click="onRemove"
@@ -137,10 +137,6 @@ function onRemove(event: MouseEvent) {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  transition:
-    transform 0.12s ease-out,
-    background-color 0.12s ease-out,
-    box-shadow 0.12s ease-out;
 }
 
 @media (hover: hover) {
@@ -149,11 +145,9 @@ function onRemove(event: MouseEvent) {
   }
 }
 
-/* Sinks 2px into the section as it is pressed. */
+/* Sinks into the section as it is pressed (press-inset), darker. */
 .remove:active {
-  transform: translateY(2px);
   background: var(--color-danger-surface-pressed);
-  box-shadow: var(--shadow-pressed-inset);
 }
 
 .remove-long {
@@ -193,12 +187,6 @@ function onRemove(event: MouseEvent) {
 
   .remove-long {
     display: inline;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .remove {
-    transition: none;
   }
 }
 </style>

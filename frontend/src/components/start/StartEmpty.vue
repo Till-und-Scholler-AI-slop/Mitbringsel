@@ -26,7 +26,7 @@ const { t } = useI18n()
     <div class="options">
       <button
         type="button"
-        class="option option--create"
+        class="option option--create press-sticker"
         aria-haspopup="dialog"
         @click="emit('create')"
       >
@@ -41,7 +41,7 @@ const { t } = useI18n()
       </button>
       <button
         type="button"
-        class="option option--join"
+        class="option option--join press-sticker"
         aria-haspopup="dialog"
         @click="emit('join')"
       >
@@ -152,7 +152,7 @@ const { t } = useI18n()
   padding-top: var(--space-1);
 }
 
-/* Sticker buttons that sink onto their shadow when pressed. */
+/* Sticker buttons that sink onto their shadow when pressed (press-sticker). */
 .option {
   display: flex;
   align-items: center;
@@ -164,21 +164,6 @@ const { t } = useI18n()
   text-align: left;
   cursor: pointer;
   box-shadow: var(--shadow-sticker);
-  transition:
-    transform var(--duration-press) var(--easing-bounce),
-    box-shadow var(--duration-press);
-}
-
-.option:active {
-  transform: translateY(3px) scale(0.98);
-  box-shadow: none;
-  transition-duration: 60ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .option {
-    transition: none;
-  }
 }
 
 .option :deep(svg) {

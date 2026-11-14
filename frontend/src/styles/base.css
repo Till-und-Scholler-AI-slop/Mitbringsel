@@ -40,3 +40,43 @@ body:has(dialog[open]) {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/*
+ * Press feedback for every button and link that looks pressable
+ * (docs/conventions.md). Components set one class instead of their own
+ * :active rules, so no button is left without it.
+ * - press-sticker: has --shadow-sticker and sinks onto it.
+ * - press-inset: is flat and sinks into the page with an inner shadow.
+ * The :active rules are more specific than a scoped component rule
+ * (".unit--on[data-v-…]"), so a component's own shadow cannot win over
+ * the pressed look. Components leave `transition` to these classes.
+ */
+.press-sticker,
+.press-inset {
+  transition:
+    transform var(--duration-press) var(--easing-bounce),
+    box-shadow var(--duration-press),
+    background-color var(--duration-press);
+}
+
+.press-sticker:active:not(:disabled),
+.press-inset:active:not(:disabled) {
+  transition-duration: var(--duration-press-down);
+}
+
+.press-sticker:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+
+.press-inset:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: var(--shadow-pressed-inset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press-sticker,
+  .press-inset {
+    transition: none;
+  }
+}

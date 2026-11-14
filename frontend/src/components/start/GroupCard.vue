@@ -32,7 +32,7 @@ const label = computed(() => {
 
 <template>
   <RouterLink
-    class="card"
+    class="card press-sticker"
     :to="{ name: 'group', params: { groupId: group.id } }"
     :aria-label="label"
   >
@@ -62,7 +62,8 @@ const label = computed(() => {
 </template>
 
 <style scoped>
-/* Lifts under the mouse and sinks onto its shadow when pressed. */
+/* Lifts under the mouse and sinks onto its shadow when pressed
+   (press-sticker). */
 .card {
   display: flex;
   flex-direction: column;
@@ -74,25 +75,10 @@ const label = computed(() => {
   color: var(--color-text);
   text-decoration: none;
   box-shadow: var(--shadow-sticker);
-  transition:
-    transform 0.25s var(--easing-bounce),
-    box-shadow 0.25s;
 }
 
 .card:hover {
   transform: translateY(-2px);
-}
-
-.card:active {
-  transform: translateY(3px);
-  box-shadow: none;
-  transition-duration: 60ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .card {
-    transition: none;
-  }
 }
 
 .head {

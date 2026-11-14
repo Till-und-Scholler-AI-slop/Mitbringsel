@@ -25,7 +25,7 @@ function pick(unit: Unit) {
         v-for="unit in UNITS"
         :key="unit"
         type="button"
-        :class="['unit', { 'unit--on': model === unit }]"
+        :class="['unit', model === unit ? 'unit--on press-sticker' : 'press-inset']"
         :aria-pressed="model === unit"
         @click="pick(unit)"
       >

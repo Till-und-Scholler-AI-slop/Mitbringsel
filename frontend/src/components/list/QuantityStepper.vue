@@ -34,7 +34,7 @@ function step(direction: -1 | 1) {
     <div class="stepper">
       <button
         type="button"
-        class="step step--down"
+        class="step step--down press-inset"
         :aria-label="t('list.itemForm.decrease')"
         @click="step(-1)"
       >
@@ -52,7 +52,7 @@ function step(direction: -1 | 1) {
       />
       <button
         type="button"
-        class="step step--up"
+        class="step step--up press-sticker"
         :aria-label="t('list.itemForm.increase')"
         @click="step(1)"
       >
@@ -104,14 +104,6 @@ function step(direction: -1 | 1) {
   background: var(--color-primary);
   color: var(--color-primary-contrast);
   box-shadow: var(--shadow-sticker);
-  transition:
-    transform var(--duration-press) var(--easing-bounce),
-    box-shadow var(--duration-press);
-}
-
-.step--up:active {
-  transform: translateY(3px);
-  box-shadow: none;
 }
 
 .input {
@@ -143,11 +135,5 @@ function step(direction: -1 | 1) {
   color: var(--color-danger-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .step--up {
-    transition: none;
-  }
 }
 </style>

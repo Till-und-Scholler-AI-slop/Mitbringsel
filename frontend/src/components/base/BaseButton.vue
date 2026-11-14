@@ -21,7 +21,7 @@ withDefaults(
 <template>
   <button
     :type="type"
-    :class="['base-button', `base-button--${variant}`]"
+    :class="['base-button', `base-button--${variant}`, { 'press-sticker': variant !== 'ghost' }]"
     :disabled="disabled || loading"
     :aria-busy="loading || undefined"
   >
@@ -51,21 +51,11 @@ withDefaults(
   opacity: 0.6;
 }
 
-/* Sticker buttons sink onto their shadow when pressed. */
+/* Sticker buttons sink onto their shadow when pressed (press-sticker). */
 .base-button--primary,
 .base-button--secondary,
 .base-button--danger {
   box-shadow: var(--shadow-sticker);
-  transition:
-    transform var(--duration-press) var(--easing-bounce),
-    box-shadow var(--duration-press);
-}
-
-.base-button--primary:active:not(:disabled),
-.base-button--secondary:active:not(:disabled),
-.base-button--danger:active:not(:disabled) {
-  transform: translateY(3px);
-  box-shadow: none;
 }
 
 .base-button--primary {
@@ -94,11 +84,5 @@ withDefaults(
   font-weight: var(--font-weight-heavy);
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .base-button {
-    transition: none;
-  }
 }
 </style>
