@@ -55,10 +55,6 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 - [ ] **Listen-Aktionen in der Seitenleiste:** In der Listenansicht öffnen sich die Aktionen einer Liste (umbenennen, archivieren, löschen) per Rechtsklick oder langem Druck auf ihren Chip (`ListChips`, `useLongPress`, `ListActionsDialog`). Die Seitenleiste auf dem Desktop (`AppSidebar`) zeigt die Listen des offenen Haushalts auch, dort fehlt der Rechtsklick. Dieselben Aktionen per Rechtsklick (und Tastatur, z. B. Kontextmenü-Taste) auf den Listen-Eintrag anbieten.
 
-## Verwalten
-
-- [ ] **Namensformular teilen:** `RenameGroupDialog` und `CreateGroupDialog` sind fast gleich (Validierung, Fehleranzeige, Buttons). Mit `ListNameDialog` (Anlegen und Umbenennen von Listen) gibt es eine dritte Verwendung: jetzt ein gemeinsames Formular herausziehen.
-
 ## Einladung
 
 - [ ] **„Erstellt von dir“ bei offenen Links:** Das Design markiert die eigenen Links. `Invite` liefert nur `createdByName`; Namen sind nicht eindeutig, also steht überall „Erstellt von {Name}“. Mit einer Ersteller-ID im Schema (`api/openapi.yaml`) nachrüsten.
