@@ -75,7 +75,7 @@ function pick(unit: Unit) {
 }
 
 /* The picked one stays pressed down (press-sticker with aria-pressed) and
-   springs back up once another one is picked. */
+   springs back up once it is no longer picked. */
 .unit--on {
   border-width: var(--border-width-md);
   border-color: var(--color-primary-contrast);
