@@ -49,7 +49,7 @@ function onClick(list: List) {
       v-for="list in lists"
       :key="list.id"
       type="button"
-      :class="['chip', 'chip--list', { 'chip--current': list.id === currentId }]"
+      :class="['chip', 'chip--list', 'press-sticker', { 'chip--current': list.id === currentId }]"
       :aria-current="list.id === currentId ? 'page' : undefined"
       :aria-describedby="list.id === currentId ? hintId : undefined"
       v-on="press.handlers(list)"
@@ -61,14 +61,19 @@ function onClick(list: List) {
     <button
       v-if="archivedCount > 0"
       type="button"
-      :class="['chip', 'chip--archive', { 'chip--current': currentArchived }]"
+      :class="['chip', 'chip--archive', 'press-sticker', { 'chip--current': currentArchived }]"
       aria-haspopup="dialog"
       @click="$emit('archive')"
     >
       <BaseIcon name="archive" :size="18" />
       {{ t('list.archive.chip', { count: archivedCount }) }}
     </button>
-    <button type="button" class="add" :aria-label="t('list.newList')" @click="$emit('create')">
+    <button
+      type="button"
+      class="add press-inset"
+      :aria-label="t('list.newList')"
+      @click="$emit('create')"
+    >
       <BaseIcon name="plus" :size="20" :stroke-width="2.5" />
     </button>
     <span :id="hintId" class="sr-only">{{ t('list.chipHint') }}</span>
@@ -108,9 +113,6 @@ function onClick(list: List) {
   /* No text selection or callout while a finger is held on a chip. */
   -webkit-touch-callout: none;
   user-select: none;
-  transition:
-    transform var(--duration-press) var(--easing-bounce),
-    box-shadow var(--duration-press) var(--easing-bounce);
 }
 
 /* Pressed in = the list that is open. */
@@ -174,12 +176,6 @@ function onClick(list: List) {
     height: 3.125rem;
     border-color: var(--color-text);
     color: var(--color-text);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chip {
-    transition: none;
   }
 }
 </style>

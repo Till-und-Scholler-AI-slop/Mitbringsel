@@ -8,7 +8,7 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 - [ ] **Dialoge von Verwalten nach dem Design** (`verwalten-aktionen-hell`, `verwalten-entfernen-hell`, `verwalten-umbenennen-hell`, `verwalten-umbenennen-zulang-*`): Mitglied-Aktionen, Entfernen-Bestätigung und Umbenennen angleichen; die Seite selbst ist angeglichen, die Dialoge noch im alten Stil.
 - [ ] **Desktop-Varianten von Verwalten und Einladung** (`verwalten-desktop-*`, `markt2-einladung-desktop-*`): Verwalten zweispaltig, Einladung mit Kopf und Karte nebeneinander. `GroupSettingsView` und `InviteView` sind vorerst einspaltig.
-- [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): aktiver Chip mit Innenschatten und Druck-/Rückfeder-Animation, erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
+- [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): aktiver Chip mit Innenschatten (er sitzt schon eingedrückt, die Animation kommt von `press-sticker`), erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
 
 ## Login
 
@@ -61,8 +61,7 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 ## Komponenten
 
 - [ ] **`ListView` und `ItemFormDialog` aufteilen:** Die Konventionen schlagen ab etwa 200 Zeilen eine Aufteilung vor. `ListView.vue` hat gut 600 Zeilen (Kopf, Zustände, Artikel, sechs Dialoge), `ItemFormDialog.vue` rund 300. Kandidaten: der Kopf mit Haushalt und Chips als `ListHeader`, die offenen Artikel samt Bearbeiten als eigene Komponente, die Prüfung und das Diff des Formulars als Composable (`useItemForm`).
-- [ ] **Einheitliche Druck-Animation für Buttons:** Die Einheiten-Pillen im Artikelformular (`UnitPicker`) und der Minus-Button der Menge (`QuantityStepper`) haben beim Antippen keine Animation; die meisten anderen Buttons sinken auf ihren Schatten ein. Ursache: Die Animation steckt nur in `BaseButton`; Chips (`ListChips`), Plus der Menge, „Mit Details“ (`QuickAddBar`) und „Entfernen“ (`DoneSection`) haben sie jeweils kopiert, `UnitPicker` und Minus nicht. Die Druck-Stile an einer Stelle bündeln (z. B. Klassen `press-sticker` und `press-inset` in `styles/base.css`, oder ein `BaseToggleButton` mit `aria-pressed` für Pillen) und die Kopien darauf umstellen.
 - [ ] **Fehlende Basis-Komponenten:** In den [Konventionen](conventions.md) stehen `BaseCheckbox` und `BaseSelect`, die es noch nicht gibt (`BaseModal` und `BaseBottomSheet` deckt `BaseDialog` ab). Die Einheit wählt das Artikelformular nach dem Design mit Pillen (`UnitPicker`), nicht mit einem Select; `BaseSelect` also erst bauen, wenn ein Screen eine echte Auswahlliste braucht, sonst aus den Konventionen streichen.
-- [ ] **Toasts über der Eingabeleiste:** Das Design (`toast-*`) setzt den Stapel auf dem Smartphone 8 px über die Eingabeleiste der Listenansicht. Die gibt es noch nicht, deshalb steht er vorerst 16 px über der Safe-Area (`AppToasts`). Mit „Artikel anlegen“ nachziehen.
+- [ ] **Abstand der Toasts zur Eingabeleiste:** Der Stapel steht schon über der Eingabeleiste (`--app-bottom-bar` aus `AppFrame`), aber mit 16 px (`--space-4`) Abstand; das Design (`toast-*`) sieht 8 px vor. Beim Feinabgleich der Listenansicht mitnehmen.
 - [ ] **Toasts außerhalb von `AppFrame`:** Der Stapel hängt in `AppFrame`, also nur auf Start- und Listenansicht. Braucht ein anderer Screen (Verwalten, Einladung) einen Toast, den Stapel nach `App.vue` ziehen und die Position auf dem Desktop von der Seitenleiste abhängig machen.
 - [ ] **`BaseButton`-Größen:** Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen). Die Variante `danger` gibt es seit dem Verwalten-Screen.

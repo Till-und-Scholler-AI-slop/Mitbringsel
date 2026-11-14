@@ -89,7 +89,9 @@
   /* Popup menus lift off the page; the same in both themes. */
   --shadow-menu: 0 6px 0 rgb(0 0 0 / 0.25);
 
+  /* A press goes down at once and springs back with a bounce. */
   --duration-press: 0.2s;
+  --duration-press-down: 60ms;
   --duration-toast-in: 0.22s;
   --duration-toast-out: 0.16s;
   --easing-toast-in: cubic-bezier(0.2, 0.9, 0.3, 1);

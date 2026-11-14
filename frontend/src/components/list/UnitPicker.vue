@@ -25,7 +25,7 @@ function pick(unit: Unit) {
         v-for="unit in UNITS"
         :key="unit"
         type="button"
-        :class="['unit', { 'unit--on': model === unit }]"
+        :class="['unit', model === unit ? 'unit--on press-sticker' : 'press-inset']"
         :aria-pressed="model === unit"
         @click="pick(unit)"
       >
@@ -74,12 +74,13 @@ function pick(unit: Unit) {
   cursor: pointer;
 }
 
+/* The picked one stays pressed down (press-sticker with aria-pressed) and
+   springs back up once it is no longer picked. */
 .unit--on {
   border-width: var(--border-width-md);
   border-color: var(--color-primary-contrast);
   background: var(--color-primary);
   color: var(--color-primary-contrast);
   font-weight: var(--font-weight-black);
-  box-shadow: var(--shadow-sticker);
 }
 </style>
