@@ -113,6 +113,14 @@ describe('ItemRow: just changed by another member', () => {
     )
   })
 
+  it('puts the name apart, so only the name gets cut off when it is long', () => {
+    const name = 'Benedikt „Ben“ Müller-Lüdenscheidt'
+    const recent = mountRecent(item(), { name }).get('.recent')
+
+    expect(recent.get('.recent-name').text()).toBe(name)
+    expect(recent.attributes('title')).toBe(`${name} · just changed`)
+  })
+
   it('says only "just changed" when the member is unknown', () => {
     const wrapper = mountRecent(item(), { name: null })
 

@@ -31,11 +31,9 @@ const quantityText = useQuantityText()
 
 const quantity = computed(() => quantityText(props.item))
 const done = computed(() => props.item.checked)
-const recentText = computed(() => {
-  if (!props.recent || done.value) return null
-  const name = props.recent.name
-  return name ? t('list.row.justChanged', { name }) : t('list.row.justChangedAnon')
-})
+// Only open items show a recent change.
+const recentShown = computed(() => props.recent !== null && !done.value)
+const recentName = computed(() => (recentShown.value ? (props.recent?.name ?? null) : null))
 
 // What a screen reader says: the whole row is one button, so everything the
 // eye sees on it has to be in the label.
@@ -44,19 +42,18 @@ const label = computed(() => {
   const by = props.person
     ? t(done.value ? 'list.row.checkedBy' : 'list.row.addedBy', { name: props.person.name })
     : null
-  const recent =
-    recentText.value && props.recent
-      ? props.recent.name
-        ? t('list.row.justChangedBy', { name: props.recent.name })
-        : t('list.row.justChangedByAnon')
-      : null
+  const recent = recentShown.value
+    ? recentName.value
+      ? t('list.row.justChangedBy', { name: recentName.value })
+      : t('list.row.justChangedByAnon')
+    : null
   const action = t(done.value ? 'list.row.uncheck' : 'list.row.check')
   return `${[...details, by, recent].filter(Boolean).join(', ')} – ${action}`
 })
 </script>
 
 <template>
-  <li :class="['row', { 'row--done': done, 'row--recent': recentText }]">
+  <li :class="['row', { 'row--done': done, 'row--recent': recentShown }]">
     <button type="button" class="toggle" :aria-label="label" @click="$emit('toggle')">
       <span class="box" aria-hidden="true">
         <BaseIcon v-if="done" name="check" :size="16" :stroke-width="3.5" />
@@ -64,7 +61,20 @@ const label = computed(() => {
       <span class="text">
         <span class="name" lang="de">{{ item.name }}</span>
         <span v-if="item.note && !done" class="note">{{ item.note }}</span>
-        <span v-if="recentText" class="recent">{{ recentText }}</span>
+        <!-- Only the name gets cut off when it is too long, so "just changed"
+           always stays visible; the title shows the whole text. -->
+        <i18n-t
+          v-if="recentName"
+          keypath="list.row.justChanged"
+          tag="span"
+          class="recent"
+          :title="t('list.row.justChanged', { name: recentName })"
+        >
+          <template #name>
+            <span class="recent-name">{{ recentName }}</span>
+          </template>
+        </i18n-t>
+        <span v-else-if="recentShown" class="recent">{{ t('list.row.justChangedAnon') }}</span>
       </span>
       <span v-if="quantity" class="quantity">{{ quantity }}</span>
       <BaseAvatar
@@ -231,7 +241,11 @@ const label = computed(() => {
   overflow-wrap: anywhere;
 }
 
+/* A flex row, so the name alone can shrink; pre keeps the spaces around
+   the name, which a flex item would drop at its edges. */
 .recent {
+  display: flex;
+  max-width: 100%;
   padding: 2px var(--space-2);
   border-radius: var(--radius-full);
   background: var(--color-accent-tomato);
@@ -239,7 +253,13 @@ const label = computed(() => {
   font-size: 0.75rem;
   line-height: 1rem;
   font-weight: var(--font-weight-heavy);
-  white-space: nowrap;
+  white-space: pre;
+}
+
+.recent-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .quantity {
