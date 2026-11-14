@@ -66,7 +66,7 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 ## Komponenten
 
-- [ ] **`ListView` und `ItemFormDialog` aufteilen:** Die Konventionen schlagen ab etwa 200 Zeilen eine Aufteilung vor. Kopf und Artikel stecken schon in `ListHeader` und `ListItems`; `ListView.vue` hat noch rund 280 Zeilen (Zustände und vier Listen-Dialoge), `ItemFormDialog.vue` rund 300. Nächster Schritt: die Prüfung und das Diff des Formulars als Composable (`useItemForm`).
+- [ ] **`ListView` aufteilen:** Die Konventionen schlagen ab etwa 200 Zeilen eine Aufteilung vor. Kopf, Artikel und Artikelformular-Logik stecken schon in `ListHeader`, `ListItems` und `useItemForm`; `ListView.vue` hat noch rund 280 Zeilen (Zustände und vier Listen-Dialoge).
 - [ ] **Lade- und Fehlerboxen (`.loading` / `.failed`) zusammenführen:** `ListView` und `ListItems` (auch weitere Views nutzen ähnliche Stile) definieren die Stile für `.loading` und `.failed` doppelt, seitdem `ListItems` ausgelagert ist. In gemeinsame Basis-Komponenten oder Klassen überführen.
 - [ ] **Fehlende Basis-Komponenten:** In den [Konventionen](conventions.md) stehen `BaseCheckbox` und `BaseSelect`, die es noch nicht gibt (`BaseModal` und `BaseBottomSheet` deckt `BaseDialog` ab). Die Einheit wählt das Artikelformular nach dem Design mit Pillen (`UnitPicker`), nicht mit einem Select; `BaseSelect` also erst bauen, wenn ein Screen eine echte Auswahlliste braucht, sonst aus den Konventionen streichen.
 - [ ] **Abstand der Toasts zur Eingabeleiste:** Der Stapel steht schon über der Eingabeleiste (`--app-bottom-bar` aus `AppFrame`), aber mit 16 px (`--space-4`) Abstand; das Design (`toast-*`) sieht 8 px vor. Beim Feinabgleich der Listenansicht mitnehmen.
