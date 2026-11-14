@@ -1,10 +1,10 @@
 # Code-Qualität, Komponenten und i18n
 
-Best Practices und SOLID gelten für jeden Schritt. Claude weist aktiv darauf hin, wenn eine Anfrage diese Prinzipien verletzen würde, und schlägt eine bessere Lösung vor.
+Best Practices und SOLID gelten für jeden Schritt. Der Agent weist aktiv darauf hin, wenn eine Anfrage diese Prinzipien verletzen würde, und schlägt eine bessere Lösung vor.
 
 ## SOLID konkret
 
-- **Single Responsibility:** Ein Handler parst und antwortet, ein Service entscheidet, ein Repository speichert. Eine Vue-Komponente hat eine Aufgabe; wächst sie über etwa 200 Zeilen, schlägt Claude eine Aufteilung vor.
+- **Single Responsibility:** Ein Handler parst und antwortet, ein Service entscheidet, ein Repository speichert. Eine Vue-Komponente hat eine Aufgabe; wächst sie über etwa 200 Zeilen, schlägt der Agent eine Aufteilung vor.
 - **Open/Closed:** Neue WebSocket-Nachrichtentypen werden über eine Handler-Registry ergänzt, ohne bestehende Verzweigungen umzubauen.
 - **Liskov:** Implementierungen eines Interfaces (z.B. echtes und Test-Repository) verhalten sich gleich, inklusive Fehlerfällen.
 - **Interface Segregation:** Kleine Go-Interfaces, die genau das abbilden, was der Konsument braucht.
@@ -20,6 +20,7 @@ Best Practices und SOLID gelten für jeden Schritt. Claude weist aktiv darauf hi
 - Konventionelle Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
 - Migrationen sind abwärtskompatibel: Die vorherige Version des Backends muss mit dem neuen Schema noch laufen, weil ein fehlgeschlagenes Deployment nur die Images zurückrollt, nicht die Datenbank. Spalten und Tabellen also erst hinzufügen und erst in einem späteren Release entfernen oder umbenennen.
 - Generierter Code (sqlc unter `internal/platform/db/sqlcgen`, API-Typen unter `internal/httpapi/apigen` und `frontend/src/types/openapi.gen.ts`) wird eingecheckt und nie von Hand bearbeitet. Nach Änderungen an `db/queries`, `db/migrations` oder `api/openapi.yaml` `make generate` ausführen; die CI prüft, ob der Stand aktuell ist.
+- Nach Änderungen an `api/openapi.yaml` auch im Frontend `npm run type-check`, `npm run test` und `npm run lint` laufen lassen, nicht nur die Backend-Tests. Ein neuer `ErrorCode` braucht einen Text in `frontend/src/i18n/locales/de.json` und `en.json` (`errors`) und einen Eintrag in `API_ERROR_CODES` in `frontend/src/i18n/__tests__/i18n.spec.ts`, sonst schlägt die Frontend-CI fehl.
 - Go-Werkzeuge, die zum Build gehören (z.B. sqlc), stehen als `tool` in `backend/go.mod` und werden mit `go tool <name>` aufgerufen. So nutzen alle Rechner und die CI dieselbe Version.
 
 ## Wiederverwendbare Komponenten

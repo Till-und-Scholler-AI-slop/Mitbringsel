@@ -2,7 +2,7 @@
 
 ## Offene Entscheidungen
 
-Claude spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hier nach der Entscheidung ab.
+Der Agent spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hier nach der Entscheidung ab.
 
 - [x] LWW pro Feld für das erste Release (siehe [ADR 0004](adr/0004-lww-pro-feld.md))
 - [x] Styling-Ansatz nach Claude Design: eigenes CSS mit Tokens, kein Tailwind (siehe [ADR 0003](adr/0003-eigenes-css-mit-tokens.md))
