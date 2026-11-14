@@ -79,7 +79,9 @@ Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im Git
 4. **GitHub Release veröffentlicht:** Die Images des Release-Commits zusätzlich mit der Version taggen und genauso in `mitbringsel-prod` deployen. Rollback heißt: die vorherige Version deployen.
 5. **E2E-Tests** laufen zunächst nur nightly oder manuell, um die Pipeline schnell zu halten.
 
-Secrets liegen ausschließlich in den GitHub Environments `staging` und `production` (SSH-Key) und in der `.env` auf dem Server (Datenbank-Passwort, Google-Client-ID und -Secret je Umgebung, siehe [Authentifizierung](auth.md#einrichtung)).
+**KI-Review** (Workflow `.github/workflows/claude-review.yml`): Claude Code prüft einen PR, sobald er geöffnet oder als fertig markiert wird, und kommentiert Funde inline auf Deutsch, mit einer Zusammenfassung am Ende. Ein erneutes Review fordert man mit dem Label `claude-review` an; der Workflow entfernt es danach wieder. Übersprungen werden Drafts, PRs aus Forks und PRs, die nur `docs/` ändern (außer per Label). Das Review ist nur beratend, kein Pflicht-Check. Es läuft mit Sonnet über das Claude-Pro-Abo eines Maintainers (Repo-Secret `CLAUDE_CODE_OAUTH_TOKEN`, erzeugt mit `claude setup-token`) und verbraucht dessen Kontingent; deshalb nicht bei jedem Push. Die Kommentare schreibt die Claude-GitHub-App, die für die Organisation installiert sein muss. Was geprüft wird, steht im Prompt des Workflows: Korrektheit, Sicherheit, Sync-Reihenfolgen und Abweichungen von `AGENTS.md` und `docs/`, nicht was die CI schon prüft.
+
+Secrets liegen ausschließlich in den GitHub Environments `staging` und `production` (SSH-Key), im Repo-Secret `CLAUDE_CODE_OAUTH_TOKEN` (KI-Review) und in der `.env` auf dem Server (Datenbank-Passwort, Google-Client-ID und -Secret je Umgebung, siehe [Authentifizierung](auth.md#einrichtung)).
 
 ## Deployment-Ablauf
 
