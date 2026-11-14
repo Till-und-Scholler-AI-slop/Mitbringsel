@@ -10,7 +10,7 @@ import { useItemsStore } from '@/stores/items'
 import { TOAST_DURATION_MS, useToastsStore } from '@/stores/toasts'
 import type { Item } from '@/types/api'
 
-import { useRemoveChecked } from '../useRemoveChecked'
+import { useRemoveItems } from '../useRemoveItems'
 
 const itemsService = vi.hoisted(() => ({
   list: vi.fn<ItemsService['list']>(),
@@ -53,15 +53,18 @@ function item(id: string, name: string, checked: boolean): Item {
 
 // The composable needs a component to find the i18n instance.
 function setup(locale: 'de' | 'en' = 'de') {
-  let removeChecked: ReturnType<typeof useRemoveChecked>['removeChecked'] = () => undefined
+  let removal: ReturnType<typeof useRemoveItems> = {
+    removeChecked: () => undefined,
+    removeItem: () => undefined,
+  }
   const Probe = defineComponent({
     setup() {
-      removeChecked = useRemoveChecked().removeChecked
+      removal = useRemoveItems()
       return () => null
     },
   })
   mount(Probe, { global: { plugins: [createAppI18n([locale], null)] } })
-  return { removeChecked, items: useItemsStore(), toasts: useToastsStore() }
+  return { ...removal, items: useItemsStore(), toasts: useToastsStore() }
 }
 
 async function loadList(...listItems: Item[]) {
@@ -85,7 +88,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('useRemoveChecked', () => {
+describe('useRemoveItems: checked items', () => {
   it('hides the checked items and offers undo in a toast', async () => {
     const { removeChecked, items, toasts } = setup()
     await loadList(item('i1', 'Milch', false), item('i2', 'Brot', true), item('i3', 'Eier', true))
@@ -185,5 +188,49 @@ describe('useRemoveChecked', () => {
     removeChecked('l1')
 
     expect(toasts.toasts).toEqual([])
+  })
+})
+
+describe('useRemoveItems: one item', () => {
+  it('hides the item and names it in a toast with undo', async () => {
+    const { removeItem, items, toasts } = setup()
+    await loadList(item('i1', 'Milch', false), item('i2', 'Brot', false))
+
+    removeItem('i1', true)
+
+    expect(names(items.itemsOf('l1'))).toEqual(['Brot'])
+    expect(toasts.toasts).toMatchObject([
+      { kind: 'success', text: '„Milch“ entfernt', actionLabel: 'Rückgängig', focusAction: true },
+    ])
+    expect(itemsService.remove).not.toHaveBeenCalled()
+  })
+
+  it('deletes the item when the toast runs out', async () => {
+    itemsService.remove.mockResolvedValue()
+    const { removeItem, items } = setup()
+    await loadList(item('i1', 'Milch', false))
+
+    removeItem('i1')
+    vi.advanceTimersByTime(TOAST_DURATION_MS)
+    await flushPromises()
+
+    expect(itemsService.remove).toHaveBeenCalledWith('i1')
+    expect(items.itemsOf('l1')).toEqual([])
+  })
+
+  it('names the item in the error toast if deleting fails', async () => {
+    itemsService.remove.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { removeItem, items, toasts } = setup()
+    await loadList(item('i1', 'Milch', false))
+
+    removeItem('i1')
+    vi.advanceTimersByTime(TOAST_DURATION_MS)
+    await flushPromises()
+
+    expect(names(items.itemsOf('l1'))).toEqual(['Milch'])
+    expect(toasts.toasts[0]).toMatchObject({
+      kind: 'error',
+      text: '„Milch“ konnte nicht gelöscht werden.',
+    })
   })
 })

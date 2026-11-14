@@ -127,3 +127,24 @@ describe('ItemRow: just changed by another member', () => {
     expect(done.get('li').classes()).not.toContain('row--recent')
   })
 })
+
+describe('ItemRow: edit button', () => {
+  it('lets an open item be edited', async () => {
+    const wrapper = mountRow(item())
+
+    const edit = wrapper.get('.edit')
+    expect(edit.attributes('aria-label')).toBe('Edit Milch')
+    await edit.trigger('click')
+
+    expect(wrapper.emitted('edit')).toHaveLength(1)
+    expect(wrapper.emitted('toggle')).toBeUndefined()
+  })
+
+  it('offers no edit button for a done item', () => {
+    const wrapper = mountRow(
+      item({ checked: true, checkedBy: 'u1', checkedAt: '2026-02-01T10:00:00Z' }),
+    )
+
+    expect(wrapper.find('.edit').exists()).toBe(false)
+  })
+})

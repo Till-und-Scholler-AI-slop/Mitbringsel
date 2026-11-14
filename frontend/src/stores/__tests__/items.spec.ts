@@ -1374,3 +1374,85 @@ describe('items store: removing checked items', () => {
     expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot', 'Eier'])
   })
 })
+
+describe('items store: removing one item', () => {
+  const shopping = () => [item('i1', 'Milch'), item('i2', 'Brot', 'l1', true)]
+
+  it('hides the item at once, open or checked, and sends nothing yet', async () => {
+    const service = fakeService(shopping())
+    const { store } = setup(service)
+    await store.load('l1')
+
+    const first = store.startRemovingItem('i1')
+    store.startRemovingItem('i2')
+
+    expect(names(first?.items ?? [])).toEqual(['Milch'])
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(service.remove).not.toHaveBeenCalled()
+  })
+
+  it('answers null for an item it does not show', async () => {
+    const { store } = setup(fakeService(shopping()))
+    await store.load('l1')
+    store.startRemovingItem('i1')
+
+    expect(store.startRemovingItem('i1')).toBeNull()
+    expect(store.startRemovingItem('unknown')).toBeNull()
+  })
+
+  it('deletes the item for good on commit', async () => {
+    const service = fakeService(shopping())
+    const { store, events } = setup(service)
+    await store.load('l1')
+
+    await store.startRemovingItem('i1')?.commit()
+    events.emit(changed(later(item('i1', 'Hafermilch'), 20)))
+
+    expect(service.remove).toHaveBeenCalledWith('i1')
+    expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
+    expect(store.byId('i1')).toBeUndefined()
+  })
+
+  it('keeps the item hidden whatever others change meanwhile', async () => {
+    const { store, events } = setup(fakeService(shopping()))
+    await store.load('l1')
+
+    store.startRemovingItem('i1')
+    events.emit(changed(later(item('i1', 'Milch', 'l1', true), 2)))
+
+    expect(store.checkedItems('l1').map((i) => i.id)).toEqual(['i2'])
+  })
+
+  it('shows the item again on undo and sends nothing', async () => {
+    const service = fakeService(shopping())
+    const { store } = setup(service)
+    await store.load('l1')
+
+    store.startRemovingItem('i1')?.undo()
+
+    expect(names(store.openItems('l1'))).toEqual(['Milch'])
+    expect(service.remove).not.toHaveBeenCalled()
+  })
+
+  it('counts an item someone else deleted meanwhile as deleted', async () => {
+    const service = fakeService(shopping())
+    service.remove.mockRejectedValueOnce(new ApiError('ITEM_NOT_FOUND', 404))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await store.startRemovingItem('i1')?.commit()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
+  })
+
+  it('shows the item again and throws if the request fails', async () => {
+    const service = fakeService(shopping())
+    service.remove.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { store } = setup(service)
+    await store.load('l1')
+
+    await expect(store.startRemovingItem('i1')?.commit()).rejects.toThrow(ApiError)
+
+    expect(names(store.openItems('l1'))).toEqual(['Milch'])
+  })
+})

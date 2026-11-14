@@ -48,13 +48,14 @@ function item(name: string): Item {
   }
 }
 
-function mountDialog(name = '', locale: 'de' | 'en' = 'de') {
+function mountDialog(name = '', locale: 'de' | 'en' = 'de', extra: Record<string, unknown> = {}) {
   return mount(ItemFormDialog, {
     props: {
       open: true,
       listId: 'l1',
       listName: 'Supermarkt',
       initialName: name,
+      ...extra,
       'onUpdate:open': (open: boolean) => wrapper.setProps({ open }),
     },
     global: { plugins: [createAppI18n([locale], null)] },
@@ -189,6 +190,104 @@ describe('ItemFormDialog: new item', () => {
 
     expect((field('Name').element as HTMLInputElement).value).toBe('Milch')
     expect((field('Menge').element as HTMLInputElement).value).toBe('')
+    wrapper.unmount()
+  })
+})
+
+describe('ItemFormDialog: editing', () => {
+  const tomatoes = (): Item => ({
+    ...item('Tomaten'),
+    quantity: 2.5,
+    unit: 'kg',
+    note: 'die kleinen',
+  })
+  const mountEdit = (edited: Item = tomatoes(), creatorName: string | null = 'Lena') =>
+    mountDialog('', 'de', { item: edited, creatorName })
+
+  beforeEach(() => {
+    itemsService.update.mockImplementation((_id, change) =>
+      Promise.resolve({ ...tomatoes(), ...change } as Item),
+    )
+  })
+
+  it('fills the fields with the item and says who added it', () => {
+    wrapper = mountEdit()
+
+    expect(wrapper.get('h2').text()).toBe('Artikel bearbeiten')
+    expect(wrapper.get('.meta').text()).toBe('Von Lena · Supermarkt')
+    expect((field('Name').element as HTMLInputElement).value).toBe('Tomaten')
+    expect((field('Menge').element as HTMLInputElement).value).toBe('2,5')
+    expect(wrapper.get('[aria-pressed="true"]').text()).toBe('kg')
+    expect((field('Notiz').element as HTMLTextAreaElement).value).toBe('die kleinen')
+    expect(wrapper.get('.remove').text()).toBe('Löschen')
+    expect(wrapper.get('.submit').text()).toBe('Speichern')
+    wrapper.unmount()
+  })
+
+  it('names only the list if the creator is unknown', () => {
+    wrapper = mountEdit(tomatoes(), null)
+
+    expect(wrapper.get('.meta').text()).toBe('Supermarkt')
+    wrapper.unmount()
+  })
+
+  it('sends only the fields the user changed', async () => {
+    wrapper = mountEdit()
+
+    await field('Notiz').setValue('die großen')
+    await submit()
+    await flushPromises()
+
+    expect(itemsService.update).toHaveBeenCalledWith('i1', { note: 'die großen' })
+    expect(wrapper.props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('clears the unit with the quantity', async () => {
+    wrapper = mountEdit()
+
+    await field('Menge').setValue('')
+    await submit()
+    await flushPromises()
+
+    expect(itemsService.update).toHaveBeenCalledWith('i1', { quantity: null, unit: null })
+    wrapper.unmount()
+  })
+
+  it('closes without a request if nothing changed', async () => {
+    wrapper = mountEdit()
+
+    await submit()
+    await flushPromises()
+
+    expect(itemsService.update).not.toHaveBeenCalled()
+    expect(wrapper.props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps what is typed when the item changes meanwhile', async () => {
+    wrapper = mountEdit()
+    await field('Name').setValue('Cherrytomaten')
+
+    await wrapper.setProps({ item: { ...tomatoes(), note: 'von Ben', serverSeq: 2 } })
+    await submit()
+    await flushPromises()
+
+    expect((field('Notiz').element as HTMLTextAreaElement).value).toBe('die kleinen')
+    expect(itemsService.update).toHaveBeenCalledWith('i1', { name: 'Cherrytomaten' })
+    wrapper.unmount()
+  })
+
+  it.each([
+    [1, false],
+    [0, true],
+  ])('asks to delete (click detail %s: from the keyboard %s)', (detail, fromKeyboard) => {
+    wrapper = mountEdit()
+
+    wrapper.get('.remove').element.dispatchEvent(new MouseEvent('click', { detail }))
+
+    expect(wrapper.emitted('remove')).toEqual([[fromKeyboard]])
+    expect(itemsService.remove).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })

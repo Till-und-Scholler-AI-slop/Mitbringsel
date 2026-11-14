@@ -546,7 +546,7 @@ describe('ListView: items', () => {
     itemsService.list.mockResolvedValue(makeItems())
     const { wrapper } = await mountView()
 
-    const labels = wrapper.findAll('li button').map((b) => b.attributes('aria-label'))
+    const labels = wrapper.findAll('li .toggle').map((b) => b.attributes('aria-label'))
     expect(labels).toEqual([
       'Milch, 2 l, by Jonas – check off',
       'Brot, Vollkorn, by Jonas – check off',
@@ -575,7 +575,7 @@ describe('ListView: items', () => {
     itemsService.update.mockReturnValue(new Promise(() => undefined))
     const { wrapper } = await mountView()
 
-    await wrapper.findAll('.open li button')[0]!.trigger('click')
+    await wrapper.findAll('.open li .toggle')[0]!.trigger('click')
 
     expect(itemsService.update).toHaveBeenCalledWith('i1', { checked: true })
     expect(openNames(wrapper)).toEqual(['Brot'])
@@ -600,7 +600,7 @@ describe('ListView: items', () => {
     itemsService.update.mockRejectedValue(new ApiError('NETWORK'))
     const { wrapper } = await mountView()
 
-    await wrapper.findAll('.open li button')[0]!.trigger('click')
+    await wrapper.findAll('.open li .toggle')[0]!.trigger('click')
     await flushPromises()
 
     expect(openNames(wrapper)).toEqual(['Milch', 'Brot'])
@@ -613,7 +613,7 @@ describe('ListView: items', () => {
     itemsService.list.mockResolvedValue(makeItems())
     itemsService.update.mockRejectedValueOnce(new ApiError('NETWORK'))
     const { wrapper } = await mountView()
-    await wrapper.findAll('.open li button')[0]!.trigger('click')
+    await wrapper.findAll('.open li .toggle')[0]!.trigger('click')
     await flushPromises()
 
     itemsService.update.mockResolvedValueOnce({
@@ -621,7 +621,7 @@ describe('ListView: items', () => {
       checked: true,
       checkedBy: 'user-1',
     })
-    await wrapper.findAll('.open li button')[1]!.trigger('click')
+    await wrapper.findAll('.open li .toggle')[1]!.trigger('click')
     await flushPromises()
 
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
@@ -794,6 +794,64 @@ describe('ListView: quick add', () => {
     })
     expect(openNames(wrapper)).toEqual(['Tomaten'])
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('ListView: editing items', () => {
+  const makeItems = () => [item('i1', 'Milch', { note: 'Hafer' }), item('i2', 'Brot')]
+
+  it('edits an item in its form and saves only what changed', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    itemsService.update.mockResolvedValue(item('i1', 'Hafermilch', { note: 'Hafer', serverSeq: 2 }))
+    const { wrapper } = await mountView()
+
+    await wrapper.findAll('.open .edit')[0]!.trigger('click')
+    const form = wrapper.get('dialog[open] form')
+    expect(form.get('.meta').text()).toBe('By Jonas · Supermarkt')
+    await form.get('input').setValue('Hafermilch')
+    await form.trigger('submit')
+    await flushPromises()
+
+    expect(itemsService.update).toHaveBeenCalledWith('i1', { name: 'Hafermilch' })
+    expect(openNames(wrapper)).toEqual(['Hafermilch', 'Brot'])
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('deletes an item from its form with undo', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    itemsService.remove.mockResolvedValue()
+    const { wrapper } = await mountView()
+
+    await wrapper.findAll('.open .edit')[0]!.trigger('click')
+    await wrapper.get('dialog[open] .remove').trigger('click')
+
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(openNames(wrapper)).toEqual(['Brot'])
+    expect(wrapper.get('.toast .text').text()).toBe('“Milch” removed')
+    expect(itemsService.remove).not.toHaveBeenCalled()
+
+    await wrapper.get('.toast .action').trigger('click')
+
+    expect(openNames(wrapper)).toEqual(['Milch', 'Brot'])
+    expect(itemsService.remove).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('closes the form and says so when someone else deletes the item', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await wrapper.findAll('.open .edit')[0]!.trigger('click')
+    serverEvents.emit({
+      type: 'itemDeleted',
+      payload: { groupId: 'g1', listId: 'l1', itemId: 'i1', serverSeq: 5, actorId: 'user-2' },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(wrapper.get('.toast .text').text()).toBe('“Milch” was deleted')
     wrapper.unmount()
   })
 })

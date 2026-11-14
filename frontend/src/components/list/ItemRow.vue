@@ -22,7 +22,9 @@ const props = withDefaults(
   }>(),
   { recent: null },
 )
-defineEmits<{ toggle: [] }>()
+// edit: only open items offer it (design "markt2-liste"); a done item comes
+// back with a tap first.
+defineEmits<{ toggle: []; edit: [] }>()
 
 const { t } = useI18n()
 const quantityText = useQuantityText()
@@ -72,6 +74,19 @@ const label = computed(() => {
         :size="done ? AVATAR_SIZE_DONE : AVATAR_SIZE"
       />
     </button>
+    <button
+      v-if="!done"
+      type="button"
+      class="edit"
+      :aria-label="t('list.row.edit', { name: item.name })"
+      :title="t('list.row.editHint')"
+      aria-haspopup="dialog"
+      @click="$emit('edit')"
+    >
+      <!-- The phone shows dots, the desktop a pencil (design). -->
+      <BaseIcon class="edit-phone" name="ellipsis" :size="22" />
+      <BaseIcon class="edit-desktop" name="pencil" :size="20" />
+    </button>
   </li>
 </template>
 
@@ -120,6 +135,44 @@ const label = computed(() => {
   color: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.edit {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-right: var(--space-1-5);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .edit:hover {
+    background: var(--color-bg);
+  }
+}
+
+.edit-desktop {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .edit {
+    margin-right: var(--space-2);
+  }
+
+  .edit-phone {
+    display: none;
+  }
+
+  .edit-desktop {
+    display: block;
+  }
 }
 
 .row--done .toggle {

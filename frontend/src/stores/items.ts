@@ -14,8 +14,8 @@ const ITEM_NOT_FOUND = 'ITEM_NOT_FOUND'
 export type ItemsStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 /**
- * Checked items hidden by startRemovingChecked() until the removal is sent
- * or undone.
+ * Items hidden by startRemovingChecked() or startRemovingItem() until the
+ * removal is sent or undone.
  */
 export interface PendingRemoval {
   /** The hidden items as they were when hidden, oldest first. */
@@ -116,10 +116,12 @@ export function defineItemsStore(
     // answer of a load that started before it is outdated.
     const appliedLoadStart = new Map<string, number>()
 
-    // Items of a pending removal. Shown by the readers, so reactive. An item
-    // is hidden only while it is checked: one that someone unchecks meanwhile
-    // shows up again among the open items, and the server will skip it.
-    const hidden = ref(new Set<string>())
+    // Items of a pending removal and how they hide. Read by the readers, so
+    // reactive. 'whileChecked' (removing the checked items): one that
+    // someone unchecks meanwhile shows up again among the open items, as the
+    // server will skip it. 'always' (removing one item): it goes whatever
+    // happens to it meanwhile, as deleting wins.
+    const hidden = ref(new Map<string, 'whileChecked' | 'always'>())
 
     function reset() {
       generation++
@@ -129,7 +131,7 @@ export function defineItemsStore(
       tombstones.clear()
       touchedAt.clear()
       appliedLoadStart.clear()
-      hidden.value = new Set()
+      hidden.value = new Map()
     }
 
     watch(currentUserId, reset)
@@ -142,7 +144,8 @@ export function defineItemsStore(
     }
 
     function isHidden(item: Item): boolean {
-      return item.checked && hidden.value.has(item.id)
+      const how = hidden.value.get(item.id)
+      return how === 'always' || (how === 'whileChecked' && item.checked)
     }
 
     /** All items of the list, oldest first, without those being removed. */
@@ -488,65 +491,99 @@ export function defineItemsStore(
     }
 
     /**
-     * Hides the checked items of the list at once and returns how to finish:
-     * commit() sends the removal, undo() shows the items again. Null if the
-     * list has no checked items. The IDs are taken now, so an item someone
-     * checks meanwhile is not removed with them.
+     * Hides `items` until the returned removal is committed or undone.
+     * `send` does the requests and applies their answers; it is given a
+     * check whether the user is still the same. Whatever it did not delete
+     * shows again afterwards, also when it throws.
      */
-    function startRemovingChecked(listId: string): PendingRemoval | null {
+    function startRemoval(
+      items: Item[],
+      how: 'whileChecked' | 'always',
+      send: (current: () => boolean) => Promise<void>,
+    ): PendingRemoval {
       const started = generation
-      const items = checkedItems(listId).map((item) => ({ ...toRaw(item) }))
-      if (items.length === 0) {
-        return null
-      }
+      const current = () => started === generation
       const ids = items.map((item) => item.id)
       for (const id of ids) {
-        hidden.value.add(id)
+        hidden.value.set(id, how)
       }
       let settled = false
 
       function show() {
+        // After a reset the map belongs to the next user.
+        if (!current()) return
         for (const id of ids) {
           hidden.value.delete(id)
         }
       }
 
       async function commit() {
-        if (settled) {
-          return
-        }
+        if (settled) return
         settled = true
         try {
-          // One request per block, as the server takes only so many IDs.
-          // Each answer is applied at once, so a failing later block does
-          // not bring back what an earlier one deleted.
-          for (let start = 0; start < ids.length; start += MAX_REMOVE_CHECKED) {
-            const block = ids.slice(start, start + MAX_REMOVE_CHECKED)
-            const deleted = await service.removeChecked(listId, block)
-            if (started !== generation) {
-              return
-            }
-            for (const gone of deleted) {
-              takeDeletion(listId, gone.itemId, gone.serverSeq)
-            }
-          }
+          await send(current)
         } finally {
-          // After a reset the set belongs to the next user.
-          if (started === generation) {
-            show()
-          }
+          show()
         }
       }
 
       function undo() {
-        if (settled) {
-          return
-        }
+        if (settled) return
         settled = true
         show()
       }
 
       return { items, commit, undo }
+    }
+
+    /**
+     * Hides the checked items of the list at once and returns how to finish:
+     * commit() sends the removal, undo() shows the items again. Null if the
+     * list has no checked items. The IDs are taken now, so an item someone
+     * checks meanwhile is not removed with them.
+     */
+    function startRemovingChecked(listId: string): PendingRemoval | null {
+      const items = checkedItems(listId).map((item) => ({ ...toRaw(item) }))
+      if (items.length === 0) {
+        return null
+      }
+      const ids = items.map((item) => item.id)
+      return startRemoval(items, 'whileChecked', async (current) => {
+        // One request per block, as the server takes only so many IDs. Each
+        // answer is applied at once, so a failing later block does not bring
+        // back what an earlier one deleted.
+        for (let start = 0; start < ids.length; start += MAX_REMOVE_CHECKED) {
+          const block = ids.slice(start, start + MAX_REMOVE_CHECKED)
+          const deleted = await service.removeChecked(listId, block)
+          if (!current()) return
+          for (const gone of deleted) {
+            takeDeletion(listId, gone.itemId, gone.serverSeq)
+          }
+        }
+      })
+    }
+
+    /**
+     * Hides one item at once, checked or not, and returns how to finish, as
+     * startRemovingChecked() does. Null if the store does not show the item
+     * (anymore). An item someone else deleted meanwhile counts as deleted.
+     */
+    function startRemovingItem(itemId: string): PendingRemoval | null {
+      const item = byId(itemId)
+      if (!item || isHidden(item)) {
+        return null
+      }
+      const listId = item.listId
+      return startRemoval([{ ...toRaw(item) }], 'always', async (current) => {
+        try {
+          await service.remove(itemId)
+        } catch (err) {
+          if (!(err instanceof ApiError && err.code === ITEM_NOT_FOUND)) throw err
+        }
+        if (current()) {
+          forget(itemId, byList.value[listId])
+        }
+      })
     }
 
     /**
@@ -604,6 +641,7 @@ export function defineItemsStore(
       setChecked,
       remove,
       startRemovingChecked,
+      startRemovingItem,
       forgetList,
     }
   })

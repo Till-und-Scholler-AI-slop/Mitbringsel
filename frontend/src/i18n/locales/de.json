@@ -211,6 +211,8 @@
     },
     "checkFailed": "Das Abhaken hat nicht geklappt.",
     "row": {
+      "edit": "{name} bearbeiten",
+      "editHint": "Bearbeiten",
       "check": "abhaken",
       "uncheck": "zurückholen",
       "addedBy": "von {name}",
@@ -253,7 +255,13 @@
       "decrease": "Menge verringern",
       "increase": "Menge erhöhen",
       "add": "Hinzufügen",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "editTitle": "Artikel bearbeiten",
+      "by": "Von {name} · {list}",
+      "save": "Speichern",
+      "remove": "Löschen",
+      "removeFailed": "„{name}“ konnte nicht gelöscht werden.",
+      "deletedMeanwhile": "„{name}“ wurde gelöscht"
     },
     "noLists": {
       "title": "Noch keine Liste",
