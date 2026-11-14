@@ -74,12 +74,13 @@ function pick(unit: Unit) {
   cursor: pointer;
 }
 
+/* The picked one stays pressed down (press-sticker with aria-pressed) and
+   springs back up once another one is picked. */
 .unit--on {
   border-width: var(--border-width-md);
   border-color: var(--color-primary-contrast);
   background: var(--color-primary);
   color: var(--color-primary-contrast);
   font-weight: var(--font-weight-black);
-  box-shadow: var(--shadow-sticker);
 }
 </style>

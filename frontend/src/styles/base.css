@@ -45,7 +45,8 @@ body:has(dialog[open]) {
  * Press feedback for every button and link that looks pressable
  * (docs/conventions.md). Components set one class instead of their own
  * :active rules, so no button is left without it.
- * - press-sticker: has --shadow-sticker and sinks onto it.
+ * - press-sticker: has --shadow-sticker and sinks onto it. A toggle that
+ *   is on (aria-pressed="true") stays down until it is switched off.
  * - press-inset: is flat and sinks into the page with an inner shadow.
  * The :active rules are more specific than a scoped component rule
  * (".unit--on[data-v-…]"), so a component's own shadow cannot win over
@@ -64,7 +65,8 @@ body:has(dialog[open]) {
   transition-duration: var(--duration-press-down);
 }
 
-.press-sticker:active:not(:disabled) {
+.press-sticker:active:not(:disabled),
+.press-sticker[aria-pressed='true']:not(:disabled) {
   transform: translateY(3px);
   box-shadow: none;
 }

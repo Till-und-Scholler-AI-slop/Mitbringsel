@@ -42,7 +42,7 @@ Alles, was mehr als einmal vorkommt, wird eine Komponente in `components/base/` 
 - Props und Emits sind mit TypeScript typisiert (`defineProps<…>()`, `defineEmits<…>()`).
 - Wiederverwendbare Logik liegt in Composables (z.B. `useOnlineStatus`, `useTheme`, `useConfirm`).
 - Barrierefreiheit: semantisches HTML, Tastaturbedienung, sichtbarer Fokus, Kontraste nach WCAG AA in beiden Themes.
-- Druck-Animation: Buttons und Links, die drückbar aussehen, bekommen die globale Klasse `press-sticker` (mit Sticker-Schatten, sinkt auf ihn) oder `press-inset` (flach, sinkt mit Innenschatten ein) aus `styles/base.css`, keine eigenen `:active`-Regeln für Bewegung und Schatten und kein eigenes `transition`. Ausnahme: der aktuelle Eintrag der Seitenleiste mit eigenem Look laut Design.
+- Druck-Animation: Buttons und Links, die drückbar aussehen, bekommen die globale Klasse `press-sticker` (mit Sticker-Schatten, sinkt auf ihn; ein Umschalter mit `aria-pressed="true"` bleibt unten) oder `press-inset` (flach, sinkt mit Innenschatten ein) aus `styles/base.css`, keine eigenen `:active`-Regeln für Bewegung und Schatten und kein eigenes `transition`. Ausnahme: der aktuelle Eintrag der Seitenleiste mit eigenem Look laut Design.
 
 ## i18n
 
