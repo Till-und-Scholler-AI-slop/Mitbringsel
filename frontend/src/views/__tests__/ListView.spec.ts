@@ -855,3 +855,77 @@ describe('ListView: editing items', () => {
     wrapper.unmount()
   })
 })
+
+describe('ListView: switching lists', () => {
+  it('closes the edit form on switch without a deleted-meanwhile toast', async () => {
+    itemsService.list.mockImplementation(async (listId) =>
+      listId === 'l1' ? [item('i1', 'Milch')] : [item('i2', 'Schrauben', { listId: 'l2' })],
+    )
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.open .edit').trigger('click')
+    expect(wrapper.find('dialog[open]').exists()).toBe(true)
+
+    await wrapper.findAll('.chip--list')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(openNames(wrapper)).toEqual(['Schrauben'])
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(wrapper.find('.toast').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('clears a check error on switch', async () => {
+    itemsService.list.mockImplementation(async (listId) =>
+      listId === 'l1' ? [item('i1', 'Milch')] : [item('i2', 'Schrauben', { listId: 'l2' })],
+    )
+    itemsService.update.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.open li .toggle').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Checking the item did not work.')
+
+    await wrapper.findAll('.chip--list')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps text typed into the quick-add bar on switch', async () => {
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.add-bar input').setValue('Hafermilch')
+    await wrapper.findAll('.chip--list')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('h1').text()).toBe('Baumarkt')
+    expect((wrapper.get('.add-bar input').element as HTMLInputElement).value).toBe('Hafermilch')
+    wrapper.unmount()
+  })
+
+  it('keeps the done section folded when switching back to a loaded list', async () => {
+    itemsService.list.mockImplementation(async (listId) =>
+      listId === 'l1'
+        ? [item('i1', 'Eier', { checked: true, checkedBy: 'user-1' })]
+        : [item('i2', 'Nägel', { listId: 'l2', checked: true, checkedBy: 'user-1' })],
+    )
+    const { wrapper } = await mountView()
+
+    // Visit l2 first so both lists are loaded and switching back does not
+    // pass through the loading state that unmounts DoneSection.
+    await wrapper.findAll('.chip--list')[1]!.trigger('click')
+    await flushPromises()
+    await wrapper.get('.done-toggle').trigger('click')
+    expect(wrapper.get('.done-toggle').attributes('aria-expanded')).toBe('false')
+
+    await wrapper.findAll('.chip--list')[0]!.trigger('click')
+    await flushPromises()
+
+    expect(doneNames(wrapper)).toEqual(['Eier'])
+    expect(wrapper.get('.done-toggle').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('#done-items').isVisible()).toBe(false)
+    wrapper.unmount()
+  })
+})
