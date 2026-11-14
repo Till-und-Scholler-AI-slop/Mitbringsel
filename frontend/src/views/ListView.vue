@@ -1,27 +1,22 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 
-import BaseAvatar from '@/components/base/BaseAvatar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
-import BrandLogo from '@/components/BrandLogo.vue'
 import AppFrame from '@/components/layout/AppFrame.vue'
-import SyncStatus from '@/components/layout/SyncStatus.vue'
 import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
 import DoneSection from '@/components/list/DoneSection.vue'
-import HouseholdSwitcher from '@/components/list/HouseholdSwitcher.vue'
 import ItemFormDialog from '@/components/list/ItemFormDialog.vue'
 import ItemRow from '@/components/list/ItemRow.vue'
 import ListActionsDialog from '@/components/list/ListActionsDialog.vue'
 import ListChips from '@/components/list/ListChips.vue'
+import ListHeader from '@/components/list/ListHeader.vue'
 import ListNameDialog from '@/components/list/ListNameDialog.vue'
 import QuickAddBar from '@/components/list/QuickAddBar.vue'
-import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
-import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
 import { useRemoveItems } from '@/composables/useRemoveItems'
@@ -33,13 +28,10 @@ import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
 import { useRecentChangesStore } from '@/stores/recentChanges'
 import { useToastsStore } from '@/stores/toasts'
-import type { Group, Item, List } from '@/types/api'
+import type { Item, List } from '@/types/api'
 
 // noLists: the household has no active list to open.
 type ViewState = 'loading' | 'failed' | 'missing' | 'noLists' | 'ready'
-
-const MAX_AVATARS = 4
-const AVATAR_SIZE = 30
 
 // Without listId (the route of the household) the view opens the last or
 // first active list, or offers to create one.
@@ -55,8 +47,6 @@ const toasts = useToastsStore()
 const { removeChecked, removeItem } = useRemoveItems()
 
 const createOpen = ref(false)
-const createGroupOpen = ref(false)
-const joinOpen = ref(false)
 const archiveOpen = ref(false)
 // The item form for a new item, with the name typed into the quick-add bar.
 const newItemOpen = ref(false)
@@ -118,8 +108,6 @@ const isEmpty = computed(
 )
 
 const members = computed(() => group.value?.members ?? [])
-const shownMembers = computed(() => members.value.slice(0, MAX_AVATARS))
-const memberNames = computed(() => members.value.map((m) => m.displayName).join(', '))
 
 // Who added an open item, who checked a done one; null if unknown.
 function personOf(item: Item) {
@@ -230,10 +218,6 @@ function startRename(listId: string) {
   renamingId.value = listId
 }
 
-function openCreatedGroup(created: Group) {
-  return router.push({ name: 'group', params: { groupId: created.id } })
-}
-
 function openCreated(created: List) {
   return router.push({ name: 'list', params: { groupId: props.groupId, listId: created.id } })
 }
@@ -242,41 +226,7 @@ function openCreated(created: List) {
 <template>
   <AppFrame :group-id="groupId" :list-id="listId" :bottom-bar="list !== undefined">
     <div class="page">
-      <!-- On the phone a green header; on the desktop the plain top of the
-         page, as the sidebar holds the way back to the start page. -->
-      <header class="bar">
-        <!-- Phone only: on the desktop the sidebar holds both. -->
-        <div class="top">
-          <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
-            <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
-            <BrandLogo small flat aria-hidden="true" />
-          </RouterLink>
-          <SyncStatus />
-        </div>
-
-        <div v-if="group" class="household">
-          <HouseholdSwitcher
-            :current="group"
-            :groups="groups.groups"
-            @create="createGroupOpen = true"
-            @join="joinOpen = true"
-          />
-          <span
-            class="members"
-            role="img"
-            :aria-label="t('list.membersLabel', { names: memberNames })"
-          >
-            <BaseAvatar
-              v-for="member in shownMembers"
-              :key="member.userId"
-              class="member"
-              :name="member.displayName"
-              :src="member.avatarUrl"
-              :size="AVATAR_SIZE"
-            />
-          </span>
-        </div>
-
+      <ListHeader :group="group">
         <ListChips
           v-if="list || state === 'noLists'"
           :group-id="groupId"
@@ -289,7 +239,7 @@ function openCreated(created: List) {
           @actions="actionsId = $event.id"
           @archive="archiveOpen = true"
         />
-      </header>
+      </ListHeader>
 
       <main class="content">
         <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
@@ -426,8 +376,6 @@ function openCreated(created: List) {
         :lists="archived"
         :current-id="listKey"
       />
-      <CreateGroupDialog v-model:open="createGroupOpen" @created="openCreatedGroup" />
-      <JoinGroupDialog v-model:open="joinOpen" />
     </div>
   </AppFrame>
 </template>
@@ -438,63 +386,6 @@ function openCreated(created: List) {
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
-}
-
-.bar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4) var(--space-4);
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-  background: var(--color-brand);
-  color: var(--color-on-brand);
-}
-
-.top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.home {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--size-touch);
-  color: inherit;
-  text-decoration: none;
-}
-
-.home-icon {
-  display: grid;
-  place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  box-sizing: border-box;
-  border: var(--border-width-sm) solid currentColor;
-  border-radius: var(--radius-full);
-}
-
-.household {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.members {
-  flex: none;
-  display: flex;
-}
-
-/* Overlapping, each with a ring in the bar color to tell them apart. */
-.member {
-  box-shadow: 0 0 0 2.5px var(--color-brand);
-}
-
-.member + .member {
-  margin-left: calc(-1 * var(--space-2));
 }
 
 .content {
@@ -581,29 +472,8 @@ function openCreated(created: List) {
   font-weight: var(--font-weight-black);
 }
 
-/* Desktop: no green header; the household name stands large on the page,
-   above the chips and the items, all at most 820px wide. */
+/* Desktop: the items at most 820px wide, like the header above. */
 @media (min-width: 48rem) {
-  .bar {
-    gap: var(--space-5);
-    width: 100%;
-    max-width: 51.25rem;
-    box-sizing: border-box;
-    margin: 0 auto;
-    padding: 2.25rem var(--space-6) 0;
-    border-radius: 0;
-    background: transparent;
-    color: var(--color-text);
-  }
-
-  .top {
-    display: none;
-  }
-
-  .member {
-    box-shadow: 0 0 0 2.5px var(--color-bg);
-  }
-
   .content,
   .content:has(> .add-bar) {
     max-width: 51.25rem;
