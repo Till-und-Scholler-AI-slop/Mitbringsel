@@ -185,7 +185,7 @@ function openCreated(created: List) {
           </BaseButton>
         </BaseEmptyState>
 
-        <ListItems v-else-if="list" :key="list.id" :list="list" :members="members" />
+        <ListItems v-else-if="list" :list="list" :members="members" />
       </main>
 
       <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />

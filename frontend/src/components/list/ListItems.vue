@@ -19,8 +19,8 @@ import { useToastsStore } from '@/stores/toasts'
 import type { GroupMember, Item, List } from '@/types/api'
 
 // The items of the open list: quick-add bar, open and done items, and the
-// form dialogs to add details or edit. Keyed by list.id in the parent so
-// switching lists resets local state (open dialogs, check errors).
+// form dialogs to add details or edit. Switching lists resets open dialogs
+// and check errors while keeping typed quick-add text and the folded state.
 const props = defineProps<{ list: List; members: GroupMember[] }>()
 
 const { t } = useI18n()
@@ -97,6 +97,17 @@ function removeEditing(fromKeyboard: boolean) {
   editingId.value = null
   if (id) removeItem(id, fromKeyboard)
 }
+
+// Registered before watch(editing) so switching lists clears editingId
+// before editing becomes undefined and would show the deleted toast.
+watch(
+  () => props.list.id,
+  () => {
+    checkErrorCode.value = null
+    newItemOpen.value = false
+    editingId.value = null
+  },
+)
 
 // Someone else deleted the item while its form was open: the form has
 // nothing left to save, so it closes and says why.
