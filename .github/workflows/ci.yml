@@ -15,6 +15,9 @@ concurrency:
 permissions:
   contents: read
 
+# The names of the jobs Backend, Frontend, Deploy config, Image (backend) and
+# Image (web) are required status checks in the ruleset "protection" of the
+# repository (docs/deployment.md). Renaming one needs the ruleset changed too.
 jobs:
   backend:
     name: Backend
