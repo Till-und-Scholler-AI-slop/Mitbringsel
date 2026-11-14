@@ -39,6 +39,11 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Elfter offener Tab bleibt offline:** Der Server erlaubt 10 gleichzeitige Verbindungen pro Nutzer und antwortet auf die elfte mit `429` (siehe [Authentifizierung](auth.md)). Der Browser zeigt davon nur 1006, der Client versucht es mit Backoff weiter und bleibt `offline`; die Sitzungsprüfung per `GET /me` hilft nicht, weil die Session gültig ist. Falls sich das im Alltag zeigt: Tabs eine Verbindung teilen lassen (`BroadcastChannel` oder `SharedWorker`) oder den Hinweis in der UI erklären.
 - [ ] **Hinweis, wenn die offene Liste gelöscht wird:** Löscht ein anderes Mitglied die offene Liste, springt die Listenansicht ohne Erklärung zur nächsten aktiven Liste; ein offenes Artikelformular verschwindet dabei ohne den Hinweis „inzwischen gelöscht“. Einen Toast zeigen wie `useLeaveRemovedGroup` beim Entfernen aus dem Haushalt.
 
+## KI-Review
+
+- [ ] **Review per `@claude`-Kommentar:** Ein erneutes Review gibt es vorerst nur über das Label `claude-review`. Ein Auslöser per Kommentar (`issue_comment`) wäre bequemer, auf dem öffentlichen Repo kann aber jeder kommentieren; vorher klären, wie die Action Kommentare von Nutzern ohne Schreibrechte behandelt (`allowed_non_write_users`) und wie Prompt-Injection über fremde Kommentare ausgeschlossen wird.
+- [ ] **Verbrauch prüfen:** Nach den ersten Reviews mit `/usage` messen, wie viel vom Pro-Kontingent ein Review kostet; bei Bedarf `--max-turns` senken oder nur noch per Label prüfen.
+
 ## Start
 
 - [ ] **Offline-Text der Startseite:** Der Hinweis sagt ehrlich, dass Gründen und Ändern ohne Internet nicht gehen. Mit Offline-Bearbeitung (Phase 6) auf den Text aus dem Design umstellen („Du kannst deine Haushalte trotzdem öffnen und bearbeiten …“).
