@@ -7,8 +7,8 @@ Das visuelle Design entsteht in Claude Design. Gewählt ist die Richtung „Mark
 1. **Vorschläge holen:** In Claude Design 2 bis 3 unterschiedliche Stilrichtungen für die Kern-Screens erstellen lassen, jeweils hell und dunkel.
 2. **Richtung wählen:** Ich entscheide mich für eine Richtung und lasse sie dort verfeinern.
 3. **Tokens ableiten:** Farben, Typografie, Abstände, Radien und Schatten werden als CSS Custom Properties in `styles/tokens.css` festgehalten, mit je einem Satz für hell und dunkel.
-4. **Komponenten bauen:** Claude baut zuerst die `Base`-Komponenten nach dem Design (siehe [Konventionen](conventions.md)), dann die fachlichen Komponenten und Views.
-5. **Abgleich:** Weicht die Umsetzung vom Design ab, weil das Design technisch ungünstig ist (z.B. schlechte Touch-Ziele, zu wenig Kontrast), weist Claude darauf hin, statt still abzuweichen.
+4. **Komponenten bauen:** Der Agent baut zuerst die `Base`-Komponenten nach dem Design (siehe [Konventionen](conventions.md)), dann die fachlichen Komponenten und Views.
+5. **Abgleich:** Weicht die Umsetzung vom Design ab, weil das Design technisch ungünstig ist (z.B. schlechte Touch-Ziele, zu wenig Kontrast), weist der Agent darauf hin, statt still abzuweichen.
 
 ## Kern-Screens
 

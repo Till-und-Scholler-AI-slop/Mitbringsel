@@ -18,7 +18,7 @@ Getestet wird, was kaputtgehen darf, ohne dass man es sofort merkt: Sync- und Ko
 ## Regeln
 
 - Tests prüfen Verhalten, nicht Implementierungsdetails.
-- Neue Sync- oder Berechtigungslogik kommt nie ohne Test. Bei einem Bugfix schreibt Claude zuerst einen Test, der den Fehler zeigt.
+- Neue Sync- oder Berechtigungslogik kommt nie ohne Test. Bei einem Bugfix schreibt der Agent zuerst einen Test, der den Fehler zeigt.
 - Go-Tests sind tabellengetrieben, wo es passt, und laufen mit `-race`.
 
 ## Seed-Daten
