@@ -24,7 +24,7 @@ import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
-import { useRemoveChecked } from '@/composables/useRemoveChecked'
+import { useRemoveItems } from '@/composables/useRemoveItems'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { canManage } from '@/services/groupRoles'
 import { listToOpen, rememberLastList } from '@/services/lastList'
@@ -32,6 +32,7 @@ import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
 import { useRecentChangesStore } from '@/stores/recentChanges'
+import { useToastsStore } from '@/stores/toasts'
 import type { Group, Item, List } from '@/types/api'
 
 // noLists: the household has no active list to open.
@@ -50,7 +51,8 @@ const groups = useGroupsStore()
 const lists = useListsStore()
 const items = useItemsStore()
 const recentChanges = useRecentChangesStore()
-const { removeChecked } = useRemoveChecked()
+const toasts = useToastsStore()
+const { removeChecked, removeItem } = useRemoveItems()
 
 const createOpen = ref(false)
 const createGroupOpen = ref(false)
@@ -59,6 +61,11 @@ const archiveOpen = ref(false)
 // The item form for a new item, with the name typed into the quick-add bar.
 const newItemOpen = ref(false)
 const newItemName = ref('')
+// The item whose form is open, and its name for the case that someone else
+// deletes it meanwhile.
+const editingId = ref<string | null>(null)
+let editingName = ''
+const editing = computed(() => (editingId.value ? items.byId(editingId.value) : undefined))
 // The list whose actions are open, and the one being renamed; at most one
 // of the two is set.
 const actionsId = ref<string | null>(null)
@@ -139,6 +146,7 @@ watch(
     renamingId.value = null
     archiveOpen.value = false
     newItemOpen.value = false
+    editingId.value = null
     if (groups.status === 'idle') groups.load()
     if (lists.statusOf(groupId) === 'idle') lists.load(groupId)
     if (listId) items.load(listId)
@@ -185,6 +193,32 @@ watch(
 )
 
 useLeaveRemovedGroup(() => props.groupId)
+
+// Who added the item; null if unknown (left the household).
+function creatorOf(item: Item) {
+  return members.value.find((m) => m.userId === item.createdBy)?.displayName ?? null
+}
+
+function startEdit(item: Item) {
+  editingName = item.name
+  editingId.value = item.id
+}
+
+// Deleting closes the form; the list offers undo in a toast.
+function removeEditing(fromKeyboard: boolean) {
+  const id = editingId.value
+  editingId.value = null
+  if (id) removeItem(id, fromKeyboard)
+}
+
+// Someone else deleted the item while its form was open: the form has
+// nothing left to save, so it closes and says why.
+watch(editing, (now, before) => {
+  if (before && !now && editingId.value) {
+    editingId.value = null
+    toasts.show({ kind: 'info', text: t('list.itemForm.deletedMeanwhile', { name: editingName }) })
+  }
+})
 
 function openNewItem(name: string) {
   newItemName.value = name
@@ -338,6 +372,7 @@ function openCreated(created: List) {
                 :person="personOf(item)"
                 :recent="recentOf(item)"
                 @toggle="toggle(item)"
+                @edit="startEdit(item)"
               />
             </ul>
 
@@ -358,6 +393,16 @@ function openCreated(created: List) {
         :list-id="list.id"
         :list-name="list.name"
         :initial-name="newItemName"
+      />
+      <ItemFormDialog
+        v-if="list && editing"
+        :open="true"
+        :list-id="list.id"
+        :list-name="list.name"
+        :item="editing"
+        :creator-name="creatorOf(editing)"
+        @update:open="editingId = null"
+        @remove="removeEditing"
       />
       <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />
       <ListNameDialog

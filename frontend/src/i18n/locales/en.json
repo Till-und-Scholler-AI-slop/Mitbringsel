@@ -211,6 +211,8 @@
     },
     "checkFailed": "Checking the item did not work.",
     "row": {
+      "edit": "Edit {name}",
+      "editHint": "Edit",
       "check": "check off",
       "uncheck": "bring back",
       "addedBy": "by {name}",
@@ -253,7 +255,13 @@
       "decrease": "Decrease quantity",
       "increase": "Increase quantity",
       "add": "Add",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "editTitle": "Edit item",
+      "by": "By {name} · {list}",
+      "save": "Save",
+      "remove": "Delete",
+      "removeFailed": "“{name}” could not be deleted.",
+      "deletedMeanwhile": "“{name}” was deleted"
     },
     "noLists": {
       "title": "No list yet",
