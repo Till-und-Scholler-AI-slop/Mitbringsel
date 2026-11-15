@@ -14,6 +14,7 @@ import ListChips from '@/components/list/ListChips.vue'
 import ListHeader from '@/components/list/ListHeader.vue'
 import ListItems from '@/components/list/ListItems.vue'
 import ListNameDialog from '@/components/list/ListNameDialog.vue'
+import { ITEM_PANEL_TARGET } from '@/components/list/itemPanel'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useLeaveDeletedList } from '@/composables/useLeaveDeletedList'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
@@ -126,61 +127,65 @@ function openCreated(created: List) {
 <template>
   <AppFrame :group-id="groupId" :list-id="listId" :bottom-bar="list !== undefined">
     <div class="page">
-      <ListHeader :group="group">
-        <ListChips
-          v-if="list || state === 'noLists'"
-          :group-id="groupId"
-          :lists="active"
-          :current-id="listKey"
-          :open-count="openCount"
-          :archived-count="archived.length"
-          :current-archived="list?.archivedAt != null"
-          @create="createOpen = true"
-          @actions="actionsId = $event.id"
-          @archive="archiveOpen = true"
-        />
-      </ListHeader>
+      <div class="column">
+        <ListHeader :group="group">
+          <ListChips
+            v-if="list || state === 'noLists'"
+            :group-id="groupId"
+            :lists="active"
+            :current-id="listKey"
+            :open-count="openCount"
+            :archived-count="archived.length"
+            :current-archived="list?.archivedAt != null"
+            @create="createOpen = true"
+            @actions="actionsId = $event.id"
+            @archive="archiveOpen = true"
+          />
+        </ListHeader>
 
-      <main class="content" :class="{ 'content--bar': list }">
-        <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
-        <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
+        <main class="content" :class="{ 'content--bar': list }">
+          <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
+          <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
 
-        <p v-if="state === 'loading'" class="loading" role="status">
-          <BaseSpinner /> {{ t('list.loading') }}
-        </p>
+          <p v-if="state === 'loading'" class="loading" role="status">
+            <BaseSpinner /> {{ t('list.loading') }}
+          </p>
 
-        <div v-else-if="state === 'failed'" class="failed" role="alert">
-          <p class="failed-title">{{ t('list.loadFailed') }}</p>
-          <p>{{ listsError }}</p>
-          <BaseButton variant="secondary" @click="lists.load(groupId)">
-            <BaseIcon name="retry" /> {{ t('common.retry') }}
-          </BaseButton>
-        </div>
+          <div v-else-if="state === 'failed'" class="failed" role="alert">
+            <p class="failed-title">{{ t('list.loadFailed') }}</p>
+            <p>{{ listsError }}</p>
+            <BaseButton variant="secondary" @click="lists.load(groupId)">
+              <BaseIcon name="retry" /> {{ t('common.retry') }}
+            </BaseButton>
+          </div>
 
-        <BaseEmptyState
-          v-else-if="state === 'missing'"
-          :title="t('list.missing.title')"
-          :description="t('list.missing.description')"
-        >
-          <template #icon><BaseIcon name="linkOff" :size="24" /></template>
-          <BaseButton @click="router.push({ name: 'group', params: { groupId } })">
-            {{ t('list.missing.home') }}
-          </BaseButton>
-        </BaseEmptyState>
+          <BaseEmptyState
+            v-else-if="state === 'missing'"
+            :title="t('list.missing.title')"
+            :description="t('list.missing.description')"
+          >
+            <template #icon><BaseIcon name="linkOff" :size="24" /></template>
+            <BaseButton @click="router.push({ name: 'group', params: { groupId } })">
+              {{ t('list.missing.home') }}
+            </BaseButton>
+          </BaseEmptyState>
 
-        <BaseEmptyState
-          v-else-if="state === 'noLists'"
-          :title="t('list.noLists.title')"
-          :description="t('list.noLists.description')"
-        >
-          <template #icon><BaseIcon name="list" :size="24" /></template>
-          <BaseButton aria-haspopup="dialog" @click="createOpen = true">
-            <BaseIcon name="plus" /> {{ t('list.noLists.create') }}
-          </BaseButton>
-        </BaseEmptyState>
+          <BaseEmptyState
+            v-else-if="state === 'noLists'"
+            :title="t('list.noLists.title')"
+            :description="t('list.noLists.description')"
+          >
+            <template #icon><BaseIcon name="list" :size="24" /></template>
+            <BaseButton aria-haspopup="dialog" @click="createOpen = true">
+              <BaseIcon name="plus" /> {{ t('list.noLists.create') }}
+            </BaseButton>
+          </BaseEmptyState>
 
-        <ListItems v-else-if="list" :list="list" :members="members" />
-      </main>
+          <ListItems v-else-if="list" :list="list" :members="members" />
+        </main>
+      </div>
+      <!-- ListItems puts the item form here on a wide screen (itemPanel.ts). -->
+      <div :id="ITEM_PANEL_TARGET" class="panel-slot" />
 
       <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />
       <ListNameDialog
@@ -209,11 +214,22 @@ function openCreated(created: List) {
 </template>
 
 <style scoped>
-.page {
+.page,
+.column {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+.column {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The panel inside is the flex item, not this wrapper. */
+.panel-slot {
+  display: contents;
 }
 
 .content {
@@ -267,6 +283,21 @@ function openCreated(created: List) {
   .content--bar {
     max-width: 51.25rem;
     padding: var(--space-5) var(--space-6) 3.5rem;
+  }
+}
+
+/* Header and list in one column, the item panel next to it (design
+   "markt2-desktop"). 79rem is ITEM_PANEL_QUERY in itemPanel.ts. */
+@media (min-width: 79rem) {
+  .page {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .column {
+    flex: 999 1 35rem;
+    align-self: stretch;
   }
 }
 </style>

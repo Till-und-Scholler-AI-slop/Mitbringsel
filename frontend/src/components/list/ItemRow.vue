@@ -14,13 +14,17 @@ const AVATAR_SIZE_DONE = 22
 // person left the household or deleted their account.
 // recent: another member just changed the item; name is null if that member
 // is not (yet) among the known members. Only open items show it.
+// editing: its form is open in the panel next to the list (desktop).
+// opensDialog: false when the edit button opens that panel, not a dialog.
 const props = withDefaults(
   defineProps<{
     item: Item
     person: { name: string; avatarUrl: string | null } | null
     recent?: { name: string | null } | null
+    editing?: boolean
+    opensDialog?: boolean
   }>(),
-  { recent: null },
+  { recent: null, editing: false, opensDialog: true },
 )
 // edit: only open items offer it (design "markt2-liste"); a done item comes
 // back with a tap first.
@@ -34,6 +38,7 @@ const done = computed(() => props.item.checked)
 // Only open items show a recent change.
 const recentShown = computed(() => props.recent !== null && !done.value)
 const recentName = computed(() => (recentShown.value ? (props.recent?.name ?? null) : null))
+const editingShown = computed(() => props.editing && !done.value)
 
 // What a screen reader says: the whole row is one button, so everything the
 // eye sees on it has to be in the label.
@@ -47,13 +52,19 @@ const label = computed(() => {
       ? t('list.row.justChangedBy', { name: recentName.value })
       : t('list.row.justChangedByAnon')
     : null
+  const editing = editingShown.value ? t('list.row.editingLabel') : null
   const action = t(done.value ? 'list.row.uncheck' : 'list.row.check')
-  return `${[...details, by, recent].filter(Boolean).join(', ')} – ${action}`
+  return `${[...details, by, recent, editing].filter(Boolean).join(', ')} – ${action}`
 })
 </script>
 
 <template>
-  <li :class="['row', { 'row--done': done, 'row--recent': recentShown }]">
+  <li
+    :class="[
+      'row',
+      { 'row--done': done, 'row--recent': recentShown, 'row--editing': editingShown },
+    ]"
+  >
     <button type="button" class="toggle" :aria-label="label" @click="$emit('toggle')">
       <span class="box" aria-hidden="true">
         <BaseIcon v-if="done" name="check" :size="16" :stroke-width="3.5" />
@@ -63,18 +74,21 @@ const label = computed(() => {
         <span v-if="item.note && !done" class="note">{{ item.note }}</span>
         <!-- Only the name gets cut off when it is too long, so "just changed"
            always stays visible; the title shows the whole text. -->
-        <i18n-t
-          v-if="recentName"
-          keypath="list.row.justChanged"
-          tag="span"
-          class="recent"
-          :title="t('list.row.justChanged', { name: recentName })"
-        >
-          <template #name>
-            <span class="recent-name">{{ recentName }}</span>
-          </template>
-        </i18n-t>
-        <span v-else-if="recentShown" class="recent">{{ t('list.row.justChangedAnon') }}</span>
+        <span v-if="recentShown || editingShown" class="tags">
+          <i18n-t
+            v-if="recentName"
+            keypath="list.row.justChanged"
+            tag="span"
+            class="recent"
+            :title="t('list.row.justChanged', { name: recentName })"
+          >
+            <template #name>
+              <span class="recent-name">{{ recentName }}</span>
+            </template>
+          </i18n-t>
+          <span v-else-if="recentShown" class="recent">{{ t('list.row.justChangedAnon') }}</span>
+          <span v-if="editingShown" class="editing">{{ t('list.row.editing') }}</span>
+        </span>
       </span>
       <span v-if="quantity" class="quantity">{{ quantity }}</span>
       <BaseAvatar
@@ -90,7 +104,7 @@ const label = computed(() => {
       class="edit"
       :aria-label="t('list.row.edit', { name: item.name })"
       :title="t('list.row.editHint')"
-      aria-haspopup="dialog"
+      :aria-haspopup="opensDialog ? 'dialog' : undefined"
       @click="$emit('edit')"
     >
       <!-- The phone shows dots, the desktop a pencil (design). -->
@@ -120,6 +134,14 @@ const label = computed(() => {
   margin-block: var(--space-1-5);
   background: var(--color-recent-bg);
   box-shadow: var(--shadow-recent);
+}
+
+/* Its form is open in the panel: lifted out with a plain ring. A recent
+   change of someone else wins, as in the design. */
+.row--editing:not(.row--recent) {
+  z-index: 1;
+  margin-block: var(--space-1-5);
+  box-shadow: 0 0 0 var(--border-width-lg) var(--color-border);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -257,6 +279,25 @@ const label = computed(() => {
   line-height: 1rem;
   font-weight: var(--font-weight-heavy);
   white-space: pre;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.editing {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-edit-tag-bg);
+  color: var(--color-edit-tag-text);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: var(--font-weight-heavy);
+  white-space: nowrap;
 }
 
 .recent-name {

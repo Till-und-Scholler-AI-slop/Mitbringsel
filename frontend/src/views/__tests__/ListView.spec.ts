@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { h } from 'vue'
@@ -900,6 +900,133 @@ describe('ListView: editing items', () => {
 
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
     expect(wrapper.get('.toast .text').text()).toBe('“Milch” was deleted')
+    wrapper.unmount()
+  })
+})
+
+describe('ListView: item panel on a wide screen', () => {
+  const makeItems = () => [item('i1', 'Milch', { note: 'Hafer' }), item('i2', 'Brot')]
+  const changed = (changedItem: Item): ServerMessage => ({
+    type: 'itemChanged',
+    payload: { groupId: 'g1', actorId: 'user-2', item: changedItem },
+  })
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const panelOf = (w: Mounted) => w.find('#item-panel aside')
+  const nameField = (w: Mounted) => w.get('#item-panel aside input').element as HTMLInputElement
+  const rows = (w: Mounted) => w.findAll('.open li')
+
+  async function openEdit(w: Mounted, index: number) {
+    const button = rows(w)[index]!.get('.edit')
+    ;(button.element as HTMLElement).focus()
+    await button.trigger('click')
+    await flushPromises()
+    return button.element
+  }
+
+  it('edits an item in the panel next to the list, not in a dialog', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    itemsService.update.mockResolvedValue(item('i1', 'Hafermilch', { note: 'Hafer', serverSeq: 2 }))
+    const { wrapper } = await mountView()
+
+    const button = await openEdit(wrapper, 0)
+
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(panelOf(wrapper).get('h2').text()).toBe('Edit item')
+    expect(document.activeElement).toBe(nameField(wrapper))
+    expect(rows(wrapper)[0]!.get('.editing').text()).toBe('Editing')
+    expect(button.getAttribute('aria-haspopup')).toBeNull()
+
+    nameField(wrapper).value = 'Hafermilch'
+    await wrapper.get('#item-panel input').trigger('input')
+    await wrapper.get('#item-panel form').trigger('submit')
+    await flushPromises()
+
+    expect(itemsService.update).toHaveBeenCalledWith('i1', { name: 'Hafermilch' })
+    expect(panelOf(wrapper).exists()).toBe(false)
+    expect(wrapper.find('.editing').exists()).toBe(false)
+    // Back where the user was.
+    expect(document.activeElement).toBe(button)
+    wrapper.unmount()
+  })
+
+  it('switches to another item while it stays open', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await openEdit(wrapper, 0)
+    await wrapper.get('#item-panel input').setValue('Hafermilch')
+    await openEdit(wrapper, 1)
+
+    expect(nameField(wrapper).value).toBe('Brot')
+    expect(document.activeElement).toBe(nameField(wrapper))
+    expect(rows(wrapper).map((r) => r.find('.editing').exists())).toEqual([false, true])
+    wrapper.unmount()
+  })
+
+  it('keeps what was typed when someone else changes the same item', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await openEdit(wrapper, 0)
+    await wrapper.get('#item-panel input').setValue('Hafermilch')
+    serverEvents.emit(changed(item('i1', 'Milch', { note: 'Soja', serverSeq: 2 })))
+    await flushPromises()
+
+    expect(nameField(wrapper).value).toBe('Hafermilch')
+    wrapper.unmount()
+  })
+
+  it('opens a new item with details in place of the edited one', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await openEdit(wrapper, 0)
+    await wrapper.get('.add-bar input').setValue('Tomaten')
+    await wrapper.get('.add-bar .details').trigger('click')
+    await flushPromises()
+
+    expect(panelOf(wrapper).get('h2').text()).toBe('New item')
+    expect(nameField(wrapper).value).toBe('Tomaten')
+    expect(wrapper.find('.editing').exists()).toBe(false)
+    expect(wrapper.get('.add-bar .details').attributes('aria-haspopup')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('closes with Escape and gives the focus back', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    const button = await openEdit(wrapper, 0)
+    await wrapper.get('#item-panel input').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+
+    expect(panelOf(wrapper).exists()).toBe(false)
+    expect(document.activeElement).toBe(button)
+    wrapper.unmount()
+  })
+
+  it('closes when the item is deleted from it, with undo', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await openEdit(wrapper, 0)
+    await wrapper.get('#item-panel .remove').trigger('click')
+    await flushPromises()
+
+    expect(panelOf(wrapper).exists()).toBe(false)
+    expect(openNames(wrapper)).toEqual(['Brot'])
+    expect(wrapper.get('.toast .text').text()).toBe('“Milch” removed')
     wrapper.unmount()
   })
 })

@@ -27,9 +27,13 @@ function item(overrides: Partial<Item> = {}): Item {
 
 const JONAS = { name: 'Jonas', avatarUrl: null }
 
-function mountRow(i: Item, person: { name: string; avatarUrl: string | null } | null = JONAS) {
+function mountRow(
+  i: Item,
+  person: { name: string; avatarUrl: string | null } | null = JONAS,
+  extra: Record<string, unknown> = {},
+) {
   return mount(ItemRow, {
-    props: { item: i, person },
+    props: { item: i, person, ...extra },
     global: { plugins: [createAppI18n(['en'], null)] },
   })
 }
@@ -154,5 +158,40 @@ describe('ItemRow: edit button', () => {
     )
 
     expect(wrapper.find('.edit').exists()).toBe(false)
+  })
+})
+
+describe('ItemRow: form open in the panel', () => {
+  it('says that the item is being edited, to the eye and in the label', () => {
+    const wrapper = mountRow(item(), JONAS, { editing: true })
+
+    expect(wrapper.classes()).toContain('row--editing')
+    expect(wrapper.get('.editing').text()).toBe('Editing')
+    expect(wrapper.get('button').attributes('aria-label')).toBe(
+      'Milch, by Jonas, being edited – check off',
+    )
+  })
+
+  it('shows it next to a recent change of someone else', () => {
+    const wrapper = mountRow(item(), JONAS, { editing: true, recent: { name: 'Lena' } })
+
+    expect(wrapper.findAll('.tags > span').map((s) => s.text())).toEqual([
+      'Lena · just changed',
+      'Editing',
+    ])
+  })
+
+  it('shows nothing for a done item', () => {
+    const wrapper = mountRow(item({ checked: true }), JONAS, { editing: true })
+
+    expect(wrapper.find('.editing').exists()).toBe(false)
+    expect(wrapper.classes()).not.toContain('row--editing')
+  })
+
+  it('announces a dialog only when the edit button opens one', () => {
+    expect(mountRow(item()).get('.edit').attributes('aria-haspopup')).toBe('dialog')
+    expect(
+      mountRow(item(), JONAS, { opensDialog: false }).get('.edit').attributes('aria-haspopup'),
+    ).toBeUndefined()
   })
 })

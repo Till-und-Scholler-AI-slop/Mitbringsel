@@ -49,9 +49,9 @@ function item(name: string): Item {
   }
 }
 
-function mountBar(locale: 'de' | 'en' = 'en') {
+function mountBar(locale: 'de' | 'en' = 'en', opensDialog?: boolean) {
   return mount(QuickAddBar, {
-    props: { listId: 'l1' },
+    props: { listId: 'l1', opensDialog },
     global: { plugins: [createAppI18n([locale], null)] },
     attachTo: document.body,
   })
@@ -155,5 +155,15 @@ describe('QuickAddBar', () => {
     expect(itemsService.create).not.toHaveBeenCalled()
     expect(wrapper.get('.details').attributes('aria-label')).toBe('Add with details')
     wrapper.unmount()
+  })
+
+  it('announces a dialog only when the form with details is one', () => {
+    const dialog = mountBar()
+    const panel = mountBar('en', false)
+
+    expect(dialog.get('.details').attributes('aria-haspopup')).toBe('dialog')
+    expect(panel.get('.details').attributes('aria-haspopup')).toBeUndefined()
+    dialog.unmount()
+    panel.unmount()
   })
 })
