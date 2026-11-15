@@ -167,6 +167,16 @@ func (s *Service) ListForGroup(ctx context.Context, actor, groupID uuid.UUID) ([
 	return items, nil
 }
 
+// DeleteOldTombstones removes the items deleted more than
+// TombstoneRetention ago for good. The cleanup job calls it.
+func (s *Service) DeleteOldTombstones(ctx context.Context) (int64, error) {
+	deleted, err := s.repo.DeleteTombstones(ctx, s.now().Add(-TombstoneRetention))
+	if err != nil {
+		return 0, fmt.Errorf("delete item tombstones: %w", err)
+	}
+	return deleted, nil
+}
+
 // Get returns one item, also a deleted one (check Deleted).
 func (s *Service) Get(ctx context.Context, actor, itemID uuid.UUID) (Item, error) {
 	it, _, err := s.find(ctx, actor, itemID)

@@ -453,6 +453,43 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("the cleanup removes old tombstones only", func(t *testing.T) {
+		anna, listID := newList(t, "tombstones-anna")
+		create := func(name string) Item {
+			t.Helper()
+			it, err := svc.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: name}, clock(t, 0, "anna"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return it
+		}
+		live, old, recent := create("Milch"), create("Mehl"), create("Eier")
+		for _, it := range []Item{old, recent} {
+			if _, err := svc.Delete(ctx, anna, it.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Backdate one tombstone past the retention. Other subtests share
+		// the database, so the count is not checked, only these items.
+		if _, err := pool.Exec(ctx, "UPDATE items SET deleted_at = now() - interval '31 days' WHERE id = $1", old.ID); err != nil {
+			t.Fatalf("backdate tombstone: %v", err)
+		}
+
+		if _, err := svc.DeleteOldTombstones(ctx); err != nil {
+			t.Fatalf("DeleteOldTombstones() error = %v", err)
+		}
+
+		if _, err := repo.Get(ctx, old.ID); !errors.Is(err, ErrNotFound) {
+			t.Errorf("Get() of the old tombstone error = %v, want %v", err, ErrNotFound)
+		}
+		if got, err := repo.Get(ctx, recent.ID); err != nil || !got.Deleted() {
+			t.Errorf("Get() of the recent tombstone = %+v, %v, want it kept", got, err)
+		}
+		if got, err := repo.Get(ctx, live.ID); err != nil || got.Deleted() {
+			t.Errorf("Get() of the live item = %+v, %v, want it kept", got, err)
+		}
+	})
+
 	t.Run("deleting the list takes the items along", func(t *testing.T) {
 		anna, listID := newList(t, "cascade-anna")
 		it, err := svc.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: "Milch"}, clock(t, 0, "anna"))

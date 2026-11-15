@@ -34,6 +34,12 @@ WHERE list_id = ANY(sqlc.arg(list_ids)::uuid[])
   AND deleted_at IS NULL
 ORDER BY created_at, id;
 
+-- name: DeleteItemTombstones :execrows
+-- The cleanup job. Removes tombstones deleted before the cutoff for good;
+-- items that are not deleted are never touched.
+DELETE FROM items
+WHERE deleted_at < sqlc.arg(cutoff)::timestamptz;
+
 -- name: ApplyItemUpdate :one
 -- Writes only the fields that won the merge: a set_* flag says whether the
 -- field is part of the update, so "leave as is" and "set to NULL" differ.

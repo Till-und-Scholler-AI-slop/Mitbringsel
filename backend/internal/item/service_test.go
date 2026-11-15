@@ -26,6 +26,8 @@ type fakeRepo struct {
 	// that fails.
 	failCommit bool
 	seq        int64
+	// cutoff is the one of the last DeleteTombstones.
+	cutoff time.Time
 }
 
 func newFakeRepo() *fakeRepo {
@@ -146,6 +148,21 @@ func (r *fakeRepo) MarkDeleted(ctx context.Context, itemID uuid.UUID) (Item, err
 		r.items[itemID] = it
 	}
 	return it, nil
+}
+
+func (r *fakeRepo) DeleteTombstones(_ context.Context, cutoff time.Time) (int64, error) {
+	if r.fail {
+		return 0, errRepo
+	}
+	r.cutoff = cutoff
+	var n int64
+	for id, it := range r.items {
+		if it.DeletedAt != nil && it.DeletedAt.Before(cutoff) {
+			delete(r.items, id)
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (r *fakeRepo) MarkCheckedDeleted(_ context.Context, listID uuid.UUID, itemIDs []uuid.UUID) ([]Item, error) {
@@ -1170,6 +1187,49 @@ func TestService_ListForGroup(t *testing.T) {
 
 		if _, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID); !errors.Is(err, errRepo) {
 			t.Errorf("ListForGroup() error = %v, want %v", err, errRepo)
+		}
+	})
+}
+
+func TestService_DeleteOldTombstones(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("removes tombstones older than the retention, nothing else", func(t *testing.T) {
+		f := newFixture()
+		live := f.create(t)
+		old := f.create(t)
+		recent := f.create(t)
+		stamp := func(it Item, deletedAt time.Time) {
+			it.DeletedAt = &deletedAt
+			f.repo.items[it.ID] = it
+		}
+		stamp(old, serverNow.Add(-TombstoneRetention-time.Minute))
+		stamp(recent, serverNow.Add(-TombstoneRetention+time.Minute))
+
+		deleted, err := f.svc.DeleteOldTombstones(ctx)
+
+		if err != nil || deleted != 1 {
+			t.Fatalf("DeleteOldTombstones() = %d, %v, want 1", deleted, err)
+		}
+		if want := serverNow.Add(-TombstoneRetention); !f.repo.cutoff.Equal(want) {
+			t.Errorf("cutoff = %v, want %v", f.repo.cutoff, want)
+		}
+		if _, ok := f.repo.items[old.ID]; ok {
+			t.Error("the old tombstone is still there")
+		}
+		for name, it := range map[string]Item{"live item": live, "recent tombstone": recent} {
+			if _, ok := f.repo.items[it.ID]; !ok {
+				t.Errorf("the %s is gone", name)
+			}
+		}
+	})
+
+	t.Run("repository failure is passed on", func(t *testing.T) {
+		f := newFixture()
+		f.repo.fail = true
+
+		if _, err := f.svc.DeleteOldTombstones(ctx); !errors.Is(err, errRepo) {
+			t.Errorf("DeleteOldTombstones() error = %v, want %v", err, errRepo)
 		}
 	})
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -147,6 +148,10 @@ func (r *PostgresRepository) MarkCheckedDeleted(ctx context.Context, listID uuid
 		return nil, err
 	}
 	return fromRows(rows)
+}
+
+func (r *PostgresRepository) DeleteTombstones(ctx context.Context, cutoff time.Time) (int64, error) {
+	return r.q.DeleteItemTombstones(ctx, cutoff)
 }
 
 func fromRow(row sqlcgen.Item) (Item, error) {

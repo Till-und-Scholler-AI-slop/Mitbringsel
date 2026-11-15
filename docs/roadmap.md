@@ -16,7 +16,7 @@ Der Agent spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hi
 Jede Phase endet mit einem lauffähigen, getesteten Stand.
 
 1. **Fundament:** Monorepo, `Makefile`, lokales Postgres per Compose, Go-Server mit Health-Endpunkt, Vue-Projekt mit Router, Pinia, i18n und Platzhalter-Tokens, CI mit Lint und Tests.
-2. **Auth:** Google Login, Sessions, Dev-Login, `GET /api/v1/me`, Logout. Abgelaufene Sessions werden zunächst nur abgewiesen; ein periodischer Aufräum-Job (`internal/cleanup`) löscht seit Phase 5 Sessions und Einladungen, Tombstones folgen in Phase 6.
+2. **Auth:** Google Login, Sessions, Dev-Login, `GET /api/v1/me`, Logout. Abgelaufene Sessions werden zunächst nur abgewiesen; ein periodischer Aufräum-Job (`internal/cleanup`) löscht seit Phase 5 Sessions und Einladungen, seit Phase 6 auch Tombstones von Artikeln nach 30 Tagen.
 3. **Gruppen und Einladungen:** REST-Endpunkte, Rollen, Einladungslinks, zugehörige Views.
 4. **Listen und Artikel online:** CRUD über REST, Seed-Daten, Basis-Komponenten.
 5. **Live-Sync:** WebSocket-Hub, Protokoll, LWW-Merge (seit Phase 4 im Backend), Broadcast an Gruppenmitglieder. REST schreibt, der WebSocket verteilt nur Ereignisse (siehe [ADR 0005](adr/0005-live-sync-phase-5.md)). Schritte, je ein PR:

@@ -20,7 +20,7 @@ einkaufsliste/
 │   │   ├── list/                 # Domäne: Listen
 │   │   ├── item/                 # Domäne: Artikel
 │   │   ├── realtime/             # WebSocket-Hub, Räume pro Gruppe
-│   │   ├── cleanup/              # Aufräum-Job (abgelaufene Sessions, alte Einladungen)
+│   │   ├── cleanup/              # Aufräum-Job (abgelaufene Sessions, alte Einladungen, alte Tombstones)
 │   │   ├── httpapi/              # Routing, Handler, Middleware, Fehlerformat
 │   │   │   └── apigen/           # aus api/openapi.yaml generierte Typen
 │   │   └── platform/db/          # pgx-Pool, sqlc-Code, Transaktionen

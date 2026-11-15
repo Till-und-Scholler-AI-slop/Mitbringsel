@@ -27,7 +27,6 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Stil der Haushalt-Icons:** Haushalte zeigen in der Seitenleiste und auf den Startkarten weiter das Haus-Icon im Farbkreis. Die Sticker gelten bewusst nur für Listen; für die Haushalte ist ein eigener Stil geplant.
 - [ ] **Abgehakte entfernen übersteht kein Schließen des Tabs:** `useRemoveItems` sendet erst, wenn der Toast endet (etwa 5 Sekunden). Wird der Tab vorher geschlossen, bleibt alles auf dem Server, und die Artikel stehen beim nächsten Öffnen wieder da. Mit der Outbox in Phase 6 (Schritt 9) das Entfernen sofort in die Outbox legen und erst beim Senden die Zeit des Toasts abwarten, oder beim Verlassen der Seite (`pagehide`) sofort senden.
 - [ ] **Uhr-Symbol in der Artikelzeile:** Das Design markiert noch nicht synchronisierte Artikel mit einer Uhr („Noch nicht synchronisiert“). Kommt mit der Outbox in Phase 6.
-- [ ] **Tombstones nach 30 Tagen löschen:** Gelöschte Artikel bleiben vorerst für immer in `items`. Phase 6, Schritt 4, als weitere `cleanup.Task`.
 
 ## Live-Sync
 

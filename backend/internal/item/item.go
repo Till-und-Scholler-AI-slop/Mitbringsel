@@ -18,6 +18,10 @@ const (
 	// MaxRemoveItems is how many items one RemoveChecked may name. It keeps
 	// the request and the statement small; no shopping trip checks more.
 	MaxRemoveItems = 500
+	// TombstoneRetention is how long a deleted item is kept as a tombstone,
+	// so a late offline edit still finds it and loses ("delete wins"). The
+	// outbox of the client drops changes older than this (ADR 0006).
+	TombstoneRetention = 30 * 24 * time.Hour
 )
 
 var (
@@ -216,4 +220,7 @@ type Repository interface {
 	// returns the new tombstones in no particular order; IDs it skips are
 	// not an error.
 	MarkCheckedDeleted(ctx context.Context, listID uuid.UUID, itemIDs []uuid.UUID) ([]Item, error)
+	// DeleteTombstones removes the items deleted before cutoff for good and
+	// returns how many.
+	DeleteTombstones(ctx context.Context, cutoff time.Time) (int64, error)
 }
