@@ -5,11 +5,14 @@ import { RouterLink } from 'vue-router'
 
 import BaseAvatar from '@/components/base/BaseAvatar.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseSticker from '@/components/base/BaseSticker.vue'
 import type { Group, List } from '@/types/api'
 
 // More members than this show as the first few only; the count is in the text.
 const MAX_AVATARS = 4
 const AVATAR_SIZE = 26
+// The art of a 36 px sticker is about as large as the 28 px dot in the design.
+const STICKER_SIZE = 36
 
 // A household on the start page. The whole card is one link to the
 // household, which opens its last or first list. Screen readers hear one
@@ -56,7 +59,10 @@ const label = computed(() => {
     </span>
 
     <span v-if="lists.length > 0" class="lists" aria-hidden="true">
-      <span v-for="list in lists" :key="list.id" class="list">{{ list.name }}</span>
+      <span v-for="list in lists" :key="list.id" class="list">
+        <BaseSticker :icon="list.icon" :size="STICKER_SIZE" />
+        <span class="list-name">{{ list.name }}</span>
+      </span>
     </span>
   </RouterLink>
 </template>
@@ -145,17 +151,24 @@ const label = computed(() => {
   gap: var(--space-2);
 }
 
-/* inline-block, not flex: "…" for a long name works on block boxes only. */
+/* The sticker sits close to the left edge, like on the list chips. */
 .list {
   max-width: 100%;
   box-sizing: border-box;
-  display: inline-block;
-  padding: 0 var(--space-3);
-  line-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-height: 2.25rem;
+  padding: 0 var(--space-3) 0 var(--space-1);
   border-radius: var(--radius-full);
   background: var(--color-bg);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
+}
+
+/* A block box of its own: "…" for a long name works on block boxes only. */
+.list-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -178,8 +191,8 @@ const label = computed(() => {
   }
 
   .list {
+    min-height: 2.375rem;
     font-size: var(--font-size-sm);
-    line-height: 2.375rem;
   }
 }
 </style>

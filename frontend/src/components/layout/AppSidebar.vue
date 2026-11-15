@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseSticker from '@/components/base/BaseSticker.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import ProfileMenu from '@/components/start/ProfileMenu.vue'
 import SyncStatus from '@/components/layout/SyncStatus.vue'
@@ -71,7 +72,9 @@ const currentLists = computed(() => (props.groupId ? lists.activeLists(props.gro
                 :to="{ name: 'list', params: { groupId: group.id, listId: list.id } }"
                 :aria-current="list.id === listId ? 'page' : undefined"
               >
-                {{ list.name }}
+                <!-- 40 px: its art is about as large as the 32 px dot in the design. -->
+                <BaseSticker :icon="list.icon" :size="40" />
+                <span class="list-name">{{ list.name }}</span>
               </RouterLink>
             </li>
           </ul>
@@ -237,13 +240,19 @@ const currentLists = computed(() => (props.groupId ? lists.activeLists(props.gro
 .list {
   display: flex;
   align-items: center;
+  gap: 0.625rem;
   min-height: var(--size-touch);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-3) 0 var(--space-1-5);
   border-radius: var(--radius-full);
   color: var(--color-on-brand);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   text-decoration: none;
+}
+
+.list-name {
+  flex: 1;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 

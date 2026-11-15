@@ -10,6 +10,7 @@ import type { ListsService } from '@/services/api/lists'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import { useListsStore } from '@/stores/lists'
+import { STICKERS } from '@/components/base/stickers'
 import type { Group, List } from '@/types/api'
 
 import AppSidebar from '../AppSidebar.vue'
@@ -96,8 +97,8 @@ beforeEach(async () => {
   authService.logout.mockResolvedValue()
   groupsService.list.mockResolvedValue([group('g1', 'WG Kaiserstraße', 4), group('g2', 'Home', 2)])
   listsService.list.mockResolvedValue([
-    list('l1', 'Supermarkt'),
-    list('l2', 'Baumarkt'),
+    { ...list('l1', 'Supermarkt'), icon: 'supermarket' },
+    { ...list('l2', 'Baumarkt'), icon: 'hardware' },
     list('l3', 'Alt', '2026-01-02T10:00:00Z'),
   ])
   await useAuthStore().load()
@@ -163,6 +164,21 @@ describe('AppSidebar', () => {
       ['Baumarkt', '/groups/g1/lists/l2'],
     ])
     expect(links.map((l) => l.attributes('aria-current'))).toEqual([undefined, 'page'])
+    wrapper.unmount()
+  })
+
+  it('shows the sticker of each list, but none for the households', async () => {
+    const { wrapper } = await mountSidebar({ groupId: 'g1', listId: 'l2' })
+
+    const rotations = wrapper
+      .get('.lists')
+      .findAll('a')
+      .map((l) => l.get('.sticker > g').attributes('transform'))
+    expect(rotations).toEqual([
+      `rotate(${STICKERS.supermarket.rotate} 24 24)`,
+      `rotate(${STICKERS.hardware.rotate} 24 24)`,
+    ])
+    expect(entries(wrapper).some((e) => e.find('.sticker').exists())).toBe(false)
     wrapper.unmount()
   })
 
