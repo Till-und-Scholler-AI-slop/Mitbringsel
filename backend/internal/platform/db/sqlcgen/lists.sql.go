@@ -12,18 +12,19 @@ import (
 )
 
 const createList = `-- name: CreateList :one
-INSERT INTO lists (group_id, name)
-VALUES ($1, $2)
-RETURNING id, group_id, name, archived_at, created_at, updated_at, server_seq
+INSERT INTO lists (group_id, name, icon)
+VALUES ($1, $2, $3)
+RETURNING id, group_id, name, archived_at, created_at, updated_at, server_seq, icon
 `
 
 type CreateListParams struct {
 	GroupID uuid.UUID
 	Name    string
+	Icon    string
 }
 
 func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, error) {
-	row := q.db.QueryRow(ctx, createList, arg.GroupID, arg.Name)
+	row := q.db.QueryRow(ctx, createList, arg.GroupID, arg.Name, arg.Icon)
 	var i List
 	err := row.Scan(
 		&i.ID,
@@ -33,6 +34,7 @@ func (q *Queries) CreateList(ctx context.Context, arg CreateListParams) (List, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ServerSeq,
+		&i.Icon,
 	)
 	return i, err
 }
@@ -52,7 +54,7 @@ func (q *Queries) DeleteList(ctx context.Context, id uuid.UUID) (int64, error) {
 }
 
 const getList = `-- name: GetList :one
-SELECT id, group_id, name, archived_at, created_at, updated_at, server_seq FROM lists
+SELECT id, group_id, name, archived_at, created_at, updated_at, server_seq, icon FROM lists
 WHERE id = $1
 `
 
@@ -67,12 +69,13 @@ func (q *Queries) GetList(ctx context.Context, id uuid.UUID) (List, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ServerSeq,
+		&i.Icon,
 	)
 	return i, err
 }
 
 const listListsForGroup = `-- name: ListListsForGroup :many
-SELECT id, group_id, name, archived_at, created_at, updated_at, server_seq FROM lists
+SELECT id, group_id, name, archived_at, created_at, updated_at, server_seq, icon FROM lists
 WHERE group_id = $1
   AND (archived_at IS NULL OR $2::boolean)
 ORDER BY created_at, id
@@ -102,6 +105,7 @@ func (q *Queries) ListListsForGroup(ctx context.Context, arg ListListsForGroupPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ServerSeq,
+			&i.Icon,
 		); err != nil {
 			return nil, err
 		}
@@ -113,44 +117,13 @@ func (q *Queries) ListListsForGroup(ctx context.Context, arg ListListsForGroupPa
 	return items, nil
 }
 
-const renameList = `-- name: RenameList :one
-UPDATE lists
-SET name       = $2,
-    updated_at = now(),
-    server_seq = nextval('change_seq')
-WHERE id = $1
-RETURNING id, group_id, name, archived_at, created_at, updated_at, server_seq
-`
-
-type RenameListParams struct {
-	ID   uuid.UUID
-	Name string
-}
-
-// Every change draws a new server_seq, so clients that ask "what changed
-// since N?" see it (docs/data-model.md).
-func (q *Queries) RenameList(ctx context.Context, arg RenameListParams) (List, error) {
-	row := q.db.QueryRow(ctx, renameList, arg.ID, arg.Name)
-	var i List
-	err := row.Scan(
-		&i.ID,
-		&i.GroupID,
-		&i.Name,
-		&i.ArchivedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.ServerSeq,
-	)
-	return i, err
-}
-
 const setListArchived = `-- name: SetListArchived :one
 UPDATE lists
 SET archived_at = CASE WHEN $1::boolean THEN COALESCE(archived_at, now()) END,
     updated_at  = now(),
     server_seq  = nextval('change_seq')
 WHERE id = $2
-RETURNING id, group_id, name, archived_at, created_at, updated_at, server_seq
+RETURNING id, group_id, name, archived_at, created_at, updated_at, server_seq, icon
 `
 
 type SetListArchivedParams struct {
@@ -170,6 +143,41 @@ func (q *Queries) SetListArchived(ctx context.Context, arg SetListArchivedParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ServerSeq,
+		&i.Icon,
+	)
+	return i, err
+}
+
+const updateList = `-- name: UpdateList :one
+UPDATE lists
+SET name       = $2,
+    icon       = $3,
+    updated_at = now(),
+    server_seq = nextval('change_seq')
+WHERE id = $1
+RETURNING id, group_id, name, archived_at, created_at, updated_at, server_seq, icon
+`
+
+type UpdateListParams struct {
+	ID   uuid.UUID
+	Name string
+	Icon string
+}
+
+// Every change draws a new server_seq, so clients that ask "what changed
+// since N?" see it (docs/data-model.md).
+func (q *Queries) UpdateList(ctx context.Context, arg UpdateListParams) (List, error) {
+	row := q.db.QueryRow(ctx, updateList, arg.ID, arg.Name, arg.Icon)
+	var i List
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.Name,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ServerSeq,
+		&i.Icon,
 	)
 	return i, err
 }

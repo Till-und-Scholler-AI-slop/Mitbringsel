@@ -25,7 +25,8 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 ## Artikel
 
-- [ ] **Symbol und Farbe pro Liste:** Die Chips im Design haben links einen Kreis in der Listenfarbe mit Symbol (🛒, 🧴, 🔨), auch auf den Karten der Startseite und in der Desktop-Seitenleiste. `lists` hat dafür keine Spalten; braucht eine Schema- und API-Änderung.
+- [ ] **Listen-Icons im Frontend:** `lists.icon` und das API-Feld `icon` gibt es (Design: Die-Cut-Sticker, Iteration 3, `icons3-sticker`). Offen: Sticker-Komponente und Chips in der Listenleiste (nächster PR), danach die Auswahl im Dialog zum Anlegen und Umbenennen (`ListNameDialog`, `listsService.create`/`rename` senden das Icon noch nicht).
+- [ ] **Listen-Icons in Seitenleiste und auf den Startkarten:** Laut Design stehen die Sticker auch in der Desktop-Seitenleiste und auf den Karten der Startseite. Nach den Chips nachziehen.
 - [ ] **Desktop-Panel für Artikel:** Auf dem Desktop steht das Formular als Panel rechts neben der Liste, nicht als Dialog, und die bearbeitete Zeile zeigt „Wird bearbeitet“ (`markt2-desktop-*`). Nach dem Formular als eigener Schritt.
 - [ ] **Abgehakte entfernen übersteht kein Schließen des Tabs:** `useRemoveItems` sendet erst, wenn der Toast endet (etwa 5 Sekunden). Wird der Tab vorher geschlossen, bleibt alles auf dem Server, und die Artikel stehen beim nächsten Öffnen wieder da. Mit der Outbox in Phase 6 das Entfernen sofort in die Outbox legen und erst beim Senden die Zeit des Toasts abwarten, oder beim Verlassen der Seite (`pagehide`) sofort senden.
 - [ ] **Uhr-Symbol in der Artikelzeile:** Das Design markiert noch nicht synchronisierte Artikel mit einer Uhr („Noch nicht synchronisiert“). Kommt mit der Outbox in Phase 6.

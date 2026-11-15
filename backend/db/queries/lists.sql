@@ -1,6 +1,6 @@
 -- name: CreateList :one
-INSERT INTO lists (group_id, name)
-VALUES ($1, $2)
+INSERT INTO lists (group_id, name, icon)
+VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: GetList :one
@@ -15,11 +15,12 @@ WHERE group_id = $1
   AND (archived_at IS NULL OR sqlc.arg(include_archived)::boolean)
 ORDER BY created_at, id;
 
--- name: RenameList :one
+-- name: UpdateList :one
 -- Every change draws a new server_seq, so clients that ask "what changed
 -- since N?" see it (docs/data-model.md).
 UPDATE lists
 SET name       = $2,
+    icon       = $3,
     updated_at = now(),
     server_seq = nextval('change_seq')
 WHERE id = $1

@@ -27,6 +27,7 @@ function list(archivedAt: string | null = null): List {
     id: 'l1',
     groupId: 'g1',
     name: 'Supermarkt',
+    icon: 'general',
     archivedAt,
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',

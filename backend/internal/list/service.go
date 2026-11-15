@@ -18,7 +18,7 @@ import (
 // cancelled at any moment, so an implementation must not depend on it staying
 // alive (use context.WithoutCancel for work that outlives the request).
 type Publisher interface {
-	// ListChanged gets the list as stored after a create, rename, archive
+	// ListChanged gets the list as stored after a create, update, archive
 	// or unarchive.
 	ListChanged(ctx context.Context, actor uuid.UUID, l List)
 	// ListDeleted gets the list as it was before the deletion; ID and
@@ -54,8 +54,8 @@ func NewService(repo Repository, members MemberLookup, pub Publisher) *Service {
 	return &Service{repo: repo, members: members, pub: pub}
 }
 
-// Create adds a list to the group.
-func (s *Service) Create(ctx context.Context, actor, groupID uuid.UUID, name string) (List, error) {
+// Create adds a list to the group. An empty icon means DefaultIcon.
+func (s *Service) Create(ctx context.Context, actor, groupID uuid.UUID, name string, icon Icon) (List, error) {
 	// Membership first: an outsider must not learn anything about the
 	// rules, not even that the name was invalid.
 	if _, err := s.roleIn(ctx, groupID, actor); err != nil {
@@ -65,7 +65,11 @@ func (s *Service) Create(ctx context.Context, actor, groupID uuid.UUID, name str
 	if err != nil {
 		return List{}, err
 	}
-	l, err := s.repo.Create(ctx, groupID, name)
+	icon, err = checkIcon(icon, DefaultIcon)
+	if err != nil {
+		return List{}, err
+	}
+	l, err := s.repo.Create(ctx, groupID, name, icon)
 	if err != nil {
 		return List{}, fmt.Errorf("create list: %w", err)
 	}
@@ -92,9 +96,10 @@ func (s *Service) Get(ctx context.Context, actor, listID uuid.UUID) (List, error
 	return l, err
 }
 
-// Rename changes the name of a list. Giving it the name it has already
-// changes nothing: no write, no new serverSeq, no event.
-func (s *Service) Rename(ctx context.Context, actor, listID uuid.UUID, name string) (List, error) {
+// Update changes the name and icon of a list. An empty icon keeps the
+// current one. Giving it the values it has already changes nothing: no
+// write, no new serverSeq, no event.
+func (s *Service) Update(ctx context.Context, actor, listID uuid.UUID, name string, icon Icon) (List, error) {
 	current, _, err := s.find(ctx, actor, listID)
 	if err != nil {
 		return List{}, err
@@ -103,15 +108,19 @@ func (s *Service) Rename(ctx context.Context, actor, listID uuid.UUID, name stri
 	if err != nil {
 		return List{}, err
 	}
-	// The check reads the list before writing, so a rename that races with
+	icon, err = checkIcon(icon, current.Icon)
+	if err != nil {
+		return List{}, err
+	}
+	// The check reads the list before writing, so an update that races with
 	// another one may skip or repeat a write. That is fine: the request
 	// counts as executed at the moment of the read.
-	if current.Name == name {
+	if current.Name == name && current.Icon == icon {
 		return current, nil
 	}
-	l, err := s.repo.Rename(ctx, listID, name)
+	l, err := s.repo.Update(ctx, listID, name, icon)
 	if err != nil {
-		return List{}, fmt.Errorf("rename list: %w", err)
+		return List{}, fmt.Errorf("update list: %w", err)
 	}
 	s.pub.ListChanged(ctx, actor, l)
 	return l, nil
@@ -128,7 +137,7 @@ func (s *Service) Unarchive(ctx context.Context, actor, listID uuid.UUID) (List,
 }
 
 // setArchived does nothing if the list is in the wanted state already (the
-// read-then-write caveat of Rename applies).
+// read-then-write caveat of Update applies).
 func (s *Service) setArchived(ctx context.Context, actor, listID uuid.UUID, archived bool) (List, error) {
 	current, _, err := s.find(ctx, actor, listID)
 	if err != nil {
@@ -206,4 +215,16 @@ func normalizeName(name string) (string, error) {
 		return "", fmt.Errorf("%w: name is longer than %d characters", ErrInvalidName, MaxNameLength)
 	}
 	return name, nil
+}
+
+// checkIcon returns fallback for an empty icon and ErrInvalidIcon for one
+// that is not in the set.
+func checkIcon(icon, fallback Icon) (Icon, error) {
+	if icon == "" {
+		return fallback, nil
+	}
+	if !icon.Valid() {
+		return "", fmt.Errorf("%w: %q", ErrInvalidIcon, icon)
+	}
+	return icon, nil
 }

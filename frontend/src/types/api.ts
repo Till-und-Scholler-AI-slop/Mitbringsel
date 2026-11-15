@@ -57,7 +57,10 @@ export type List = Schemas['List']
 export type ListListResponse = Schemas['ListList']
 
 /** Body of POST /api/v1/groups/{groupId}/lists and PATCH /api/v1/lists/{listId}. */
-export type ListNameRequest = Schemas['ListNameRequest']
+export type ListRequest = Schemas['ListRequest']
+
+/** The sticker shown next to a list's name. */
+export type ListIcon = Schemas['ListIcon']
 
 /** Body of PUT /api/v1/lists/{listId}/archived. */
 export type SetListArchivedRequest = Schemas['SetListArchivedRequest']

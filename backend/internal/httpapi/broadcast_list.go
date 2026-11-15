@@ -11,8 +11,8 @@ import (
 
 var _ list.Publisher = (*Broadcaster)(nil)
 
-// ListChanged tells the group that a list was created, renamed, archived or
-// unarchived. The message carries the whole list, so a client can show it
+// ListChanged tells the group that a list was created, renamed, given a new
+// icon, archived or unarchived. The message carries the whole list, so a client can show it
 // without asking again.
 func (b *Broadcaster) ListChanged(ctx context.Context, actor uuid.UUID, l list.List) {
 	b.broadcast(ctx, l.GroupID, apigen.ListChangedMessage{

@@ -53,14 +53,14 @@ func TestPostgresRepository(t *testing.T) {
 		anna := newTestUser(t, pool, "create-anna")
 		groupID := newGroup(t, anna)
 
-		first, err := svc.Create(ctx, anna, groupID, "Supermarkt")
+		first, err := svc.Create(ctx, anna, groupID, "Supermarkt", "")
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
-		if first.ID == uuid.Nil || first.GroupID != groupID || first.CreatedAt.IsZero() || first.ServerSeq == 0 || first.Archived() {
-			t.Errorf("Create() = %+v, want ID, group, timestamps, server_seq and no archive date", first)
+		if first.ID == uuid.Nil || first.GroupID != groupID || first.Icon != DefaultIcon || first.CreatedAt.IsZero() || first.ServerSeq == 0 || first.Archived() {
+			t.Errorf("Create() = %+v, want ID, group, default icon, timestamps, server_seq and no archive date", first)
 		}
-		second, err := svc.Create(ctx, anna, groupID, "Baumarkt")
+		second, err := svc.Create(ctx, anna, groupID, "Baumarkt", "")
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
@@ -86,11 +86,11 @@ func TestPostgresRepository(t *testing.T) {
 		ben := newTestUser(t, pool, "scope-ben")
 		annasGroup, bensGroup := newGroup(t, anna), newGroup(t, ben)
 
-		annasList, err := svc.Create(ctx, anna, annasGroup, "Annas Liste")
+		annasList, err := svc.Create(ctx, anna, annasGroup, "Annas Liste", "")
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
-		if _, err := svc.Create(ctx, ben, bensGroup, "Bens Liste"); err != nil {
+		if _, err := svc.Create(ctx, ben, bensGroup, "Bens Liste", ""); err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
 
@@ -101,41 +101,67 @@ func TestPostgresRepository(t *testing.T) {
 		if _, err := svc.Get(ctx, ben, annasList.ID); !errors.Is(err, ErrNotFound) {
 			t.Errorf("Get() by a member of another group error = %v, want %v", err, ErrNotFound)
 		}
-		if _, err := svc.Create(ctx, ben, annasGroup, "Eingeschleust"); !errors.Is(err, ErrNotFound) {
+		if _, err := svc.Create(ctx, ben, annasGroup, "Eingeschleust", ""); !errors.Is(err, ErrNotFound) {
 			t.Errorf("Create() in another group error = %v, want %v", err, ErrNotFound)
 		}
 	})
 
-	t.Run("rename draws a new server_seq and updates the timestamp", func(t *testing.T) {
+	t.Run("update draws a new server_seq and updates the timestamp", func(t *testing.T) {
 		anna := newTestUser(t, pool, "rename-anna")
 		groupID := newGroup(t, anna)
-		created, err := svc.Create(ctx, anna, groupID, "Old")
+		created, err := svc.Create(ctx, anna, groupID, "Old", "")
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
 
-		renamed, err := svc.Rename(ctx, anna, created.ID, "New")
+		renamed, err := svc.Update(ctx, anna, created.ID, "New", "")
 		if err != nil {
-			t.Fatalf("Rename() error = %v", err)
+			t.Fatalf("Update() error = %v", err)
 		}
 		if renamed.Name != "New" || renamed.ServerSeq <= created.ServerSeq || !renamed.UpdatedAt.After(created.UpdatedAt) {
-			t.Errorf("Rename() = %+v, want new name, larger server_seq and later updated_at than %+v", renamed, created)
+			t.Errorf("Update() = %+v, want new name, larger server_seq and later updated_at than %+v", renamed, created)
 		}
 		if !renamed.CreatedAt.Equal(created.CreatedAt) {
 			t.Errorf("created_at changed from %v to %v", created.CreatedAt, renamed.CreatedAt)
 		}
 
 		// The same name again is no change: no write, so no new server_seq.
-		same, err := svc.Rename(ctx, anna, created.ID, "New")
+		same, err := svc.Update(ctx, anna, created.ID, "New", "")
 		if err != nil || same.ServerSeq != renamed.ServerSeq || !same.UpdatedAt.Equal(renamed.UpdatedAt) {
-			t.Errorf("second Rename() = %+v, %v, want %+v unchanged", same, err, renamed)
+			t.Errorf("second Update() = %+v, %v, want %+v unchanged", same, err, renamed)
+		}
+
+		// A new icon alone is a change, too.
+		withIcon, err := svc.Update(ctx, anna, created.ID, "New", IconBakery)
+		if err != nil || withIcon.Icon != IconBakery || withIcon.ServerSeq <= renamed.ServerSeq {
+			t.Errorf("Update() with icon = %+v, %v, want icon %q and a larger server_seq", withIcon, err, IconBakery)
+		}
+		got, err := svc.Get(ctx, anna, created.ID)
+		if err != nil || got.Icon != IconBakery {
+			t.Errorf("Get() = %+v, %v, want the stored icon %q", got, err, IconBakery)
+		}
+	})
+
+	t.Run("the database accepts every icon of the domain and nothing else", func(t *testing.T) {
+		anna := newTestUser(t, pool, "icons-anna")
+		groupID := newGroup(t, anna)
+		// The repository skips the service's checks on purpose, so this
+		// shows that Icons and the CHECK in the migration agree.
+		for _, icon := range Icons {
+			l, err := repo.Create(ctx, groupID, "Liste", icon)
+			if err != nil || l.Icon != icon {
+				t.Errorf("Create() with %q = %+v, %v", icon, l, err)
+			}
+		}
+		if _, err := repo.Create(ctx, groupID, "Liste", "spaceship"); err == nil {
+			t.Error("Create() with an unknown icon succeeded, want a CHECK violation")
 		}
 	})
 
 	t.Run("archive hides a list and keeps the first archive date", func(t *testing.T) {
 		anna := newTestUser(t, pool, "archive-anna")
 		groupID := newGroup(t, anna)
-		l, err := svc.Create(ctx, anna, groupID, "Supermarkt")
+		l, err := svc.Create(ctx, anna, groupID, "Supermarkt", "")
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
@@ -178,7 +204,7 @@ func TestPostgresRepository(t *testing.T) {
 		if err := groupRepo.AddMember(ctx, groupID, cleo, group.RoleAdmin); err != nil {
 			t.Fatalf("AddMember() error = %v", err)
 		}
-		l, err := svc.Create(ctx, ben, groupID, "Supermarkt")
+		l, err := svc.Create(ctx, ben, groupID, "Supermarkt", "")
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
@@ -212,7 +238,7 @@ func TestPostgresRepository(t *testing.T) {
 	t.Run("deleting the group takes the lists along", func(t *testing.T) {
 		anna := newTestUser(t, pool, "cascade-anna")
 		groupID := newGroup(t, anna)
-		l, err := svc.Create(ctx, anna, groupID, "Supermarkt")
+		l, err := svc.Create(ctx, anna, groupID, "Supermarkt", "")
 		if err != nil {
 			t.Fatalf("Create() error = %v", err)
 		}
@@ -228,10 +254,10 @@ func TestPostgresRepository(t *testing.T) {
 		anna := newTestUser(t, pool, "limit-anna")
 		groupID := newGroup(t, anna)
 		// The repository skips the service's checks on purpose.
-		if _, err := repo.Create(ctx, groupID, strings.Repeat("a", MaxNameLength+1)); err == nil {
+		if _, err := repo.Create(ctx, groupID, strings.Repeat("a", MaxNameLength+1), DefaultIcon); err == nil {
 			t.Error("Create() with a too long name succeeded, want a CHECK violation")
 		}
-		if _, err := repo.Create(ctx, groupID, ""); err == nil {
+		if _, err := repo.Create(ctx, groupID, "", DefaultIcon); err == nil {
 			t.Error("Create() with an empty name succeeded, want a CHECK violation")
 		}
 	})
@@ -241,8 +267,8 @@ func TestPostgresRepository(t *testing.T) {
 		if _, err := repo.Get(ctx, unknown); !errors.Is(err, ErrNotFound) {
 			t.Errorf("Get() error = %v, want %v", err, ErrNotFound)
 		}
-		if _, err := repo.Rename(ctx, unknown, "x"); !errors.Is(err, ErrNotFound) {
-			t.Errorf("Rename() error = %v, want %v", err, ErrNotFound)
+		if _, err := repo.Update(ctx, unknown, "x", DefaultIcon); !errors.Is(err, ErrNotFound) {
+			t.Errorf("Update() error = %v, want %v", err, ErrNotFound)
 		}
 		if _, err := repo.SetArchived(ctx, unknown, true); !errors.Is(err, ErrNotFound) {
 			t.Errorf("SetArchived() error = %v, want %v", err, ErrNotFound)

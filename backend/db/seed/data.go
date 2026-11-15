@@ -3,6 +3,7 @@ package seed
 import (
 	"mitbringsel/internal/group"
 	"mitbringsel/internal/item"
+	"mitbringsel/internal/list"
 )
 
 // The seed data is mixed German and English on purpose, with umlauts, long
@@ -42,7 +43,9 @@ type itemSpec struct {
 }
 
 type listSpec struct {
-	Name     string
+	Name string
+	// Icon is empty for the default, so the seed covers that path, too.
+	Icon     list.Icon
 	Archived bool
 	Items    []itemSpec
 }
@@ -68,9 +71,9 @@ var groupSpecs = []groupSpec{
 			{Email: emailBen, Role: group.RoleMember},
 		},
 		Lists: []listSpec{
-			{Name: "Supermarkt", Items: supermarktItems},
-			{Name: "Drogerie & Haushalt", Items: drogerieItems},
-			{Name: "Grillparty Sommer", Archived: true, Items: grillpartyItems},
+			{Name: "Supermarkt", Icon: list.IconSupermarket, Items: supermarktItems},
+			{Name: "Drogerie & Haushalt", Icon: list.IconDrugstore, Items: drogerieItems},
+			{Name: "Grillparty Sommer", Icon: list.IconButcher, Archived: true, Items: grillpartyItems},
 		},
 	},
 	{
@@ -82,7 +85,7 @@ var groupSpecs = []groupSpec{
 		},
 		Lists: []listSpec{
 			{Name: "Wocheneinkauf", Items: wocheneinkaufItems},
-			{Name: "Baumarkt / hardware store fürs Gartenhaus", Items: baumarktItems},
+			{Name: "Baumarkt / hardware store fürs Gartenhaus", Icon: list.IconHardware, Items: baumarktItems},
 		},
 	},
 }

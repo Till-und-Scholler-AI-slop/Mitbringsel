@@ -21,10 +21,10 @@ const (
 // ListService is everything the handlers need from lists.
 // *list.Service satisfies it; tests use a fake.
 type ListService interface {
-	Create(ctx context.Context, actor, groupID uuid.UUID, name string) (list.List, error)
+	Create(ctx context.Context, actor, groupID uuid.UUID, name string, icon list.Icon) (list.List, error)
 	ListForGroup(ctx context.Context, actor, groupID uuid.UUID, includeArchived bool) ([]list.List, error)
 	Get(ctx context.Context, actor, listID uuid.UUID) (list.List, error)
-	Rename(ctx context.Context, actor, listID uuid.UUID, name string) (list.List, error)
+	Update(ctx context.Context, actor, listID uuid.UUID, name string, icon list.Icon) (list.List, error)
 	Archive(ctx context.Context, actor, listID uuid.UUID) (list.List, error)
 	Unarchive(ctx context.Context, actor, listID uuid.UUID) (list.List, error)
 	Delete(ctx context.Context, actor, listID uuid.UUID) error
@@ -38,6 +38,7 @@ func newListResponse(l list.List) apigen.List {
 		ID:         l.ID,
 		GroupID:    l.GroupID,
 		Name:       l.Name,
+		Icon:       apigen.ListIcon(l.Icon),
 		ArchivedAt: utcPtr(l.ArchivedAt),
 		CreatedAt:  l.CreatedAt.UTC(),
 		UpdatedAt:  l.UpdatedAt.UTC(),
@@ -86,12 +87,12 @@ func createListHandler(lists ListService) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		var req apigen.ListNameRequest
+		var req apigen.ListRequest
 		if !decodeBody(w, r, &req) {
 			return
 		}
 
-		l, err := lists.Create(r.Context(), actor, groupID, req.Name)
+		l, err := lists.Create(r.Context(), actor, groupID, req.Name, iconFrom(req.Icon))
 		if err != nil {
 			writeListError(w, "create list", err)
 			return
@@ -122,14 +123,14 @@ func updateListHandler(lists ListService) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		var req apigen.ListNameRequest
+		var req apigen.ListRequest
 		if !decodeBody(w, r, &req) {
 			return
 		}
 
-		l, err := lists.Rename(r.Context(), actor, listID, req.Name)
+		l, err := lists.Update(r.Context(), actor, listID, req.Name, iconFrom(req.Icon))
 		if err != nil {
-			writeListError(w, "rename list", err)
+			writeListError(w, "update list", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, newListResponse(l))
@@ -187,6 +188,16 @@ func deleteListHandler(lists ListService) http.HandlerFunc {
 	}
 }
 
+// iconFrom turns the optional icon of a request into the domain value: a
+// missing icon is "", which the service reads as "default" or "keep".
+// Unknown values pass through unchanged; the service rejects them.
+func iconFrom(icon *apigen.ListIcon) list.Icon {
+	if icon == nil {
+		return ""
+	}
+	return list.Icon(*icon)
+}
+
 // actorAndListFrom returns the logged-in user and the list ID from the
 // path. On failure it has answered already and returns false.
 func actorAndListFrom(w http.ResponseWriter, r *http.Request) (actor, listID uuid.UUID, ok bool) {
@@ -211,6 +222,8 @@ func writeListError(w http.ResponseWriter, op string, err error) {
 		writeError(w, http.StatusForbidden, apigen.ErrorCodeForbidden)
 	case errors.Is(err, list.ErrInvalidName):
 		writeError(w, http.StatusBadRequest, apigen.ErrorCodeListNameInvalid)
+	case errors.Is(err, list.ErrInvalidIcon):
+		writeError(w, http.StatusBadRequest, apigen.ErrorCodeListIconInvalid)
 	default:
 		slog.Error("lists: "+op, "error", err)
 		writeError(w, http.StatusInternalServerError, apigen.ErrorCodeInternal)

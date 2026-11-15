@@ -27,6 +27,7 @@ const LIST: List = {
   id: 'l1',
   groupId: 'g1',
   name: 'Supermarkt',
+  icon: 'general',
   archivedAt: null,
   createdAt: '2026-01-01T10:00:00Z',
   updatedAt: '2026-01-01T10:00:00Z',

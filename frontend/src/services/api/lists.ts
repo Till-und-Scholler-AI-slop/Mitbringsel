@@ -1,4 +1,4 @@
-import type { List, ListListResponse, ListNameRequest, SetListArchivedRequest } from '@/types/api'
+import type { List, ListListResponse, ListRequest, SetListArchivedRequest } from '@/types/api'
 
 import { apiDelete, apiGet, apiPatchJson, apiPostJson, apiPutJson } from './client'
 
@@ -25,9 +25,8 @@ export const listsService: ListsService = {
     return (await apiGet<ListListResponse>(`${groupListsPath(groupId)}${query}`)).lists
   },
   create: (groupId, name) =>
-    apiPostJson<List>(groupListsPath(groupId), { name } satisfies ListNameRequest),
-  rename: (listId, name) =>
-    apiPatchJson<List>(listPath(listId), { name } satisfies ListNameRequest),
+    apiPostJson<List>(groupListsPath(groupId), { name } satisfies ListRequest),
+  rename: (listId, name) => apiPatchJson<List>(listPath(listId), { name } satisfies ListRequest),
   setArchived: (listId, archived) =>
     apiPutJson<List>(`${listPath(listId)}/archived`, { archived } satisfies SetListArchivedRequest),
   remove: (listId) => apiDelete(listPath(listId)),

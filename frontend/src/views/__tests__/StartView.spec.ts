@@ -46,6 +46,7 @@ function list(id: string, groupId: string, name: string, archivedAt: string | nu
     id,
     groupId,
     name,
+    icon: 'general',
     archivedAt,
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',

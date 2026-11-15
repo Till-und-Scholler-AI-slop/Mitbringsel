@@ -20,6 +20,7 @@ function list(id: string, name: string, groupId = 'g1', archivedAt: string | nul
     id,
     groupId,
     name,
+    icon: 'general',
     archivedAt,
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',
