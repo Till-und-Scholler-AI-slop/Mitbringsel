@@ -20,6 +20,11 @@ SELECT id FROM groups
 WHERE id = $1
 FOR UPDATE;
 
+-- name: CountOwnedGroups :one
+-- How many groups the user has created and still owns.
+SELECT count(*) FROM group_members
+WHERE user_id = $1 AND role = 'owner';
+
 -- name: GetGroupMemberRole :one
 SELECT role FROM group_members
 WHERE group_id = $1 AND user_id = $2;

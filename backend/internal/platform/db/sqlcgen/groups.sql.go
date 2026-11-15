@@ -28,6 +28,19 @@ func (q *Queries) AddGroupMember(ctx context.Context, arg AddGroupMemberParams) 
 	return err
 }
 
+const countOwnedGroups = `-- name: CountOwnedGroups :one
+SELECT count(*) FROM group_members
+WHERE user_id = $1 AND role = 'owner'
+`
+
+// How many groups the user has created and still owns.
+func (q *Queries) CountOwnedGroups(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countOwnedGroups, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createGroup = `-- name: CreateGroup :one
 INSERT INTO groups (name, created_by)
 VALUES ($1, $2)

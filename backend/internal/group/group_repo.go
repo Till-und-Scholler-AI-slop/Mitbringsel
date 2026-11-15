@@ -83,6 +83,11 @@ func (r *PostgresRepository) Delete(ctx context.Context, groupID uuid.UUID) erro
 	return notFoundIfNone(n, err)
 }
 
+func (r *PostgresRepository) CountOwned(ctx context.Context, userID uuid.UUID) (int, error) {
+	n, err := r.q.CountOwnedGroups(ctx, userID)
+	return int(n), err
+}
+
 func (r *PostgresRepository) ListForUser(ctx context.Context, userID uuid.UUID) ([]Membership, error) {
 	rows, err := r.q.ListGroupsForUser(ctx, userID)
 	if err != nil {

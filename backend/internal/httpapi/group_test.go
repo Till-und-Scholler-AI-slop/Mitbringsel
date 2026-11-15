@@ -285,6 +285,7 @@ func TestGroupErrors(t *testing.T) {
 		{"invalid name", fmt.Errorf("%w: name is empty", group.ErrInvalidName), http.StatusBadRequest, "GROUP_NAME_INVALID"},
 		{"invalid role", group.ErrInvalidRole, http.StatusBadRequest, "INVALID_ROLE"},
 		{"owner immutable", group.ErrOwnerImmutable, http.StatusConflict, "OWNER_IMMUTABLE"},
+		{"too many groups", group.ErrTooManyGroups, http.StatusConflict, "TOO_MANY_GROUPS"},
 		{"database failure", errors.New("connection refused"), http.StatusInternalServerError, "INTERNAL_ERROR"},
 	}
 	routes := []struct {
