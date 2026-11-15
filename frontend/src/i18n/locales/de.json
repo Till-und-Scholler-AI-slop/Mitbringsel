@@ -188,7 +188,7 @@
     "membersLabel": "Mitglieder: {names}",
     "chips": "Listen",
     "newList": "Neue Liste",
-    "chipHint": "Nochmal auswählen zum Umbenennen, Archivieren oder Löschen",
+    "chipHint": "Nochmal auswählen zum Bearbeiten, Archivieren oder Löschen",
     "archive": {
       "chip": "Archiv ({count})",
       "title": "Archivierte Listen",
@@ -272,19 +272,47 @@
     "deletedMeanwhile": "„{name}“ wurde gelöscht",
     "name": {
       "createTitle": "Neue Liste",
-      "renameTitle": "Liste umbenennen",
+      "renameTitle": "Liste bearbeiten",
       "label": "Name der Liste",
       "placeholder": "z. B. Wocheneinkauf",
       "cancel": "Abbrechen",
       "create": "Anlegen",
       "save": "Speichern"
     },
+    "icon": {
+      "label": "Symbol",
+      "groups": {
+        "food": "Lebensmittel",
+        "household": "Haushalt, Pflege & Heimwerken",
+        "other": "Sonstiges"
+      },
+      "names": {
+        "supermarket": "Supermarkt",
+        "market": "Wochenmarkt",
+        "bakery": "Bäckerei",
+        "butcher": "Metzgerei",
+        "drinks": "Getränke",
+        "organic": "Bioladen",
+        "drugstore": "Drogerie",
+        "pharmacy": "Apotheke",
+        "baby": "Baby",
+        "pets": "Tierbedarf",
+        "hardware": "Baumarkt",
+        "garden": "Gartencenter",
+        "furniture": "Möbelhaus",
+        "electronics": "Elektronik",
+        "stationery": "Schreibwaren",
+        "clothing": "Kleidung",
+        "online": "Online bestellen",
+        "general": "Allgemein"
+      }
+    },
     "actions": {
       "title": "Liste verwalten",
       "question": "Was soll mit „{name}“ passieren?",
       "rename": {
-        "title": "Umbenennen",
-        "description": "Gibt der Liste einen neuen Namen."
+        "title": "Bearbeiten",
+        "description": "Ändert Name und Symbol der Liste."
       },
       "archive": {
         "title": "Archivieren",

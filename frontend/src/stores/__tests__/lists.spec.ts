@@ -6,7 +6,7 @@ import { ref } from 'vue'
 import { ApiError } from '@/services/api/client'
 import type { ListsService } from '@/services/api/lists'
 import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
-import type { List, ServerMessage } from '@/types/api'
+import type { List, ListIcon, ServerMessage } from '@/types/api'
 
 import { defineListsStore } from '../lists'
 
@@ -43,11 +43,11 @@ function fakeService(
       ),
     ),
     // Created later than the lists above, so it sorts after them.
-    create: vi.fn((groupId: string, name: string) =>
-      Promise.resolve({ ...list('l-new', name, groupId), createdAt: CREATED_LATER }),
+    create: vi.fn((groupId: string, name: string, icon: ListIcon) =>
+      Promise.resolve({ ...list('l-new', name, groupId), icon, createdAt: CREATED_LATER }),
     ),
-    rename: vi.fn((id: string, name: string) =>
-      Promise.resolve({ ...(initial.find((l) => l.id === id) ?? list(id, name)), name }),
+    update: vi.fn((id: string, name: string, icon: ListIcon) =>
+      Promise.resolve({ ...(initial.find((l) => l.id === id) ?? list(id, name)), name, icon }),
     ),
     setArchived: vi.fn((id: string, archived: boolean) =>
       Promise.resolve({
@@ -267,10 +267,11 @@ describe('lists store: create', () => {
     const { store } = setup(service)
     await store.load('g1')
 
-    const created = await store.create('g1', 'Baumarkt')
+    const created = await store.create('g1', 'Baumarkt', 'hardware')
 
-    expect(service.create).toHaveBeenCalledWith('g1', 'Baumarkt')
+    expect(service.create).toHaveBeenCalledWith('g1', 'Baumarkt', 'hardware')
     expect(created.id).toBe('l-new')
+    expect(store.byId('l-new')?.icon).toBe('hardware')
     expect(names(store.activeLists('g1'))).toEqual(['Supermarkt', 'Baumarkt'])
   })
 
@@ -279,28 +280,35 @@ describe('lists store: create', () => {
     service.create.mockRejectedValueOnce(new ApiError('LIST_NAME_INVALID', 400))
     const { store } = setup(service)
 
-    await expect(store.create('g1', '')).rejects.toMatchObject({ code: 'LIST_NAME_INVALID' })
+    await expect(store.create('g1', '', 'general')).rejects.toMatchObject({
+      code: 'LIST_NAME_INVALID',
+    })
     expect(store.listsOf('g1')).toEqual([])
   })
 })
 
-describe('lists store: rename and archive', () => {
-  it('takes the renamed list from the answer of the server', async () => {
-    const { store } = setup(fakeService([list('l1', 'Supermarkt'), list('l2', 'Baumarkt')]))
-    await store.load('g1')
-
-    await store.rename('l2', 'Drogerie')
-
-    expect(names(store.listsOf('g1'))).toEqual(['Supermarkt', 'Drogerie'])
-  })
-
-  it('keeps the name when renaming fails', async () => {
-    const service = fakeService([list('l1', 'Supermarkt')])
-    service.rename.mockRejectedValueOnce(new ApiError('LIST_NAME_INVALID', 400))
+describe('lists store: update and archive', () => {
+  it('takes the changed list from the answer of the server', async () => {
+    const service = fakeService([list('l1', 'Supermarkt'), list('l2', 'Baumarkt')])
     const { store } = setup(service)
     await store.load('g1')
 
-    await expect(store.rename('l1', ' ')).rejects.toMatchObject({ code: 'LIST_NAME_INVALID' })
+    await store.update('l2', 'Drogerie', 'drugstore')
+
+    expect(service.update).toHaveBeenCalledWith('l2', 'Drogerie', 'drugstore')
+    expect(names(store.listsOf('g1'))).toEqual(['Supermarkt', 'Drogerie'])
+    expect(store.byId('l2')?.icon).toBe('drugstore')
+  })
+
+  it('keeps the name when updating fails', async () => {
+    const service = fakeService([list('l1', 'Supermarkt')])
+    service.update.mockRejectedValueOnce(new ApiError('LIST_NAME_INVALID', 400))
+    const { store } = setup(service)
+    await store.load('g1')
+
+    await expect(store.update('l1', ' ', 'general')).rejects.toMatchObject({
+      code: 'LIST_NAME_INVALID',
+    })
     expect(store.byId('l1')?.name).toBe('Supermarkt')
   })
 
@@ -438,7 +446,7 @@ describe('lists store: live events', () => {
     const { store, events } = setup(service)
     await store.load('g1')
 
-    const creating = store.create('g1', 'Baumarkt')
+    const creating = store.create('g1', 'Baumarkt', 'general')
     events.emit(changed(list('l-new', 'Baumarkt')))
     answer.resolve(list('l-new', 'Baumarkt'))
     await creating
@@ -450,7 +458,7 @@ describe('lists store: live events', () => {
     const { store, events } = setup(fakeService())
     await store.load('g1')
 
-    const created = await store.create('g1', 'Baumarkt')
+    const created = await store.create('g1', 'Baumarkt', 'general')
     events.emit(changed(created))
 
     expect(names(store.listsOf('g1'))).toEqual(['Baumarkt'])
@@ -460,11 +468,11 @@ describe('lists store: live events', () => {
     const base = list('l1', 'Supermarkt')
     const service = fakeService([base])
     const answer = deferred<List>()
-    service.rename.mockReturnValueOnce(answer.promise)
+    service.update.mockReturnValueOnce(answer.promise)
     const { store, events } = setup(service)
     await store.load('g1')
 
-    const renaming = store.rename('l1', 'Mein Name')
+    const renaming = store.update('l1', 'Mein Name', 'general')
     events.emit(changed(later(base, 3, { name: 'Name von Ben' })))
     answer.resolve(later(base, 2, { name: 'Mein Name' }))
     await renaming
@@ -646,7 +654,7 @@ describe('lists store: ready', () => {
   it('does not load a group that only got a list from a create', async () => {
     const service = fakeService()
     const { store, events } = setup(service)
-    await store.create('g1', 'Baumarkt')
+    await store.create('g1', 'Baumarkt', 'general')
 
     events.emit(READY)
 

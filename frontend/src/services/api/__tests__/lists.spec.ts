@@ -50,22 +50,26 @@ describe('listsService', () => {
   it('creates a list in a group', async () => {
     stubFetch(() => Response.json(list('l1', 'Baumarkt'), { status: 201 }))
 
-    await expect(listsService.create('g1', 'Baumarkt')).resolves.toEqual(list('l1', 'Baumarkt'))
+    await expect(listsService.create('g1', 'Baumarkt', 'hardware')).resolves.toEqual(
+      list('l1', 'Baumarkt'),
+    )
     expect(fetch).toHaveBeenCalledWith('/api/v1/groups/g1/lists', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: '{"name":"Baumarkt"}',
+      body: '{"name":"Baumarkt","icon":"hardware"}',
     })
   })
 
-  it('renames a list', async () => {
+  it('changes name and icon of a list', async () => {
     stubFetch(() => Response.json(list('l1', 'Drogerie')))
 
-    await expect(listsService.rename('l1', 'Drogerie')).resolves.toEqual(list('l1', 'Drogerie'))
+    await expect(listsService.update('l1', 'Drogerie', 'drugstore')).resolves.toEqual(
+      list('l1', 'Drogerie'),
+    )
     expect(fetch).toHaveBeenCalledWith('/api/v1/lists/l1', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: '{"name":"Drogerie"}',
+      body: '{"name":"Drogerie","icon":"drugstore"}',
     })
   })
 

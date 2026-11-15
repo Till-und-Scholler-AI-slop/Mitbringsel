@@ -13,7 +13,7 @@ import ListNameDialog from '../ListNameDialog.vue'
 const service = vi.hoisted(() => ({
   list: vi.fn<ListsService['list']>(),
   create: vi.fn<ListsService['create']>(),
-  rename: vi.fn<ListsService['rename']>(),
+  update: vi.fn<ListsService['update']>(),
   setArchived: vi.fn<ListsService['setArchived']>(),
   remove: vi.fn<ListsService['remove']>(),
 }))
@@ -65,6 +65,10 @@ async function mountDialog(list?: List) {
 const input = (wrapper: Awaited<ReturnType<typeof mountDialog>>) =>
   wrapper.get('input').element as HTMLInputElement
 
+/** The value of the checked icon radio. */
+const picked = (wrapper: Awaited<ReturnType<typeof mountDialog>>) =>
+  (wrapper.get('input[type="radio"]:checked').element as HTMLInputElement).value
+
 describe('ListNameDialog: new list', () => {
   it('starts empty and cannot be sent', async () => {
     const wrapper = await mountDialog()
@@ -83,8 +87,22 @@ describe('ListNameDialog: new list', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(service.create).toHaveBeenCalledWith('g1', 'Baumarkt')
+    expect(service.create).toHaveBeenCalledWith('g1', 'Baumarkt', 'general')
     expect(wrapper.props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('creates the list with the picked icon', async () => {
+    service.create.mockResolvedValue({ ...LIST, name: 'Baumarkt', icon: 'hardware' })
+    const wrapper = await mountDialog()
+
+    expect(picked(wrapper)).toBe('general')
+    await wrapper.get('input').setValue('Baumarkt')
+    await wrapper.get('input[value="hardware"]').setValue(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(service.create).toHaveBeenCalledWith('g1', 'Baumarkt', 'hardware')
     wrapper.unmount()
   })
 
@@ -114,50 +132,66 @@ describe('ListNameDialog: new list', () => {
   it('starts empty again when it is opened a second time', async () => {
     const wrapper = await mountDialog()
     await wrapper.get('input').setValue('Baumarkt')
+    await wrapper.get('input[value="hardware"]').setValue(true)
 
     await wrapper.setProps({ open: false })
     await wrapper.setProps({ open: true })
 
     expect(input(wrapper).value).toBe('')
+    expect(picked(wrapper)).toBe('general')
     wrapper.unmount()
   })
 })
 
-describe('ListNameDialog: rename', () => {
-  it('starts with the current name', async () => {
-    const wrapper = await mountDialog(LIST)
+describe('ListNameDialog: edit', () => {
+  it('starts with the current name and icon', async () => {
+    const wrapper = await mountDialog({ ...LIST, icon: 'bakery' })
 
-    expect(wrapper.get('h2').text()).toBe('Rename list')
+    expect(wrapper.get('h2').text()).toBe('Edit list')
     expect(input(wrapper).value).toBe('Supermarkt')
+    expect(picked(wrapper)).toBe('bakery')
     wrapper.unmount()
   })
 
   it('renames with the trimmed name and closes', async () => {
-    service.rename.mockResolvedValue({ ...LIST, name: 'Drogerie' })
+    service.update.mockResolvedValue({ ...LIST, name: 'Drogerie' })
     const wrapper = await mountDialog(LIST)
 
     await wrapper.get('input').setValue('  Drogerie  ')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(service.rename).toHaveBeenCalledWith('l1', 'Drogerie')
+    expect(service.update).toHaveBeenCalledWith('l1', 'Drogerie', 'general')
     expect(wrapper.props('open')).toBe(false)
     wrapper.unmount()
   })
 
-  it('sends nothing when the name did not change', async () => {
+  it('sends nothing when name and icon did not change', async () => {
     const wrapper = await mountDialog(LIST)
 
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(service.rename).not.toHaveBeenCalled()
+    expect(service.update).not.toHaveBeenCalled()
+    expect(wrapper.props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('saves a new icon even when the name stays', async () => {
+    service.update.mockResolvedValue({ ...LIST, icon: 'supermarket' })
+    const wrapper = await mountDialog(LIST)
+
+    await wrapper.get('input[value="supermarket"]').setValue(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(service.update).toHaveBeenCalledWith('l1', 'Supermarkt', 'supermarket')
     expect(wrapper.props('open')).toBe(false)
     wrapper.unmount()
   })
 
   it('shows the error of the server and keeps the dialog open', async () => {
-    service.rename.mockRejectedValue(new ApiError('LIST_NOT_FOUND', 404))
+    service.update.mockRejectedValue(new ApiError('LIST_NOT_FOUND', 404))
     const wrapper = await mountDialog(LIST)
 
     await wrapper.get('input').setValue('Drogerie')

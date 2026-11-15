@@ -12,7 +12,7 @@ import ListActionsDialog from '../ListActionsDialog.vue'
 const service = vi.hoisted(() => ({
   list: vi.fn<ListsService['list']>(),
   create: vi.fn<ListsService['create']>(),
-  rename: vi.fn<ListsService['rename']>(),
+  update: vi.fn<ListsService['update']>(),
   setArchived: vi.fn<ListsService['setArchived']>(),
   remove: vi.fn<ListsService['remove']>(),
 }))
@@ -73,24 +73,24 @@ describe('ListActionsDialog', () => {
     wrapper.unmount()
   })
 
-  it('offers rename, archive and delete for an active list', () => {
+  it('offers edit, archive and delete for an active list', () => {
     const wrapper = mountDialog(list())
 
-    expect(titles(wrapper)).toEqual(['Rename', 'Archive', 'Delete'])
+    expect(titles(wrapper)).toEqual(['Edit', 'Archive', 'Delete'])
     wrapper.unmount()
   })
 
   it('offers restore instead of archive for an archived list', () => {
     const wrapper = mountDialog(list('2026-02-01T10:00:00Z'))
 
-    expect(titles(wrapper)).toEqual(['Rename', 'Restore', 'Delete'])
+    expect(titles(wrapper)).toEqual(['Edit', 'Restore', 'Delete'])
     wrapper.unmount()
   })
 
   it('hides delete from members who may not delete', () => {
     const wrapper = mountDialog(list(), false)
 
-    expect(titles(wrapper)).toEqual(['Rename', 'Archive'])
+    expect(titles(wrapper)).toEqual(['Edit', 'Archive'])
     wrapper.unmount()
   })
 
@@ -100,7 +100,7 @@ describe('ListActionsDialog', () => {
     await wrapper.findAll('.action')[0]!.trigger('click')
 
     expect(wrapper.emitted('rename')).toHaveLength(1)
-    expect(service.rename).not.toHaveBeenCalled()
+    expect(service.update).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
@@ -158,7 +158,7 @@ describe('ListActionsDialog', () => {
     await wrapper.get('.back').trigger('click')
 
     expect(service.remove).not.toHaveBeenCalled()
-    expect(titles(wrapper)).toEqual(['Rename', 'Archive', 'Delete'])
+    expect(titles(wrapper)).toEqual(['Edit', 'Archive', 'Delete'])
     wrapper.unmount()
   })
 

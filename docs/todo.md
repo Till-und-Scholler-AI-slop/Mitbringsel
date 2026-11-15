@@ -25,7 +25,8 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 ## Artikel
 
-- [ ] **Listen-Icon auswählen:** Die Chips zeigen den Sticker der Liste (`BaseSticker`, Design `icons3-sticker`), wählen lässt er sich noch nicht. Im Dialog zum Anlegen und Umbenennen (`ListNameDialog`) ein Raster mit den drei Gruppen aus dem Design anbieten; `listsService.create`/`rename` senden das Icon noch nicht.
+- [ ] **Listen-Icon aus dem Namen vorschlagen:** Beim Anlegen ist „Allgemein“ vorgewählt. Falls das im Alltag nervt, im Dialog ein Icon aus dem Namen vorschlagen („Drogerie“ → `drugstore`), ohne das Wählen zu ersetzen.
+- [ ] **Gewählte Icon-Kachel im Dunkelmodus:** Die gewählte Kachel im `ListIconPicker` nutzt `--color-qty-bg`; im Dunkelmodus hebt sie sich nur schwach ab. Das Design zeigt die Auswahl nur hell; bei Bedarf eine eigene Farbe für den Dunkelmodus festlegen.
 - [ ] **Listen-Icons in Seitenleiste und auf den Startkarten:** Laut Design stehen die Sticker auch in der Desktop-Seitenleiste und auf den Karten der Startseite. Nach den Chips nachziehen.
 - [ ] **Desktop-Panel für Artikel:** Auf dem Desktop steht das Formular als Panel rechts neben der Liste, nicht als Dialog, und die bearbeitete Zeile zeigt „Wird bearbeitet“ (`markt2-desktop-*`). Nach dem Formular als eigener Schritt.
 - [ ] **Abgehakte entfernen übersteht kein Schließen des Tabs:** `useRemoveItems` sendet erst, wenn der Toast endet (etwa 5 Sekunden). Wird der Tab vorher geschlossen, bleibt alles auf dem Server, und die Artikel stehen beim nächsten Öffnen wieder da. Mit der Outbox in Phase 6 das Entfernen sofort in die Outbox legen und erst beim Senden die Zeit des Toasts abwarten, oder beim Verlassen der Seite (`pagehide`) sofort senden.
