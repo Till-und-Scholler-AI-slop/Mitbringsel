@@ -74,13 +74,15 @@ function goBack() {
 <template>
   <div class="settings">
     <header class="bar">
-      <div class="top">
-        <button type="button" class="back" :aria-label="t('settings.back')" @click="goBack">
-          <BaseIcon name="arrowLeft" :size="24" :stroke-width="2.75" />
-        </button>
-        <SyncStatus />
+      <div class="bar-inner">
+        <div class="top">
+          <button type="button" class="back" :aria-label="t('settings.back')" @click="goBack">
+            <BaseIcon name="arrowLeft" :size="24" :stroke-width="2.75" />
+          </button>
+          <SyncStatus />
+        </div>
+        <h1 class="title">{{ t('settings.title') }}</h1>
       </div>
-      <h1 class="title">{{ t('settings.title') }}</h1>
     </header>
 
     <main class="content">
@@ -106,50 +108,60 @@ function goBack() {
       </BaseEmptyState>
 
       <template v-else-if="group">
-        <SettingsCard :title="t('settings.name.title')">
-          <template #aside>
-            <button
-              v-if="isManager"
-              type="button"
-              class="rename"
-              aria-haspopup="dialog"
-              @click="renameOpen = true"
-            >
-              <BaseIcon name="pencil" :size="18" /> {{ t('settings.name.rename') }}
-            </button>
-          </template>
-          <div class="name-row">
-            <span class="name-icon" aria-hidden="true"><BaseIcon name="home" :size="22" /></span>
-            <p class="name">{{ group.name }}</p>
+        <!-- Two columns side by side on a wide screen (design
+             "verwalten-desktop-*"), one below the other on a phone. The
+             order in the DOM is the reading order in both. -->
+        <div class="columns">
+          <div class="column">
+            <SettingsCard class="name-card" :title="t('settings.name.title')">
+              <template #aside>
+                <button
+                  v-if="isManager"
+                  type="button"
+                  class="rename"
+                  aria-haspopup="dialog"
+                  @click="renameOpen = true"
+                >
+                  <BaseIcon name="pencil" :size="18" /> {{ t('settings.name.rename') }}
+                </button>
+              </template>
+              <div class="name-row">
+                <span class="name-icon" aria-hidden="true"
+                  ><BaseIcon name="home" :size="22"
+                /></span>
+                <p class="name">{{ group.name }}</p>
+              </div>
+            </SettingsCard>
+
+            <SettingsCard class="members-card" :title="t('settings.members.title')">
+              <template #aside>
+                <span
+                  class="count"
+                  role="img"
+                  :aria-label="t('settings.members.count', members.length)"
+                >
+                  {{ members.length }}
+                </span>
+              </template>
+              <ul class="members">
+                <MemberRow
+                  v-for="member in members"
+                  :key="member.userId"
+                  :member="member"
+                  :is-me="member.userId === auth.user?.id"
+                  :can-act="canAct(member.userId, member.role)"
+                  @act="selectedId = member.userId"
+                />
+              </ul>
+              <p class="explain">{{ t('settings.members.explain') }}</p>
+            </SettingsCard>
           </div>
-        </SettingsCard>
+          <div class="column">
+            <GroupInvitesSection v-if="isManager" :group="group" />
 
-        <SettingsCard class="members-card" :title="t('settings.members.title')">
-          <template #aside>
-            <span
-              class="count"
-              role="img"
-              :aria-label="t('settings.members.count', members.length)"
-            >
-              {{ members.length }}
-            </span>
-          </template>
-          <ul class="members">
-            <MemberRow
-              v-for="member in members"
-              :key="member.userId"
-              :member="member"
-              :is-me="member.userId === auth.user?.id"
-              :can-act="canAct(member.userId, member.role)"
-              @act="selectedId = member.userId"
-            />
-          </ul>
-          <p class="explain">{{ t('settings.members.explain') }}</p>
-        </SettingsCard>
-
-        <GroupInvitesSection v-if="isManager" :group="group" />
-
-        <GroupDangerSection :group="group" />
+            <GroupDangerSection :group="group" />
+          </div>
+        </div>
 
         <RenameGroupDialog v-model:open="renameOpen" :group="group" />
         <MemberActionsDialog
@@ -173,14 +185,20 @@ function goBack() {
 }
 
 .bar {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.625rem;
   padding: 0.625rem var(--space-4) 1.375rem;
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   background: var(--color-brand);
   color: var(--color-on-brand);
+}
+
+.bar-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.625rem;
+  width: 100%;
+  max-width: 68rem;
+  margin: 0 auto;
 }
 
 .top {
@@ -223,6 +241,17 @@ function goBack() {
   max-width: 40rem;
   margin: 0 auto;
   padding: 1.125rem var(--space-4) var(--space-8);
+}
+
+.columns,
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.column {
+  min-width: 0;
 }
 
 .loading {
@@ -336,5 +365,34 @@ function goBack() {
   font-size: 0.8125rem;
   font-weight: var(--font-weight-medium);
   line-height: 1.125rem;
+}
+
+/* Desktop (design "verwalten-desktop-*"): a roomier header and two columns.
+   Each column starts at 460 px and they share the rest; when two do not
+   fit (up to about 1030 px), the second wraps below the first. */
+@media (min-width: 48rem) {
+  .bar {
+    padding: var(--space-6) var(--space-12) 2.25rem;
+  }
+
+  .title {
+    font-size: 2.75rem;
+    line-height: 3.125rem;
+  }
+
+  .content {
+    max-width: 74rem;
+    padding: var(--space-8) var(--space-12) 3.5rem;
+  }
+
+  .columns {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .column {
+    flex: 1 1 28.75rem;
+  }
 }
 </style>

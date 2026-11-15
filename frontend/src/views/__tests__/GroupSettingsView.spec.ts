@@ -110,6 +110,19 @@ describe('GroupSettingsView', () => {
     wrapper.unmount()
   })
 
+  it('puts name and members in the first column, invites and danger zone in the second', async () => {
+    service.list.mockResolvedValue([group('owner')])
+
+    const { wrapper } = await mountView()
+
+    const [first, second] = wrapper.findAll('.columns > .column')
+    expect(first!.find('.name-card').exists()).toBe(true)
+    expect(first!.find('.members-card').exists()).toBe(true)
+    expect(second!.find('.invites').exists()).toBe(true)
+    expect(second!.find('.danger').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('shows a spinner while loading', async () => {
     service.list.mockReturnValue(new Promise(() => undefined))
 
