@@ -14,12 +14,13 @@ import (
 	"mitbringsel/internal/list"
 )
 
-// ListAccess is the door to a list: it returns the list if the user may see
-// it, and list.ErrNotFound otherwise (also for a user outside the group).
-// *list.Service satisfies it. Items use it so the membership rules live in
-// one place.
+// ListAccess is the door to the lists: it returns a list, or the lists of a
+// group, if the user may see them, and list.ErrNotFound otherwise (also for
+// a user outside the group). *list.Service satisfies it. Items use it so the
+// membership rules live in one place.
 type ListAccess interface {
 	Get(ctx context.Context, actor, listID uuid.UUID) (list.List, error)
+	ListForGroup(ctx context.Context, actor, groupID uuid.UUID, includeArchived bool) ([]list.List, error)
 }
 
 // Publisher tells the members of a group about an item change once it is
@@ -53,9 +54,9 @@ func (noPublisher) ItemsDeleted(context.Context, uuid.UUID, uuid.UUID, uuid.UUID
 // archived list: an offline device may still have changes from before the
 // list was archived (docs/sync.md).
 //
-// The methods take the clock of the change from the caller. The transport
-// decides where it comes from: the server issues it for REST, the device for
-// the WebSocket.
+// The methods take the clock of the change from the caller: the one of the
+// device that made it, or one the server issued for a request without a
+// clock (docs/sync.md).
 type Service struct {
 	repo  Repository
 	lists ListAccess
@@ -134,6 +135,32 @@ func (s *Service) ListForList(ctx context.Context, actor, listID uuid.UUID) ([]I
 		return nil, err
 	}
 	items, err := s.repo.ListForList(ctx, listID)
+	if err != nil {
+		return nil, fmt.Errorf("list items: %w", err)
+	}
+	return items, nil
+}
+
+// ListForGroup returns the items that are not deleted in the active lists
+// of a group, oldest first. Clients load them in one go to have them
+// offline (ADR 0006). Archived lists are left out; their items load with
+// ListForList when someone opens one.
+func (s *Service) ListForGroup(ctx context.Context, actor, groupID uuid.UUID) ([]Item, error) {
+	lists, err := s.lists.ListForGroup(ctx, actor, groupID, false)
+	if errors.Is(err, list.ErrNotFound) {
+		return nil, ErrGroupNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list lists: %w", err)
+	}
+	if len(lists) == 0 {
+		return nil, nil
+	}
+	ids := make([]uuid.UUID, len(lists))
+	for i, l := range lists {
+		ids[i] = l.ID
+	}
+	items, err := s.repo.ListForLists(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}

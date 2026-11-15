@@ -87,6 +87,18 @@ func (r *fakeRepo) ListForList(_ context.Context, listID uuid.UUID) ([]Item, err
 	return out, nil
 }
 
+func (r *fakeRepo) ListForLists(ctx context.Context, listIDs []uuid.UUID) ([]Item, error) {
+	var out []Item
+	for _, id := range listIDs {
+		items, err := r.ListForList(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, items...)
+	}
+	return out, nil
+}
+
 func (r *fakeRepo) Apply(_ context.Context, itemID uuid.UUID, u Update) (Item, error) {
 	it, err := r.Get(context.Background(), itemID)
 	if err != nil {
@@ -193,14 +205,35 @@ func (p *fakePublisher) ItemsDeleted(_ context.Context, groupID, listID, actor u
 	p.batches = append(p.batches, publishedBatch{groupID, listID, actor, tombstones})
 }
 
-// fakeLists says which users may see which lists.
-type fakeLists map[uuid.UUID]map[uuid.UUID]bool
+// fakeLists says which users may see which lists. Every list belongs to
+// fakeGroupID; a user who sees none of them is outside the group.
+type fakeLists struct {
+	access   map[uuid.UUID]map[uuid.UUID]bool
+	archived map[uuid.UUID]bool
+}
 
 func (l fakeLists) Get(_ context.Context, actor, listID uuid.UUID) (list.List, error) {
-	if !l[listID][actor] {
+	if !l.access[listID][actor] {
 		return list.List{}, list.ErrNotFound
 	}
 	return list.List{ID: listID, GroupID: fakeGroupID}, nil
+}
+
+func (l fakeLists) ListForGroup(_ context.Context, actor, groupID uuid.UUID, includeArchived bool) ([]list.List, error) {
+	var seen, out []list.List
+	for id, users := range l.access {
+		if !users[actor] || groupID != fakeGroupID {
+			continue
+		}
+		seen = append(seen, list.List{ID: id, GroupID: fakeGroupID})
+		if includeArchived || !l.archived[id] {
+			out = append(out, list.List{ID: id, GroupID: fakeGroupID})
+		}
+	}
+	if len(seen) == 0 {
+		return nil, list.ErrNotFound
+	}
+	return out, nil
 }
 
 // serverNow is the time of the server in the tests: an hour after the
@@ -211,6 +244,7 @@ var serverNow = at.Add(time.Hour)
 type fixture struct {
 	svc      *Service
 	repo     *fakeRepo
+	lists    fakeLists
 	pub      *fakePublisher
 	listID   uuid.UUID
 	otherID  uuid.UUID // a list the member cannot see
@@ -227,11 +261,14 @@ func newFixture() fixture {
 		member:   uuid.New(),
 		outsider: uuid.New(),
 	}
-	lists := fakeLists{
-		f.listID:  {f.member: true},
-		f.otherID: {f.outsider: true},
+	f.lists = fakeLists{
+		access: map[uuid.UUID]map[uuid.UUID]bool{
+			f.listID:  {f.member: true},
+			f.otherID: {f.outsider: true},
+		},
+		archived: map[uuid.UUID]bool{},
 	}
-	f.svc = NewService(f.repo, lists, f.pub)
+	f.svc = NewService(f.repo, f.lists, f.pub)
 	f.svc.now = func() time.Time { return serverNow }
 	return f
 }
@@ -987,7 +1024,7 @@ func TestService_RemoveChecked(t *testing.T) {
 
 func TestNewService_nilPublisher(t *testing.T) {
 	f := newFixture()
-	svc := NewService(f.repo, fakeLists{f.listID: {f.member: true}}, nil)
+	svc := NewService(f.repo, f.lists, nil)
 	ctx := context.Background()
 	id := uuid.New()
 
@@ -1051,6 +1088,88 @@ func TestService_ListAndGet(t *testing.T) {
 		}
 		if _, err := f.svc.Get(ctx, f.member, kept.ID); !errors.Is(err, errRepo) {
 			t.Errorf("Get() error = %v, want %v", err, errRepo)
+		}
+	})
+}
+
+func TestService_ListForGroup(t *testing.T) {
+	ctx := context.Background()
+
+	// createIn stores an item through the service in the given list.
+	createIn := func(t *testing.T, f fixture, listID uuid.UUID, name string) Item {
+		t.Helper()
+		it, err := f.svc.Create(ctx, f.member, listID, NewItem{ID: uuid.New(), Name: name}, f.clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		return it
+	}
+	ids := func(items []Item) map[uuid.UUID]bool {
+		out := map[uuid.UUID]bool{}
+		for _, it := range items {
+			out[it.ID] = true
+		}
+		return out
+	}
+
+	t.Run("returns the items of every active list, without tombstones", func(t *testing.T) {
+		f := newFixture()
+		second, archived := uuid.New(), uuid.New()
+		f.lists.access[second] = map[uuid.UUID]bool{f.member: true}
+		f.lists.access[archived] = map[uuid.UUID]bool{f.member: true}
+		milk := createIn(t, f, f.listID, "Milch")
+		nails := createIn(t, f, second, "Nägel")
+		createIn(t, f, archived, "Kerzen")
+		gone := createIn(t, f, f.listID, "Mehl")
+		if _, err := f.svc.Delete(ctx, f.member, gone.ID); err != nil {
+			t.Fatal(err)
+		}
+		f.lists.archived[archived] = true
+
+		items, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID)
+
+		if err != nil {
+			t.Fatalf("ListForGroup() error = %v", err)
+		}
+		if got := ids(items); len(got) != 2 || !got[milk.ID] || !got[nails.ID] {
+			t.Errorf("ListForGroup() = %+v, want Milch and Nägel", items)
+		}
+	})
+
+	t.Run("a group without active lists has no items", func(t *testing.T) {
+		f := newFixture()
+		createIn(t, f, f.listID, "Milch")
+		f.lists.archived[f.listID] = true
+
+		items, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID)
+
+		if err != nil || len(items) != 0 {
+			t.Errorf("ListForGroup() = %+v, %v, want no items", items, err)
+		}
+	})
+
+	t.Run("a user outside the group gets not found", func(t *testing.T) {
+		f := newFixture()
+
+		if _, err := f.svc.ListForGroup(ctx, uuid.New(), fakeGroupID); !errors.Is(err, ErrGroupNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrGroupNotFound)
+		}
+	})
+
+	t.Run("an unknown group is not found", func(t *testing.T) {
+		f := newFixture()
+
+		if _, err := f.svc.ListForGroup(ctx, f.member, uuid.New()); !errors.Is(err, ErrGroupNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrGroupNotFound)
+		}
+	})
+
+	t.Run("repository failure is passed on", func(t *testing.T) {
+		f := newFixture()
+		f.repo.fail = true
+
+		if _, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID); !errors.Is(err, errRepo) {
+			t.Errorf("ListForGroup() error = %v, want %v", err, errRepo)
 		}
 	})
 }

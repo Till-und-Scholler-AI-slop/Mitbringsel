@@ -26,6 +26,14 @@ WHERE list_id = $1
   AND deleted_at IS NULL
 ORDER BY created_at, id;
 
+-- name: ListItemsForLists :many
+-- The same for several lists at once: the active lists of a group, which a
+-- client loads in one go to have them offline.
+SELECT * FROM items
+WHERE list_id = ANY(sqlc.arg(list_ids)::uuid[])
+  AND deleted_at IS NULL
+ORDER BY created_at, id;
+
 -- name: ApplyItemUpdate :one
 -- Writes only the fields that won the merge: a set_* flag says whether the
 -- field is part of the update, so "leave as is" and "set to NULL" differ.

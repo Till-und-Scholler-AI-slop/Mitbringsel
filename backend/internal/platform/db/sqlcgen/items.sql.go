@@ -237,6 +237,50 @@ func (q *Queries) ListItemsForList(ctx context.Context, listID uuid.UUID) ([]Ite
 	return items, nil
 }
 
+const listItemsForLists = `-- name: ListItemsForLists :many
+SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq FROM items
+WHERE list_id = ANY($1::uuid[])
+  AND deleted_at IS NULL
+ORDER BY created_at, id
+`
+
+// The same for several lists at once: the active lists of a group, which a
+// client loads in one go to have them offline.
+func (q *Queries) ListItemsForLists(ctx context.Context, listIds []uuid.UUID) ([]Item, error) {
+	rows, err := q.db.Query(ctx, listItemsForLists, listIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Item
+	for rows.Next() {
+		var i Item
+		if err := rows.Scan(
+			&i.ID,
+			&i.ListID,
+			&i.Name,
+			&i.Quantity,
+			&i.Unit,
+			&i.Note,
+			&i.Checked,
+			&i.CheckedBy,
+			&i.CheckedAt,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.DeletedAt,
+			&i.FieldClocks,
+			&i.ServerSeq,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markCheckedItemsDeleted = `-- name: MarkCheckedItemsDeleted :many
 WITH target AS (
     SELECT i.id FROM items i

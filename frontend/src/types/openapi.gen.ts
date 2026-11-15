@@ -319,6 +319,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/groups/{groupId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the items of all active lists of a group
+         * @description The items of every list of the group that is not archived, in one
+         *     response, so a client can have them offline (docs/sync.md). Oldest
+         *     first; deleted items are left out. Items of archived lists load with
+         *     `listItems`. A group the user is not a member of looks like a group
+         *     that does not exist (`GROUP_NOT_FOUND`).
+         */
+        get: operations["listGroupItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/lists/{listId}": {
         parameters: {
             query?: never;
@@ -1563,6 +1589,32 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    listGroupItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: components["parameters"]["GroupId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The items of the active lists of the group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemList"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             500: components["responses"]["Error"];
         };
     };

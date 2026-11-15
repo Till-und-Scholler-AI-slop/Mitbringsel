@@ -122,6 +122,7 @@ func newRouter(deps Deps, ws wsConfig) http.Handler {
 	r.handle(http.MethodPatch, listPath, protect(updateListHandler(deps.Lists)))
 	r.handle(http.MethodDelete, listPath, protect(deleteListHandler(deps.Lists)))
 	r.handle(http.MethodPut, listArchivedPath, protect(setListArchivedHandler(deps.Lists)))
+	r.handle(http.MethodGet, groupItemsPath, protect(groupItemsHandler(deps.Items)))
 	r.handle(http.MethodGet, listItemsPath, protect(listItemsHandler(deps.Items)))
 	r.handle(http.MethodPost, listItemsPath, protect(createItemHandler(deps.Items, deps.ItemClock)))
 	r.handle(http.MethodPost, removeCheckedPath, protect(removeCheckedItemsHandler(deps.Items)))

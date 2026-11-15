@@ -95,6 +95,14 @@ func (r *PostgresRepository) ListForList(ctx context.Context, listID uuid.UUID) 
 	return fromRows(rows)
 }
 
+func (r *PostgresRepository) ListForLists(ctx context.Context, listIDs []uuid.UUID) ([]Item, error) {
+	rows, err := r.q.ListItemsForLists(ctx, listIDs)
+	if err != nil {
+		return nil, err
+	}
+	return fromRows(rows)
+}
+
 func (r *PostgresRepository) Apply(ctx context.Context, itemID uuid.UUID, u Update) (Item, error) {
 	clocks, err := json.Marshal(u.Clocks)
 	if err != nil {
