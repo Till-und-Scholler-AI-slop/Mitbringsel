@@ -461,6 +461,13 @@ func (e Unit) Valid() bool {
 
 // CreateItemRequest defines model for CreateItemRequest.
 type CreateItemRequest struct {
+	// Clock Optional. The hybrid logical clock (HLC) of the change,
+	// `<wall>-<counter>-<node>` (docs/sync.md), from the device that
+	// made it. Without it the server stamps the change itself. A clock
+	// more than 5 minutes ahead of the server is set to the server
+	// time. Otherwise `INVALID_REQUEST`.
+	Clock *string `json:"clock,omitempty"`
+
 	// ID Optional. A UUID chosen by the client (UUIDv7); the server picks
 	// one if it is left out.
 	ID *uuid.UUID `json:"id,omitempty"`
@@ -927,11 +934,18 @@ type Theme string
 // Unit How a quantity is measured; the frontend translates it.
 type Unit string
 
-// UpdateItemRequest At least one field. `quantity`, `unit` and `note` accept `null` to
-// remove the value; for `name` and `checked`, `null` is an invalid
-// request.
+// UpdateItemRequest At least one field besides `clock`. `quantity`, `unit` and `note`
+// accept `null` to remove the value; for `name` and `checked`, `null`
+// is an invalid request.
 type UpdateItemRequest struct {
-	Checked  *bool    `json:"checked,omitempty"`
+	Checked *bool `json:"checked,omitempty"`
+
+	// Clock Optional. The hybrid logical clock (HLC) of the change,
+	// `<wall>-<counter>-<node>` (docs/sync.md), from the device that
+	// made it. Without it the server stamps the change itself. A clock
+	// more than 5 minutes ahead of the server is set to the server
+	// time. Otherwise `INVALID_REQUEST`.
+	Clock    *string  `json:"clock,omitempty"`
 	Name     *string  `json:"name,omitempty"`
 	Note     *string  `json:"note,omitempty"`
 	Quantity *float64 `json:"quantity,omitempty"`

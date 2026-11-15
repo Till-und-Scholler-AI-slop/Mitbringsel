@@ -35,10 +35,25 @@ type ItemService interface {
 	RemoveChecked(ctx context.Context, actor, listID uuid.UUID, itemIDs []uuid.UUID) ([]item.Item, error)
 }
 
-// ItemClock issues the clocks for changes made over REST.
-// *item.Clock satisfies it; tests use a fake.
+// ItemClock issues the clocks for changes made over REST that bring no
+// clock of their own. *item.Clock satisfies it; tests use a fake.
 type ItemClock interface {
 	Next() item.HLC
+}
+
+// clockFor returns the clock a change is stamped with: the one the client
+// sent, or a new one from the server if it sent none (older clients). It
+// returns false if the sent clock is not a valid HLC. A clock too far ahead
+// is limited later by item.Merge, not here.
+func clockFor(sent *string, clock ItemClock) (item.HLC, bool) {
+	if sent == nil {
+		return clock.Next(), true
+	}
+	hlc, err := item.ParseHLC(*sent)
+	if err != nil {
+		return "", false
+	}
+	return hlc, true
 }
 
 // newItemResponse translates the domain item into the Item schema of the API
@@ -124,7 +139,13 @@ func createItemHandler(items ItemService, clock ItemClock) http.HandlerFunc {
 			n.Unit = &u
 		}
 
-		created, err := items.Create(r.Context(), actor, listID, n, clock.Next())
+		stamp, valid := clockFor(req.Clock, clock)
+		if !valid {
+			writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidRequest)
+			return
+		}
+
+		created, err := items.Create(r.Context(), actor, listID, n, stamp)
 		if err != nil {
 			writeItemError(w, "create item", err)
 			return
@@ -192,6 +213,8 @@ type updateItemRequest struct {
 	Unit     optionalField[string]  `json:"unit"`
 	Note     optionalField[string]  `json:"note"`
 	Checked  optionalField[bool]    `json:"checked"`
+	// Clock is a pointer: nil if the client sent none (or null).
+	Clock *string `json:"clock"`
 }
 
 // change translates the body into a domain change. It returns false if a
@@ -242,8 +265,13 @@ func updateItemHandler(items ItemService, clock ItemClock) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidRequest)
 			return
 		}
+		stamp, valid := clockFor(req.Clock, clock)
+		if !valid {
+			writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidRequest)
+			return
+		}
 
-		it, err := items.Update(r.Context(), actor, itemID, change, clock.Next())
+		it, err := items.Update(r.Context(), actor, itemID, change, stamp)
 		if err != nil {
 			writeItemError(w, "update item", err)
 			return
