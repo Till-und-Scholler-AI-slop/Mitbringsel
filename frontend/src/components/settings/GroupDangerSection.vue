@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -10,6 +10,7 @@ import SettingsCard from '@/components/settings/SettingsCard.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { useGroupsStore } from '@/stores/groups'
+import { useListsStore } from '@/stores/lists'
 import type { Group } from '@/types/api'
 
 const props = defineProps<{ group: Group }>()
@@ -17,10 +18,36 @@ const props = defineProps<{ group: Group }>()
 const { t } = useI18n()
 const router = useRouter()
 const groups = useGroupsStore()
+const lists = useListsStore()
 
 // The founder cannot leave (OWNER_IMMUTABLE), only delete; everybody else
 // can only leave.
 const kind = computed(() => (props.group.role === 'owner' ? 'delete' : 'leave'))
+
+// Deleting names what goes with it, like the design: "with all 3 lists …
+// for all 6 members". Archived lists count, they go too. The lists are
+// usually loaded already (start page, list view); opened directly, this
+// loads them. Until they are there, the text just leaves the numbers out.
+onMounted(() => {
+  if (kind.value === 'delete' && lists.statusOf(props.group.id) === 'idle') {
+    lists.load(props.group.id)
+  }
+})
+
+const message = computed(() => {
+  const name = props.group.name
+  if (kind.value === 'leave') return t('settings.danger.leave.body', { name })
+  if (lists.statusOf(props.group.id) !== 'ready') {
+    return t('settings.danger.delete.body', { name })
+  }
+  const listCount = lists.listsOf(props.group.id).length
+  const memberCount = props.group.members.length
+  return t('settings.danger.delete.bodyCounted', {
+    name,
+    lists: t('settings.danger.delete.lists', listCount),
+    members: t('settings.danger.delete.members', memberCount),
+  })
+})
 
 const confirmOpen = ref(false)
 const busy = ref(false)
@@ -62,7 +89,7 @@ async function confirm() {
     <ConfirmDialog
       v-model:open="confirmOpen"
       :title="t(`settings.danger.${kind}.dialogTitle`, { name: group.name })"
-      :message="t(`settings.danger.${kind}.body`, { name: group.name })"
+      :message="message"
       :confirm-label="t(`settings.danger.${kind}.confirm`)"
       :cancel-label="t('settings.danger.cancel')"
       :loading="busy"

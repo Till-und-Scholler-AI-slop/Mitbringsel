@@ -7,6 +7,7 @@ import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
 import type { GroupInvitesService } from '@/services/api/groupInvites'
 import type { GroupsService } from '@/services/api/groups'
+import type { ListsService } from '@/services/api/lists'
 import { useAuthStore } from '@/stores/auth'
 import type { Group, GroupMember, Role } from '@/types/api'
 
@@ -26,6 +27,20 @@ const invitesService = vi.hoisted(() => ({
   create: vi.fn<GroupInvitesService['create']>(),
   revoke: vi.fn<GroupInvitesService['revoke']>(),
 }))
+
+// The danger zone counts the lists of the household it would delete.
+const listsService = vi.hoisted(() => ({
+  list: vi.fn<ListsService['list']>(),
+  create: vi.fn<ListsService['create']>(),
+  update: vi.fn<ListsService['update']>(),
+  setArchived: vi.fn<ListsService['setArchived']>(),
+  remove: vi.fn<ListsService['remove']>(),
+}))
+
+vi.mock('@/stores/lists', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/stores/lists')>()
+  return { ...original, useListsStore: original.defineListsStore(listsService, () => 'user-1') }
+})
 
 vi.mock('@/stores/groupInvites', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/groupInvites')>()
@@ -61,6 +76,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   invitesService.list.mockResolvedValue([])
+  listsService.list.mockResolvedValue([])
   useAuthStore().user = {
     id: 'user-1',
     email: 'jonas@example.com',

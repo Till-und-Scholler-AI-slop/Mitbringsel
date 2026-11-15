@@ -6,7 +6,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
 import type { GroupsService } from '@/services/api/groups'
-import type { Group, Role } from '@/types/api'
+import type { ListsService } from '@/services/api/lists'
+import type { Group, GroupMember, List, Role } from '@/types/api'
 
 import GroupDangerSection from '../GroupDangerSection.vue'
 
@@ -20,17 +21,47 @@ const service = vi.hoisted(() => ({
   setMemberRole: vi.fn<GroupsService['setMemberRole']>(),
 }))
 
+const listsService = vi.hoisted(() => ({
+  list: vi.fn<ListsService['list']>(),
+  create: vi.fn<ListsService['create']>(),
+  update: vi.fn<ListsService['update']>(),
+  setArchived: vi.fn<ListsService['setArchived']>(),
+  remove: vi.fn<ListsService['remove']>(),
+}))
+
+vi.mock('@/stores/lists', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/stores/lists')>()
+  return { ...original, useListsStore: original.defineListsStore(listsService, () => 'user-1') }
+})
+
 vi.mock('@/stores/groups', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/groups')>()
   return { ...original, useGroupsStore: original.defineGroupsStore(service, () => 'user-1') }
 })
 
-function group(role: Role): Group {
+function member(userId: string): GroupMember {
+  return { userId, displayName: userId, avatarUrl: null, role: 'member', joinedAt: '' }
+}
+
+function list(id: string, archived = false): List {
+  return {
+    id,
+    groupId: 'g1',
+    name: id,
+    icon: 'general',
+    archivedAt: archived ? '2026-01-02T10:00:00Z' : null,
+    createdAt: '2026-01-01T10:00:00Z',
+    updatedAt: '2026-01-01T10:00:00Z',
+    serverSeq: 1,
+  }
+}
+
+function group(role: Role, memberCount = 2): Group {
   return {
     id: 'g1',
     name: 'WG Kaiserstraße',
     role,
-    members: [],
+    members: Array.from({ length: memberCount }, (_, i) => member(`user-${i + 1}`)),
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',
   }
@@ -40,6 +71,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   service.remove.mockResolvedValue(undefined)
+  listsService.list.mockResolvedValue([])
   service.removeMember.mockResolvedValue(undefined)
   // jsdom has no modal <dialog>.
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
@@ -51,7 +83,7 @@ beforeEach(() => {
   }
 })
 
-async function mountSection(role: Role) {
+async function mountSection(role: Role, memberCount = 2) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -61,7 +93,7 @@ async function mountSection(role: Role) {
   })
   await router.push('/settings')
   const wrapper = mount(GroupDangerSection, {
-    props: { group: group(role) },
+    props: { group: group(role, memberCount) },
     global: { plugins: [createAppI18n(['en'], null), router] },
     attachTo: document.body,
   })
@@ -82,6 +114,59 @@ describe('GroupDangerSection', () => {
 
     expect(wrapper.get('h2').text()).toBe('Leave household')
     expect(wrapper.get('button.open').text()).toBe('Leave')
+    wrapper.unmount()
+  })
+
+  it('names how many lists and members go with the household, archived lists included', async () => {
+    listsService.list.mockResolvedValue([list('l1'), list('l2'), list('l3', true)])
+    const { wrapper } = await mountSection('owner', 6)
+    await flushPromises()
+
+    await wrapper.get('button.open').trigger('click')
+
+    expect(listsService.list).toHaveBeenCalledWith('g1', { includeArchived: true })
+    expect(wrapper.get('.message').text()).toBe(
+      '“WG Kaiserstraße” is deleted with all 3 lists and all items for all 6 members. This cannot be undone.',
+    )
+    wrapper.unmount()
+  })
+
+  it.each([
+    [0, 1, '“WG Kaiserstraße” is deleted without lists for you. This cannot be undone.'],
+    [
+      1,
+      2,
+      '“WG Kaiserstraße” is deleted with its list and all items for all 2 members. This cannot be undone.',
+    ],
+  ])('words %i lists and %i members', async (listCount, memberCount, text) => {
+    listsService.list.mockResolvedValue(Array.from({ length: listCount }, (_, i) => list(`l${i}`)))
+    const { wrapper } = await mountSection('owner', memberCount)
+    await flushPromises()
+
+    await wrapper.get('button.open').trigger('click')
+
+    expect(wrapper.get('.message').text()).toBe(text)
+    wrapper.unmount()
+  })
+
+  it('leaves the numbers out while the lists are not there', async () => {
+    listsService.list.mockRejectedValue(new ApiError('NETWORK'))
+    const { wrapper } = await mountSection('owner')
+    await flushPromises()
+
+    await wrapper.get('button.open').trigger('click')
+
+    expect(wrapper.get('.message').text()).toBe(
+      '“WG Kaiserstraße” is deleted with all lists and items for all members. This cannot be undone.',
+    )
+    wrapper.unmount()
+  })
+
+  it('does not load the lists for someone who can only leave', async () => {
+    const { wrapper } = await mountSection('member')
+    await flushPromises()
+
+    expect(listsService.list).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

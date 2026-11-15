@@ -403,6 +403,9 @@
         "open": "Delete household",
         "dialogTitle": "Delete household?",
         "body": "“{name}” is deleted with all lists and items for all members. This cannot be undone.",
+        "bodyCounted": "“{name}” is deleted {lists} for {members}. This cannot be undone.",
+        "lists": "without lists | with its list and all items | with all {count} lists and all items",
+        "members": "you | all {count} members",
         "confirm": "Delete for good"
       },
       "cancel": "Cancel"

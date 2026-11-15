@@ -403,6 +403,9 @@
         "open": "Haushalt löschen",
         "dialogTitle": "Haushalt löschen?",
         "body": "„{name}“ wird mit allen Listen und Artikeln für alle Mitglieder gelöscht. Das lässt sich nicht rückgängig machen.",
+        "bodyCounted": "„{name}“ wird {lists} für {members} gelöscht. Das lässt sich nicht rückgängig machen.",
+        "lists": "ohne Listen | mit seiner Liste und allen Artikeln | mit allen {count} Listen und allen Artikeln",
+        "members": "dich | alle {count} Mitglieder",
         "confirm": "Endgültig löschen"
       },
       "cancel": "Abbrechen"
