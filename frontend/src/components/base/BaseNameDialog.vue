@@ -120,7 +120,11 @@ async function submit() {
       />
       <slot />
       <div class="actions">
-        <BaseButton variant="secondary" class="cancel" @click="open = false">
+        <!-- mousedown.prevent: pressing "Cancel" must not take the focus from
+             the field. Otherwise the field is left (maybe empty), the error
+             appears, pushes the button down under the pointer, and the
+             click is lost. -->
+        <BaseButton variant="secondary" class="cancel" @mousedown.prevent @click="open = false">
           {{ cancelLabel }}
         </BaseButton>
         <BaseButton type="submit" class="submit" :loading="submitting" :disabled="problem !== null">

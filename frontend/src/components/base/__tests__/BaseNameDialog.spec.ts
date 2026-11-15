@@ -160,6 +160,21 @@ describe('BaseNameDialog', () => {
     wrapper.unmount()
   })
 
+  it('keeps the focus in the field while Cancel is pressed', async () => {
+    const { wrapper } = mountDialog({ initialName: 'Old' })
+    await wrapper.get('input').setValue('')
+
+    // Pressing Cancel would otherwise blur the field, show the error and
+    // push the button away before the click is complete.
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    wrapper.get('button.cancel').element.dispatchEvent(press)
+    expect(press.defaultPrevented).toBe(true)
+
+    await wrapper.get('button.cancel').trigger('click')
+    expect(wrapper.props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
   it('forgets a field left empty when reopened', async () => {
     const { wrapper } = mountDialog()
 
