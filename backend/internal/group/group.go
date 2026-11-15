@@ -36,6 +36,11 @@ func (r Role) assignable() bool {
 // "Kaiserstraße" counts 12). The database checks the same limit.
 const MaxNameLength = 30
 
+// MaxOwnedGroups caps the groups one user can create (and still own), so
+// nobody can fill the table by creating groups in a loop. Groups the user
+// joined by invite do not count: joining needs a link from someone else.
+const MaxOwnedGroups = 10
+
 var (
 	// ErrNotFound means the group does not exist or the user is not a
 	// member. Both look the same to the caller, so nobody can find out
@@ -52,6 +57,8 @@ var (
 	// role: the owner can neither leave nor be demoted. Deleting the group
 	// is the way out.
 	ErrOwnerImmutable = errors.New("the owner cannot leave or change role")
+	// ErrTooManyGroups means the user already owns MaxOwnedGroups groups.
+	ErrTooManyGroups = errors.New("too many groups")
 )
 
 // Group is a stored group.
@@ -105,6 +112,8 @@ type Repository interface {
 
 	// ListForUser returns the groups the user is a member of.
 	ListForUser(ctx context.Context, userID uuid.UUID) ([]Membership, error)
+	// CountOwned returns how many groups the user owns.
+	CountOwned(ctx context.Context, userID uuid.UUID) (int, error)
 	// Members returns the members of the given groups, keyed by group ID.
 	Members(ctx context.Context, groupIDs []uuid.UUID) (map[uuid.UUID][]Member, error)
 	MemberRole(ctx context.Context, groupID, userID uuid.UUID) (Role, error)

@@ -122,6 +122,20 @@ describe('CreateGroupDialog', () => {
     wrapper.unmount()
   })
 
+  it('says when the user has created too many households', async () => {
+    service.create.mockRejectedValue(new ApiError('TOO_MANY_GROUPS', 409))
+    const wrapper = await mountDialog()
+
+    await wrapper.get('input').setValue('WG')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[role="alert"]').text()).toContain(
+      'You have already created 10 households. Delete one to create a new one.',
+    )
+    wrapper.unmount()
+  })
+
   it('starts empty every time it is opened', async () => {
     const wrapper = await mountDialog()
     await wrapper.get('input').setValue('Draft')

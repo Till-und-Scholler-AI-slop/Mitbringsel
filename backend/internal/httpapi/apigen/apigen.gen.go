@@ -35,6 +35,7 @@ const (
 	ErrorCodeNotFound            ErrorCode = "NOT_FOUND"
 	ErrorCodeOwnerImmutable      ErrorCode = "OWNER_IMMUTABLE"
 	ErrorCodeRateLimited         ErrorCode = "RATE_LIMITED"
+	ErrorCodeTooManyGroups       ErrorCode = "TOO_MANY_GROUPS"
 	ErrorCodeTooManyInvites      ErrorCode = "TOO_MANY_INVITES"
 	ErrorCodeUnauthenticated     ErrorCode = "UNAUTHENTICATED"
 )
@@ -89,6 +90,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeOwnerImmutable:
 		return true
 	case ErrorCodeRateLimited:
+		return true
+	case ErrorCodeTooManyGroups:
 		return true
 	case ErrorCodeTooManyInvites:
 		return true

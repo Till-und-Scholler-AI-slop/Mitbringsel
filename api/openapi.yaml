@@ -194,7 +194,9 @@ paths:
     post:
       operationId: createGroup
       summary: Create a group
-      description: The logged-in user becomes its owner.
+      description: |
+        The logged-in user becomes its owner. A user can own 10 groups at
+        once (`TOO_MANY_GROUPS`); groups joined by invite do not count.
       tags: [groups]
       security:
         - sessionCookie: []
@@ -214,6 +216,8 @@ paths:
         "400":
           $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
         "500":
           $ref: "#/components/responses/Error"
@@ -1568,6 +1572,7 @@ components:
         - GROUP_NAME_INVALID
         - INVALID_ROLE
         - OWNER_IMMUTABLE
+        - TOO_MANY_GROUPS
         - INVITE_NOT_FOUND
         - INVITE_EXPIRED
         - TOO_MANY_INVITES
@@ -1597,6 +1602,7 @@ components:
         - GroupNameInvalid
         - InvalidRole
         - OwnerImmutable
+        - TooManyGroups
         - InviteNotFound
         - InviteExpired
         - TooManyInvites

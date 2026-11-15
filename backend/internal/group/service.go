@@ -66,6 +66,17 @@ func (s *Service) Create(ctx context.Context, actor uuid.UUID, name string) (Det
 		return Details{}, err
 	}
 
+	// Two requests at the same moment can both pass this check and exceed
+	// the limit by one. The limit only keeps the table small, so that is
+	// not worth a lock (like MaxActiveInvites).
+	owned, err := s.repo.CountOwned(ctx, actor)
+	if err != nil {
+		return Details{}, fmt.Errorf("count owned groups: %w", err)
+	}
+	if owned >= MaxOwnedGroups {
+		return Details{}, ErrTooManyGroups
+	}
+
 	var groupID uuid.UUID
 	// One transaction: a group without its owner must never be stored.
 	err = s.repo.InTx(ctx, func(tx Repository) error {

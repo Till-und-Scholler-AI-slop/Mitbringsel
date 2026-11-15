@@ -165,6 +165,7 @@
     "NETWORK": "Der Server ist nicht erreichbar.",
     "NOT_FOUND": "Das gibt es nicht (mehr).",
     "OWNER_IMMUTABLE": "Die Gründer:in kann weder austreten noch die Rolle wechseln. Lösche stattdessen den Haushalt.",
+    "TOO_MANY_GROUPS": "Du hast schon 10 Haushalte gegründet. Lösche einen, um einen neuen zu gründen.",
     "RATE_LIMITED": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
     "TOO_MANY_INVITES": "Es sind schon zu viele Einladungslinks offen. Ziehe einen zurück, um einen neuen zu erstellen.",
     "UNAUTHENTICATED": "Du bist nicht angemeldet.",

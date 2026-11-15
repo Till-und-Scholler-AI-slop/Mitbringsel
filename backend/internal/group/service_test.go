@@ -97,6 +97,16 @@ func (r *fakeRepo) ListForUser(_ context.Context, userID uuid.UUID) ([]Membershi
 	return out, nil
 }
 
+func (r *fakeRepo) CountOwned(_ context.Context, userID uuid.UUID) (int, error) {
+	n := 0
+	for _, roles := range r.roles {
+		if roles[userID] == RoleOwner {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (r *fakeRepo) Members(_ context.Context, groupIDs []uuid.UUID) (map[uuid.UUID][]Member, error) {
 	out := map[uuid.UUID][]Member{}
 	for _, id := range groupIDs {
@@ -248,6 +258,46 @@ func TestService_Create(t *testing.T) {
 				t.Errorf("Members = %+v, want only the creator as owner", got.Members)
 			}
 		})
+	}
+}
+
+func TestService_CreateLimitsOwnedGroups(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, nil)
+	ctx := context.Background()
+	actor := uuid.New()
+
+	// Groups the actor only joined do not count.
+	joined, err := svc.Create(ctx, uuid.New(), "Bei Ben")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	repo.roles[joined.ID][actor] = RoleMember
+
+	var first Details
+	for i := range MaxOwnedGroups {
+		g, err := svc.Create(ctx, actor, fmt.Sprintf("Haushalt %d", i+1))
+		if err != nil {
+			t.Fatalf("Create() #%d error = %v", i+1, err)
+		}
+		if i == 0 {
+			first = g
+		}
+	}
+
+	if _, err := svc.Create(ctx, actor, "Einer zu viel"); !errors.Is(err, ErrTooManyGroups) {
+		t.Fatalf("Create() over the limit error = %v, want %v", err, ErrTooManyGroups)
+	}
+	if len(repo.groups) != MaxOwnedGroups+1 {
+		t.Errorf("stored %d groups, want %d", len(repo.groups), MaxOwnedGroups+1)
+	}
+
+	// Deleting a group frees its place.
+	if err := svc.Delete(ctx, actor, first.ID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := svc.Create(ctx, actor, "Wieder Platz"); err != nil {
+		t.Errorf("Create() after Delete() error = %v", err)
 	}
 }
 

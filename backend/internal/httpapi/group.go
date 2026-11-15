@@ -279,6 +279,8 @@ func writeGroupError(w http.ResponseWriter, op string, err error) {
 		writeError(w, http.StatusBadRequest, apigen.ErrorCodeInvalidRole)
 	case errors.Is(err, group.ErrOwnerImmutable):
 		writeError(w, http.StatusConflict, apigen.ErrorCodeOwnerImmutable)
+	case errors.Is(err, group.ErrTooManyGroups):
+		writeError(w, http.StatusConflict, apigen.ErrorCodeTooManyGroups)
 	default:
 		slog.Error("groups: "+op, "error", err)
 		writeError(w, http.StatusInternalServerError, apigen.ErrorCodeInternal)

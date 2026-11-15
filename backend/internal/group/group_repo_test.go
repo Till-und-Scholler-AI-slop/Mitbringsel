@@ -172,6 +172,30 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("count owned counts only the groups the user owns", func(t *testing.T) {
+		anna := newTestUser(t, pool, "count-anna")
+		ben := newTestUser(t, pool, "count-ben")
+		for _, name := range []string{"Zuhause", "Ferienhaus"} {
+			if _, err := svc.Create(ctx, anna, name); err != nil {
+				t.Fatalf("Create() error = %v", err)
+			}
+		}
+		bens, err := svc.Create(ctx, ben, "Bei Ben")
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if err := repo.AddMember(ctx, bens.ID, anna, RoleAdmin); err != nil {
+			t.Fatalf("AddMember() error = %v", err)
+		}
+
+		if got, err := repo.CountOwned(ctx, anna); err != nil || got != 2 {
+			t.Errorf("CountOwned(anna) = %d, %v, want 2", got, err)
+		}
+		if got, err := repo.CountOwned(ctx, ben); err != nil || got != 1 {
+			t.Errorf("CountOwned(ben) = %d, %v, want 1", got, err)
+		}
+	})
+
 	t.Run("unknown rows are not found", func(t *testing.T) {
 		unknown := uuid.New()
 		if _, err := repo.Get(ctx, unknown); !errors.Is(err, ErrNotFound) {

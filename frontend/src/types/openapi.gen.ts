@@ -146,7 +146,8 @@ export interface paths {
         put?: never;
         /**
          * Create a group
-         * @description The logged-in user becomes its owner.
+         * @description The logged-in user becomes its owner. A user can own 10 groups at
+         *     once (`TOO_MANY_GROUPS`); groups joined by invite do not count.
          */
         post: operations["createGroup"];
         delete?: never;
@@ -813,7 +814,7 @@ export interface components {
          * @description Machine-readable error; the frontend translates it.
          * @enum {string}
          */
-        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID" | "LIST_ICON_INVALID" | "ITEM_NOT_FOUND" | "ITEM_NAME_INVALID" | "ITEM_QUANTITY_INVALID" | "ITEM_UNIT_INVALID" | "ITEM_NOTE_INVALID" | "ITEM_ID_TAKEN";
+        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "TOO_MANY_GROUPS" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID" | "LIST_ICON_INVALID" | "ITEM_NOT_FOUND" | "ITEM_NAME_INVALID" | "ITEM_QUANTITY_INVALID" | "ITEM_UNIT_INVALID" | "ITEM_NOTE_INVALID" | "ITEM_ID_TAKEN";
         /** @description Client to server: keeps the connection alive. Sent every 25 seconds; the server disconnects after 60 seconds of silence. */
         PingMessage: {
             /**
@@ -1246,6 +1247,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             500: components["responses"]["Error"];
         };
     };
