@@ -3,7 +3,8 @@ import { mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createAppI18n } from '@/i18n'
-import type { Group, GroupMember, List } from '@/types/api'
+import { STICKERS } from '@/components/base/stickers'
+import type { Group, GroupMember, List, ListIcon } from '@/types/api'
 
 import GroupCard from '../GroupCard.vue'
 
@@ -28,12 +29,12 @@ function group(name: string, memberCount: number): Group {
   }
 }
 
-function list(id: string, name: string): List {
+function list(id: string, name: string, icon: ListIcon = 'general'): List {
   return {
     id,
     groupId: 'g1',
     name,
-    icon: 'general',
+    icon,
     archivedAt: null,
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',
@@ -79,6 +80,22 @@ describe('GroupCard', () => {
     const wrapper = mountCard(group('WG', 2), [list('l1', 'Supermarkt'), list('l2', 'Drogerie')])
 
     expect(wrapper.findAll('.list').map((c) => c.text())).toEqual(['Supermarkt', 'Drogerie'])
+  })
+
+  it('shows the sticker of each list, but none for the household', () => {
+    const wrapper = mountCard(group('WG', 2), [
+      list('l1', 'Supermarkt', 'supermarket'),
+      list('l2', 'Drogerie', 'drugstore'),
+    ])
+
+    const rotations = wrapper
+      .findAll('.list')
+      .map((chip) => chip.get('.sticker > g').attributes('transform'))
+    expect(rotations).toEqual([
+      `rotate(${STICKERS.supermarket.rotate} 24 24)`,
+      `rotate(${STICKERS.drugstore.rotate} 24 24)`,
+    ])
+    expect(wrapper.find('.head .sticker').exists()).toBe(false)
   })
 
   it('has no chip row without lists', () => {
