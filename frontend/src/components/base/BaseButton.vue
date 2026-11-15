@@ -1,9 +1,21 @@
 <script setup lang="ts">
 import BaseSpinner from './BaseSpinner.vue'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
+// danger: a dangerous action on a page (light red). danger-solid: the final
+// "yes, do it" in a confirmation dialog (filled red, flat).
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'danger-solid' | 'ghost'
 
 const SPINNER_SIZE = 18
+
+// Sticker buttons sink onto their shadow, the flat danger-solid sinks into
+// the page (docs/conventions.md, press feedback).
+const PRESS: Record<ButtonVariant, string | undefined> = {
+  primary: 'press-sticker',
+  secondary: 'press-sticker',
+  danger: 'press-sticker',
+  'danger-solid': 'press-inset',
+  ghost: undefined,
+}
 
 // While loading the button is disabled too, so a second click cannot start
 // the same action twice.
@@ -21,7 +33,7 @@ withDefaults(
 <template>
   <button
     :type="type"
-    :class="['base-button', `base-button--${variant}`, { 'press-sticker': variant !== 'ghost' }]"
+    :class="['base-button', `base-button--${variant}`, PRESS[variant]]"
     :disabled="disabled || loading"
     :aria-busy="loading || undefined"
   >
@@ -74,6 +86,12 @@ withDefaults(
   border-color: var(--color-danger);
   background: var(--color-danger-surface);
   color: var(--color-danger-text);
+}
+
+.base-button--danger-solid {
+  border-color: var(--color-on-accent);
+  background: var(--color-danger);
+  color: var(--color-on-danger);
 }
 
 .base-button--ghost {

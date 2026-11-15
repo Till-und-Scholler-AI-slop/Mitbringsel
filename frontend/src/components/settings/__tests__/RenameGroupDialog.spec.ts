@@ -100,8 +100,27 @@ describe('RenameGroupDialog', () => {
     await wrapper.get('input').setValue('x'.repeat(31))
     await wrapper.get('form').trigger('submit')
 
-    expect(wrapper.get('[role="alert"]').text()).toContain('1 to 30 characters')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Please shorten it by one character.')
     expect(service.rename).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('says by how many characters to shorten the name', async () => {
+    const wrapper = await mountDialog()
+
+    await wrapper.get('input').setValue('x'.repeat(33))
+
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      'The name can have at most 30 characters. Please shorten it by 3 characters.',
+    )
+    wrapper.unmount()
+  })
+
+  it('names the field like the design and says who sees the new name', async () => {
+    const wrapper = await mountDialog()
+
+    expect(wrapper.get('label').text()).toContain('Name of the household')
+    expect(wrapper.text()).toContain('All members see the new name right away.')
     wrapper.unmount()
   })
 

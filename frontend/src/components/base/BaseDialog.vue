@@ -52,7 +52,11 @@ function onClose() {
     <div class="panel">
       <span class="handle" aria-hidden="true" />
       <header class="header">
-        <h2 :id="titleId" class="title">{{ title }}</h2>
+        <div class="heading">
+          <h2 :id="titleId" class="title">{{ title }}</h2>
+          <!-- e.g. the role chip under a member's name -->
+          <slot name="subtitle" />
+        </div>
         <BaseIconButton icon="close" :label="t('common.close')" @click="dialog?.close()" />
       </header>
       <slot />
@@ -107,6 +111,14 @@ function onClose() {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+.heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 
 .title {

@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import BaseAvatar from '@/components/base/BaseAvatar.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import MemberRoleChip from '@/components/settings/MemberRoleChip.vue'
 import type { GroupMember } from '@/types/api'
 
 const AVATAR_SIZE = 44
@@ -23,9 +24,7 @@ const { t } = useI18n()
         {{ member.displayName }}
         <span v-if="isMe" class="you">{{ t('settings.members.you') }}</span>
       </span>
-      <span :class="['role', `role--${member.role}`]">{{
-        t(`settings.roles.${member.role}`)
-      }}</span>
+      <MemberRoleChip :role="member.role" />
     </div>
     <button
       v-if="canAct"
@@ -78,31 +77,6 @@ const { t } = useI18n()
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-}
-
-.role {
-  padding: 1px 0.625rem;
-  border: var(--border-width-sm) solid var(--color-on-accent);
-  border-radius: var(--radius-full);
-  font-size: 0.8125rem;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.125rem;
-}
-
-.role--owner {
-  background: var(--color-accent-tomato);
-  color: var(--color-on-accent);
-}
-
-.role--admin {
-  background: var(--color-accent-lilac);
-  color: var(--color-on-accent);
-}
-
-.role--member {
-  border-color: var(--color-divider);
-  background: var(--color-bg);
-  color: var(--color-text);
 }
 
 .act {

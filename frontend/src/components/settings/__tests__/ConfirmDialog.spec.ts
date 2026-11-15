@@ -39,6 +39,8 @@ describe('ConfirmDialog', () => {
 
     expect(wrapper.get('h2').text()).toBe('Delete household?')
     expect(wrapper.get('.message').text()).toBe('It cannot be undone.')
+    expect(wrapper.get('.message-icon').attributes('aria-hidden')).toBe('true')
+    expect(wrapper.get('.confirm').classes()).toContain('base-button--danger-solid')
 
     await wrapper.get('.confirm').trigger('click')
 

@@ -89,7 +89,7 @@ describe('CreateGroupDialog', () => {
     await wrapper.get('input').setValue('x'.repeat(31))
     await wrapper.get('form').trigger('submit')
 
-    expect(wrapper.get('[role="alert"]').text()).toContain('1 to 30 characters')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Please shorten it by one character.')
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
     expect(service.create).not.toHaveBeenCalled()
     wrapper.unmount()

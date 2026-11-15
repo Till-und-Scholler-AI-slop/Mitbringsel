@@ -6,9 +6,11 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
-- [ ] **Dialoge von Verwalten nach dem Design** (`verwalten-aktionen-hell`, `verwalten-entfernen-hell`, `verwalten-umbenennen-hell`, `verwalten-umbenennen-zulang-*`): Mitglied-Aktionen, Entfernen-Bestätigung und Umbenennen angleichen; die Seite selbst ist angeglichen, die Dialoge noch im alten Stil.
 - [ ] **Desktop-Varianten von Verwalten und Einladung** (`verwalten-desktop-*`, `markt2-einladung-desktop-*`): Verwalten zweispaltig, Einladung mit Kopf und Karte nebeneinander. `GroupSettingsView` und `InviteView` sind vorerst einspaltig.
 - [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
+- [ ] **Löschen-Text mit Anzahlen** (`verwalten-loeschen-*`): Das Design nennt beim Löschen eines Haushalts, wie viele Listen und Mitglieder betroffen sind („mit allen 3 Listen … für alle 6 Mitglieder“). Der Text nennt bisher nur den Namen; die Listenanzahl kennt die Verwalten-Seite noch nicht.
+- [ ] **Fehler bei leerem Namen nach Verlassen des Felds** (`verwalten-umbenennen-*`): Das Design zeigt „Gib deinem Haushalt einen Namen.“, wenn das Feld leer verlassen wird. `BaseNameDialog` behandelt einen leeren Namen bewusst nicht als Fehler, der Knopf wartet nur.
+- [ ] **`danger-solid` in den Listen-Bestätigungen:** Die Bestätigungen in Verwalten nutzen den roten Vollton-Knopf (`danger-solid`). Das Löschen einer Liste (`ListActionsDialog`) und eines Artikels (`ItemFormDialog`) zeigt noch den hellen `danger`-Knopf; angleichen, falls das Design es dort auch vorsieht.
 
 ## Login
 
@@ -68,4 +70,4 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Fehlende Basis-Komponenten:** In den [Konventionen](conventions.md) stehen `BaseCheckbox` und `BaseSelect`, die es noch nicht gibt (`BaseModal` und `BaseBottomSheet` deckt `BaseDialog` ab). Die Einheit wählt das Artikelformular nach dem Design mit Pillen (`UnitPicker`), nicht mit einem Select; `BaseSelect` also erst bauen, wenn ein Screen eine echte Auswahlliste braucht, sonst aus den Konventionen streichen.
 - [ ] **Abstand der Toasts zur Eingabeleiste:** Der Stapel steht schon über der Eingabeleiste (`--app-bottom-bar` aus `AppFrame`), aber mit 16 px (`--space-4`) Abstand; das Design (`toast-*`) sieht 8 px vor. Beim Feinabgleich der Listenansicht mitnehmen.
 - [ ] **Toasts außerhalb von `AppFrame`:** Der Stapel hängt in `AppFrame`, also nur auf Start- und Listenansicht. Braucht ein anderer Screen (Verwalten, Einladung) einen Toast, den Stapel nach `App.vue` ziehen und die Position auf dem Desktop von der Seitenleiste abhängig machen.
-- [ ] **`BaseButton`-Größen:** Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen). Die Variante `danger` gibt es seit dem Verwalten-Screen.
+- [ ] **`BaseButton`-Größen:** Größen ergänzen, sobald ein Screen sie braucht (laut [Konventionen](conventions.md) vorgesehen). Die Variante `danger` gibt es seit dem Verwalten-Screen, `danger-solid` (endgültiges „Ja“ in Bestätigungen) seit dessen Dialogen.
