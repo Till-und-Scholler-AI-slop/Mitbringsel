@@ -1,6 +1,6 @@
 # 0005: Live-Sync in Phase 5: REST schreibt, WebSocket verteilt
 
-Status: akzeptiert
+Status: akzeptiert; die Pläne für Phase 6 ersetzt [ADR 0006](0006-offline-phase-6.md)
 
 ## Kontext
 
@@ -38,8 +38,8 @@ Verworfene Alternativen:
 
 ## Konsequenzen
 
-- Phase 6 erweitert `ClientMessage` um `mutate` und `sync` (und `ServerMessage` um `ack` und `syncResult`) und ergänzt die Tabelle `processed_ops`.
-- Für `sync` braucht es Listen-Tombstones oder einen vollständigen Neuabgleich, weil gelöschte Listen sonst nicht mehr auffindbar sind (siehe [Aufgeschobene Punkte](../todo.md)).
+- Phase 6 erweitert `ClientMessage` um `mutate` und `sync` (und `ServerMessage` um `ack` und `syncResult`) und ergänzt die Tabelle `processed_ops`. Nachtrag: Ersetzt durch [ADR 0006](0006-offline-phase-6.md), Phase 6 schreibt weiter per REST und lädt nach `ready` vollständig neu.
+- Für `sync` braucht es Listen-Tombstones oder einen vollständigen Neuabgleich, weil gelöschte Listen sonst nicht mehr auffindbar sind. Nachtrag: [ADR 0006](0006-offline-phase-6.md) lädt vollständig neu, Listen bleiben ohne Tombstone.
 - Die Zustellung ist Best Effort: Ein langsamer oder getrennter Client verpasst Ereignisse und holt sie nach dem nächsten `ready` per REST nach.
 - Der Client braucht keine Rollback-Logik für Schreibzugriffe; REST-Fehler zeigt er wie bisher an.
 - Ein zweites Backend-Exemplar würde Ereignisse nur an die eigenen Verbindungen verteilen. Vor einer Skalierung muss `LISTEN/NOTIFY` dazukommen.

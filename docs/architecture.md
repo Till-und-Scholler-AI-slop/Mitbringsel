@@ -58,12 +58,12 @@ einkaufsliste/
 
 - **Views** setzen Seiten aus Komponenten zusammen und sprechen nur mit Stores.
 - **Komponenten** bekommen Daten per Props und melden Aktionen per Events. Sie rufen nie direkt `fetch` oder den WebSocket auf.
-- **Stores** halten den Zustand und rufen Services auf. Schreibende Aktionen laufen ab Phase 6 immer über den Sync-Service (siehe [Live-Sync](sync.md)); bis dahin schreiben die Stores per REST.
+- **Stores** halten den Zustand und rufen Services auf. Schreibende Aktionen an Artikeln laufen ab Phase 6 über die Outbox, die per REST sendet (siehe [Live-Sync](sync.md)); alles andere schreiben die Stores direkt per REST.
 - **Services** kapseln REST-Client, WebSocket und IndexedDB.
 
 ## REST und WebSocket
 
 - REST unter `/api/v1/...` für Auth, Profil, Gruppen, Einladungen, Listen und das initiale Laden von Daten.
 - Der Vertrag steht in `api/openapi.yaml`. Eine API-Änderung beginnt dort, danach `make generate`; Handler und Frontend nutzen die generierten Typen (siehe [ADR 0002](adr/0002-openapi-als-api-vertrag.md)).
-- WebSocket unter `/api/v1/ws`. In Phase 5 sendet der Server darüber nur Ereignisse (Artikel, Listen, Gruppen); geschrieben wird per REST. Die Nachrichtentypen stehen in `api/openapi.yaml` (siehe [ADR 0005](adr/0005-live-sync-phase-5.md)). Ab Phase 6 kommen Änderungen vom Client und das Nachsynchronisieren dazu.
+- WebSocket unter `/api/v1/ws`. Der Server sendet darüber nur Ereignisse (Artikel, Listen, Gruppen); geschrieben wird per REST, ab Phase 6 auch offline gesammelte Änderungen über die Outbox. Die Nachrichtentypen stehen in `api/openapi.yaml` (siehe [ADR 0005](adr/0005-live-sync-phase-5.md) und [ADR 0006](adr/0006-offline-phase-6.md)).
 - Wichtige Entscheidungen werden als kurzer ADR in [`adr/`](adr/README.md) festgehalten.

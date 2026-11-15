@@ -6,7 +6,7 @@ Der Sync entsteht in zwei Phasen: Phase 5 verteilt Änderungen live per WebSocke
 
 Entscheidung und Alternativen: [ADR 0005](adr/0005-live-sync-phase-5.md).
 
-- **REST schreibt, der WebSocket verteilt.** Alle Änderungen laufen wie bisher über REST. Der Server vergibt die HLC (`item.Clock`) und `serverSeq` und sendet das Ergebnis nach dem Commit als Ereignis an die Mitglieder der Gruppe. `mutate`, `ack`, `opId`, Outbox und `sync` gibt es noch nicht.
+- **REST schreibt, der WebSocket verteilt.** Alle Änderungen laufen wie bisher über REST. Der Server vergibt die HLC (`item.Clock`) und `serverSeq` und sendet das Ergebnis nach dem Commit als Ereignis an die Mitglieder der Gruppe. Outbox und HLC vom Client kommen mit Phase 6.
 - **Kein `subscribe`:** Beim Verbinden trägt der Server die Verbindung in alle Gruppen des Nutzers ein und sendet `ready`. Nach jedem `ready` lädt der Client per REST neu, was er geladen hat (Gruppen, Listen, offene Artikel). So gleicht sich eine Verbindung nach einer Unterbrechung ohne `sync` wieder an.
 - **Best Effort:** Ein langsamer oder getrennter Client verpasst Ereignisse. Die Datenbank ist die Wahrheit, REST holt alles nach.
 - **Reihenfolge über `serverSeq`:** Ereignisse können vertauscht ankommen. Der Client wendet Artikel- und Listen-Ereignisse nur an, wenn die `serverSeq` größer ist als die gespeicherte.
@@ -16,60 +16,58 @@ Entscheidung und Alternativen: [ADR 0005](adr/0005-live-sync-phase-5.md).
 
 ## Zielbild ab Phase 6
 
-Jede Änderung wird zuerst lokal angewendet, in einer Warteschlange (Outbox) gespeichert und per WebSocket an den Server geschickt. Der Server entscheidet per Last Write Wins und verteilt das Ergebnis an alle verbundenen Gruppenmitglieder.
+Entscheidung und Alternativen: [ADR 0006](adr/0006-offline-phase-6.md).
+
+Jede Änderung an einem Artikel wird zuerst lokal angewendet, in einer Warteschlange (Outbox) in IndexedDB gespeichert und dann als REST-Aufruf an den Server geschickt. Der Server entscheidet per Last Write Wins und verteilt das Ergebnis per WebSocket an alle verbundenen Gruppenmitglieder. Der WebSocket bleibt eine Einbahnstraße vom Server zu den Clients.
 
 ```
-Client A (Vue)                   Go-Server                        Client B (Vue)
-┌───────────────────┐           ┌────────────────────┐           ┌───────────────────┐
-│ Outbox            │──mutate──▶│ WebSocket-Hub      │──event───▶│ Store + IndexedDB │
-│        ▲          │◀───ack────│        │           │           │        │          │
-│ Store + IndexedDB │           │ Sync-Service (LWW) │           │ UI aktualisiert   │
-└───────────────────┘           └─────────┬──────────┘           └───────────────────┘
-                                          │ LWW + serverSeq
-                                          ▼
-                                     PostgreSQL
+Client A (Vue)                 Go-Server                         Client B (Vue)
+┌───────────────────┐          ┌────────────────────┐            ┌───────────────────┐
+│ Store + IndexedDB │          │ item.Service (LWW) │            │ Store + IndexedDB │
+│        │          │──REST───▶│         │          │            │        ▲          │
+│ Outbox            │◀─Antwort─│ WebSocket-Hub      │──Ereignis─▶│ WebSocket         │
+└───────────────────┘          └─────────┬──────────┘            └───────────────────┘
+                                         │ LWW + serverSeq
+                                         ▼
+                                    PostgreSQL
 ```
 
-Der Absender erhält ein `ack` und leert seine Outbox; alle anderen Clients der Gruppe erhalten sie als Ereignis (`itemChanged`). Offline bleiben Änderungen in der Outbox, bis die Verbindung zurück ist.
-
-In Phase 5 läuft nur der rechte Teil: Der Server sendet nach einer REST-Änderung ein Ereignis an die Mitglieder der Gruppe. Das Schreiben per `mutate` und das `ack` folgen in Phase 6.
+Die Antwort auf den REST-Aufruf trägt den gespeicherten Artikel; die Änderung verlässt die Outbox. Alle Verbindungen der Gruppe erhalten das Ereignis (`itemChanged`). Offline bleiben Änderungen in der Outbox, bis die Verbindung zurück ist.
 
 ## Grundprinzipien
 
 - **Offline-first für Artikel:** Die UI liest immer aus dem lokalen Zustand (Pinia, gespiegelt in IndexedDB). Das Netzwerk ist nur der Transport.
 - **IDs vom Client:** Neue Artikel bekommen eine UUIDv7 auf dem Client. So kann man offline Artikel anlegen und später ohne ID-Konflikte synchronisieren.
 - **Optimistische Updates:** Die Änderung ist sofort in der UI sichtbar. Lehnt der Server sie ab, wird sie zurückgerollt und der Nutzer bekommt einen Hinweis.
-- **Idempotenz (ab Phase 6):** Jede Änderung trägt eine eindeutige `opId`. Der Server verarbeitet dieselbe `opId` nur einmal, auch wenn der Client sie nach einem Verbindungsabbruch erneut sendet.
+- **Wiederholen ist harmlos:** Geht eine Antwort verloren, sendet die Outbox dieselbe Änderung noch einmal. Ein zweites Anlegen mit derselben ID in derselben Liste gibt den gespeicherten Artikel zurück, eine Änderung mit derselben HLC gewinnt nicht gegen die gespeicherte, ein zweites Löschen trifft nur den Tombstone. Eine eigene `opId` braucht es deshalb nicht.
 
 ## Konfliktauflösung: Last Write Wins pro Feld
 
 Status: entschieden (siehe [ADR 0004](adr/0004-lww-pro-feld.md)).
 
 - **Regel:** LWW pro Feld statt pro Artikel. Hakt Person A einen Artikel ab, während Person B die Menge ändert, bleiben beide Änderungen erhalten. Nur wenn beide dasselbe Feld ändern, gewinnt die spätere Änderung.
-- **Zeitstempel:** Jede Änderung trägt einen Zeitstempel einer Hybrid Logical Clock (HLC) vom Client. Die HLC kombiniert Uhrzeit und Zähler und bleibt auch bei leicht abweichenden Geräteuhren konsistent. Zeitstempel, die mehr als 5 Minuten in der Zukunft liegen, setzt der Server auf seine eigene Zeit.
+- **Zeitstempel:** Jede Änderung trägt einen Zeitstempel einer Hybrid Logical Clock (HLC). Ab Phase 6 kommt er vom Client (Feld `clock` bei `createItem` und `updateItem`); fehlt er, stempelt der Server selbst. Der Client übernimmt die Uhren jedes Artikels, den er empfängt, damit seine nächste Änderung neuer ist als alles, was er gesehen hat. Die HLC kombiniert Uhrzeit und Zähler und bleibt auch bei leicht abweichenden Geräteuhren konsistent. Zeitstempel, die mehr als 5 Minuten in der Zukunft liegen, setzt der Server auf seine eigene Zeit.
 - **HLC-Format:** Eine HLC stempelt die Änderung eines einzelnen Feldes, sie identifiziert nicht den Artikel. Sie ist ein Text fester Breite, `<Zeit>-<Zähler>-<Knoten>`, z.B. `0000019a2b3c4d5e-0001-3f2a9c`: Millisekunden seit 1970 (16 Hex-Ziffern, klein), Zähler (4 Hex-Ziffern, klein) und Knoten-ID des Geräts (1 bis 64 Zeichen aus `A-Z a-z 0-9 _ -`). Wegen der festen Breite ist der Textvergleich (`<`, `>`) schon der HLC-Vergleich, in Go wie in TypeScript. Umsetzung: `backend/internal/item/hlc.go`.
 - **Felder mit Uhr:** `name`, `quantity`, `unit`, `note` und `checked`. `checked_by` und `checked_at` gehören zur Uhr von `checked`. Die Uhren stehen in `items.field_clocks`, `Merge` (`backend/internal/item/merge.go`) entscheidet, welche Felder einer Änderung gewinnen.
-- **Gleiche Änderung zweimal:** Eine gleiche HLC gewinnt nicht gegen die gespeicherte; ein erneut gesendetes `mutate` ändert also nichts (zusätzlich zur `opId`).
+- **Gleiche Änderung zweimal:** Eine gleiche HLC gewinnt nicht gegen die gespeicherte; eine erneut gesendete Änderung ändert also nichts.
 - **Archivierte Listen:** Artikel in einer archivierten Liste bleiben änderbar, damit Offline-Änderungen aus der Zeit vor dem Archivieren nicht verloren gehen.
 - **Löschen gewinnt:** Gelöschte Artikel werden als Tombstone (`deleted_at`) markiert und nicht wiederbelebt, auch wenn später eine Offline-Bearbeitung eintrifft. Tombstones werden nach 30 Tagen endgültig entfernt.
 - **Gleichstand:** Bei identischem Zeitstempel entscheidet der lexikografische Vergleich der Client-IDs, damit alle Geräte zum selben Ergebnis kommen.
 
 ## Synchronisationsablauf (ab Phase 6)
 
-1. Nutzer ändert einen Artikel. Der Store wendet die Änderung lokal an, speichert sie in IndexedDB und legt sie in die Outbox.
-2. Ist der WebSocket verbunden, sendet der Sync-Service die Änderung als `mutate`-Nachricht.
-3. Der Server prüft Session und Gruppenmitgliedschaft, wendet LWW in einer Transaktion an und vergibt eine fortlaufende `serverSeq`.
-4. Der Server bestätigt dem Absender mit `ack` (die Änderung verlässt die Outbox) und sendet allen anderen Verbindungen der Gruppe ein Ereignis (`itemChanged`).
-5. Empfangende Clients mischen die Änderung per LWW in ihren lokalen Zustand.
+1. Nutzer ändert einen Artikel. Der Client stempelt die Änderung mit seiner HLC, zeigt sie sofort an, speichert sie in IndexedDB und legt sie in die Outbox.
+2. Die Outbox sendet ihre Änderungen der Reihe nach als REST-Aufrufe, immer eine zur Zeit. Nur ein Tab sendet (`navigator.locks`).
+3. Der Server prüft Session und Gruppenmitgliedschaft, wendet LWW in einer Transaktion an und vergibt eine neue `serverSeq`.
+4. Die Antwort trägt den gespeicherten Artikel. Der Client übernimmt ihn, die Änderung verlässt die Outbox. Alle Verbindungen der Gruppe bekommen das Ereignis (`itemChanged`); die anderen Clients übernehmen es, wenn dessen `serverSeq` größer ist als die gespeicherte.
+5. Netzfehler, 5xx und 429 wiederholt die Outbox mit Backoff. Bei 401 hält sie an und behält alles. Bei 400, 403, 404 und 409 verwirft sie die Änderung, der Artikel zeigt wieder den Stand des Servers, und ein Toast nennt den Grund.
 
 ## Wiederverbinden nach Offline-Phase (ab Phase 6)
 
-In Phase 5 genügt ein Neuladen per REST nach jedem `ready`; `sync` mit Sequenzen ersetzt das in Phase 6.
-
 1. Der Client baut den WebSocket neu auf (exponentielles Backoff, maximal 30 Sekunden).
-2. Er sendet `sync` mit der letzten bekannten `serverSeq` pro Gruppe.
-3. Der Server antwortet mit allen Änderungen seit dieser Sequenz. Liegt die Sequenz zu weit zurück (älter als die Tombstone-Frist), fordert der Server einen vollständigen Neuabgleich an.
-4. Danach sendet der Client seine Outbox in der ursprünglichen Reihenfolge.
+2. Nach `ready` stößt der Client die Outbox an (sie sendet auch ohne Socket, sobald der Browser online ist) und lädt Gruppen, Listen und Artikel vollständig neu, die Artikel mit einer Anfrage pro Haushalt (`GET /groups/{groupId}/items`). Senden und Laden dürfen gleichzeitig laufen: Felder mit ausstehenden Änderungen liegen über dem geladenen Stand, bis die Antwort des Servers kommt.
+
+Einen Abgleich ab einer `serverSeq` (Delta) gibt es bewusst nicht: `serverSeq` folgt nicht der Reihenfolge der Commits, ein Delta könnte Änderungen dauerhaft übersehen (siehe [ADR 0006](adr/0006-offline-phase-6.md)).
 
 ## WebSocket-Protokoll
 
@@ -78,8 +76,6 @@ Alle Nachrichten sind JSON mit einheitlichem Umschlag: `{ "type": "...", "payloa
 | Richtung | Typ | Inhalt | Ab |
 | --- | --- | --- | --- |
 | Client → Server | `ping` | Verbindung am Leben halten (alle 25 Sekunden) | Phase 5 |
-| Client → Server | `mutate` | `opId`, Entität, ID, geänderte Felder, HLC-Zeitstempel | Phase 6 |
-| Client → Server | `sync` | Letzte `serverSeq` pro Gruppe | Phase 6 |
 | Server → Client | `ready` | Verbindung steht, alle Gruppen des Nutzers sind eingetragen; der Client lädt per REST neu | Phase 5 |
 | Server → Client | `pong` | Antwort auf `ping` | Phase 5 |
 | Server → Client | `itemChanged` | Artikel angelegt oder geändert: `groupId`, `actorId`, ganzer Artikel mit `serverSeq` | Phase 5 |
@@ -90,10 +86,8 @@ Alle Nachrichten sind JSON mit einheitlichem Umschlag: `{ "type": "...", "payloa
 | Server → Client | `groupChanged` | Name, Mitglieder oder Rollen geändert; Hinweis, `GET /groups` neu zu laden | Phase 5 |
 | Server → Client | `groupRemoved` | Gruppe gelöscht oder Nutzer entfernt (`reason`: `deleted`, `removed`) | Phase 5 |
 | Server → Client | `error` | Fehlercode (`ErrorCode`) | Phase 5 |
-| Server → Client | `ack` | Bestätigte `opId` und vergebene `serverSeq` | Phase 6 |
-| Server → Client | `syncResult` | Alle Änderungen seit der angefragten Sequenz | Phase 6 |
 
-Der `error` aus Phase 5 trägt nur einen Code; in Phase 6 kommen die betroffene `opId` und ein Grund dazu.
+Auch mit Phase 6 kommen keine neuen Nachrichten dazu: Der Client schreibt per REST (siehe [ADR 0006](adr/0006-offline-phase-6.md)).
 
 ### Ping und Pong
 
@@ -135,7 +129,7 @@ Browser können keine WebSocket-Protokoll-Pings senden. Der Client schickt desha
   - **Gruppe löschen:** `GroupDeleted` nach dem Löschen. Listen und Artikel bekommen kein eigenes Ereignis; der Client verwirft sie mit der Gruppe.
 - **Authentifizierung:** `GET /api/v1/ws` liegt hinter der Session-Prüfung. Die `Origin` muss zum Host von `PUBLIC_BASE_URL` passen, sonst `403 CROSS_ORIGIN_REQUEST`. Der Schutz gegen Cross-Origin-Anfragen aus der Standardbibliothek greift hier nicht, weil er GET durchlässt und der Vite-Proxy im Dev-Betrieb den `Host`-Header umschreibt.
 - **Lebensdauer und Limits:** Eine Verbindung lebt höchstens etwa eine Stunde, damit die Session beim Wiederverbinden neu geprüft wird. Pro Nutzer sind etwa 10 Verbindungen erlaubt. Beim Logout schließt das Frontend den Socket, beim Herunterfahren schließt der Server alle Verbindungen selbst.
-- **Fristen und Größen:** Der Server liest höchstens 4 KiB pro Nachricht (heute gibt es nur `ping`; Phase 6 braucht für `mutate` mehr). Er trennt eine Verbindung nach 60 Sekunden ohne Nachricht und gibt jeder Nachricht beim Schreiben 10 Sekunden. Die Verbindung wird ohne Kompression geführt.
+- **Fristen und Größen:** Der Server liest höchstens 4 KiB pro Nachricht (der Client sendet nur `ping`). Er trennt eine Verbindung nach 60 Sekunden ohne Nachricht und gibt jeder Nachricht beim Schreiben 10 Sekunden. Die Verbindung wird ohne Kompression geführt.
 - **Unbekannter Typ:** Eine Nachricht mit einem Typ, den der Server nicht kennt, beantwortet er mit `error` (`INVALID_REQUEST`) und lässt die Verbindung offen, damit ein Client einer anderen Version nicht getrennt wird. Neue Nachrichtentypen kommen als Eintrag in die Handler-Registry (`newWSHandlers` in `httpapi/ws.go`).
 - **Schließcodes:** Der Server schließt, wenn er einen Grund hat, mit einem Close-Frame. Das Frontend verbindet sich in allen Fällen neu (mit Backoff) und lädt nach `ready` per REST nach; der Code sagt nur, warum.
 
