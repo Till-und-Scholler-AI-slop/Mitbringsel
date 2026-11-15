@@ -188,7 +188,7 @@
     "membersLabel": "Members: {names}",
     "chips": "Lists",
     "newList": "New list",
-    "chipHint": "Select again to rename, archive or delete",
+    "chipHint": "Select again to edit, archive or delete",
     "archive": {
       "chip": "Archive ({count})",
       "title": "Archived lists",
@@ -272,19 +272,47 @@
     "deletedMeanwhile": "“{name}” was deleted",
     "name": {
       "createTitle": "New list",
-      "renameTitle": "Rename list",
+      "renameTitle": "Edit list",
       "label": "Name of the list",
       "placeholder": "e.g. Weekly shopping",
       "cancel": "Cancel",
       "create": "Create",
       "save": "Save"
     },
+    "icon": {
+      "label": "Icon",
+      "groups": {
+        "food": "Food",
+        "household": "Household, care & DIY",
+        "other": "Other"
+      },
+      "names": {
+        "supermarket": "Supermarket",
+        "market": "Farmers' market",
+        "bakery": "Bakery",
+        "butcher": "Butcher",
+        "drinks": "Drinks",
+        "organic": "Organic shop",
+        "drugstore": "Drugstore",
+        "pharmacy": "Pharmacy",
+        "baby": "Baby",
+        "pets": "Pet supplies",
+        "hardware": "Hardware store",
+        "garden": "Garden center",
+        "furniture": "Furniture store",
+        "electronics": "Electronics",
+        "stationery": "Stationery",
+        "clothing": "Clothing",
+        "online": "Online order",
+        "general": "General"
+      }
+    },
     "actions": {
       "title": "Manage list",
       "question": "What should happen to “{name}”?",
       "rename": {
-        "title": "Rename",
-        "description": "Gives the list a new name."
+        "title": "Edit",
+        "description": "Changes the name and icon of the list."
       },
       "archive": {
         "title": "Archive",

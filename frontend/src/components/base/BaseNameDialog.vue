@@ -11,7 +11,8 @@ export type NameProblem = 'empty' | 'tooLong'
 
 // Shared dialog for creating or renaming a named entity (group, list).
 // With `initialName` it starts prefilled and closes without calling `save`
-// when the trimmed value is unchanged.
+// when the trimmed value is unchanged, unless `changed` says that a field in
+// the default slot (below the name) differs from its start value.
 const props = defineProps<{
   title: string
   label: string
@@ -22,6 +23,7 @@ const props = defineProps<{
   maxLength: number
   tooLongError: string
   initialName?: string
+  changed?: boolean
   validate: (name: string) => NameProblem | null
   save: (trimmedName: string) => Promise<void>
 }>()
@@ -64,7 +66,7 @@ async function submit() {
   if (problem.value || submitting.value) return
   const trimmed = name.value.trim()
   // Nothing to save; no request for the same name.
-  if (props.initialName !== undefined && trimmed === props.initialName) {
+  if (props.initialName !== undefined && trimmed === props.initialName && !props.changed) {
     open.value = false
     return
   }
@@ -93,6 +95,7 @@ async function submit() {
         autocomplete="off"
         autofocus
       />
+      <slot />
       <div class="actions">
         <BaseButton variant="secondary" class="cancel" @click="open = false">
           {{ cancelLabel }}

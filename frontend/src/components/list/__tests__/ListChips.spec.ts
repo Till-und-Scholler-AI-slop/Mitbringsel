@@ -131,7 +131,7 @@ describe('ListChips', () => {
 
     const [current, other] = wrapper.findAll('.chip--list')
     const hint = wrapper.get(`#${current!.attributes('aria-describedby')}`)
-    expect(hint.text()).toBe('Select again to rename, archive or delete')
+    expect(hint.text()).toBe('Select again to edit, archive or delete')
     expect(other!.attributes('aria-describedby')).toBeUndefined()
   })
 

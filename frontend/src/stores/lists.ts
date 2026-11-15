@@ -6,7 +6,7 @@ import { listsService, type ListsService } from '@/services/api/lists'
 import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
 import { useItemsStore } from '@/stores/items'
-import type { List } from '@/types/api'
+import type { List, ListIcon } from '@/types/api'
 
 /** idle: not loaded yet. error: the last load failed (lists may still be shown). */
 export type ListsStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -302,9 +302,9 @@ export function defineListsStore(
     }
 
     /** Creates a list and returns it, so the caller can open it. */
-    async function create(groupId: string, name: string): Promise<List> {
+    async function create(groupId: string, name: string, icon: ListIcon): Promise<List> {
       const started = generation
-      const list = await service.create(groupId, name)
+      const list = await service.create(groupId, name, icon)
       // After a reset the old user's list must not come back: ensure() would
       // create the group anew.
       if (started === generation) {
@@ -314,8 +314,9 @@ export function defineListsStore(
       return list
     }
 
-    async function rename(listId: string, name: string) {
-      await takeAnswer(service.rename(listId, name))
+    /** Sets name and icon of a list. */
+    async function update(listId: string, name: string, icon: ListIcon) {
+      await takeAnswer(service.update(listId, name, icon))
     }
 
     async function archive(listId: string) {
@@ -394,7 +395,7 @@ export function defineListsStore(
       deletionOf,
       load,
       create,
-      rename,
+      update,
       archive,
       unarchive,
       remove,

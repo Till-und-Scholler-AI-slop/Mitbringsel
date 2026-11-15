@@ -26,7 +26,7 @@ const groupsService = vi.hoisted(() => ({
 const listsService = vi.hoisted(() => ({
   list: vi.fn<ListsService['list']>(),
   create: vi.fn<ListsService['create']>(),
-  rename: vi.fn<ListsService['rename']>(),
+  update: vi.fn<ListsService['update']>(),
   setArchived: vi.fn<ListsService['setArchived']>(),
   remove: vi.fn<ListsService['remove']>(),
 }))
@@ -327,7 +327,7 @@ describe('ListView: opening the household', () => {
     await wrapper.get('dialog[open] form').trigger('submit')
     await flushPromises()
 
-    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie')
+    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie', 'general')
     expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l3')
     wrapper.unmount()
   })
@@ -433,7 +433,7 @@ describe('ListView: header', () => {
     await wrapper.get('dialog[open] form').trigger('submit')
     await flushPromises()
 
-    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie')
+    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie', 'general')
     expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l9' })
     wrapper.unmount()
   })
@@ -444,17 +444,17 @@ describe('ListView: list actions', () => {
     w.findAll('button.action').find((b) => b.find('.action-title').text() === title)!
 
   it('opens the actions when the current chip is chosen again and renames from there', async () => {
-    listsService.rename.mockResolvedValue(list('l1', 'Wocheneinkauf'))
+    listsService.update.mockResolvedValue(list('l1', 'Wocheneinkauf'))
     const { wrapper } = await mountView()
 
     await wrapper.get('.chip--list[aria-current="page"]').trigger('click')
     expect(wrapper.get('dialog[open] h2').text()).toBe('Manage list')
-    await actionButton(wrapper, 'Rename').trigger('click')
+    await actionButton(wrapper, 'Edit').trigger('click')
     await wrapper.get('dialog[open] input').setValue('Wocheneinkauf')
     await wrapper.get('dialog[open] form').trigger('submit')
     await flushPromises()
 
-    expect(listsService.rename).toHaveBeenCalledWith('l1', 'Wocheneinkauf')
+    expect(listsService.update).toHaveBeenCalledWith('l1', 'Wocheneinkauf', 'general')
     expect(wrapper.findAll('.chip-name').map((e) => e.text())).toEqual([
       'Wocheneinkauf',
       'Baumarkt',

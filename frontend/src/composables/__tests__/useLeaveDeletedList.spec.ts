@@ -29,7 +29,7 @@ const groupsService = vi.hoisted(() => ({
 const listsService = vi.hoisted(() => ({
   list: vi.fn<ListsService['list']>(),
   create: vi.fn<ListsService['create']>(),
-  rename: vi.fn<ListsService['rename']>(),
+  update: vi.fn<ListsService['update']>(),
   setArchived: vi.fn<ListsService['setArchived']>(),
   remove: vi.fn<ListsService['remove']>(),
 }))

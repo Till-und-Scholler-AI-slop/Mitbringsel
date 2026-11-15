@@ -29,6 +29,7 @@ beforeEach(() => {
 function mountDialog(options?: {
   open?: boolean
   initialName?: string
+  changed?: boolean
   save?: (name: string) => Promise<void>
 }) {
   const save = options?.save ?? vi.fn<(name: string) => Promise<void>>().mockResolvedValue()
@@ -44,10 +45,12 @@ function mountDialog(options?: {
       maxLength: MAX_LENGTH,
       tooLongError: 'Too long',
       initialName: options?.initialName,
+      changed: options?.changed,
       validate,
       save,
       'onUpdate:open': (value: boolean) => wrapper.setProps({ open: value }),
     },
+    slots: { default: '<p class="extra">Extra field</p>' },
     global: { plugins: [createAppI18n(['en'], null)] },
     attachTo: document.body,
   })
@@ -82,6 +85,24 @@ describe('BaseNameDialog', () => {
 
     expect(save).not.toHaveBeenCalled()
     expect(wrapper.props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('saves an unchanged name when another field changed', async () => {
+    const { wrapper, save } = mountDialog({ open: true, initialName: 'Market', changed: true })
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(save).toHaveBeenCalledWith('Market')
+    expect(wrapper.props('open')).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('shows extra fields below the name, inside the form', () => {
+    const { wrapper } = mountDialog()
+
+    expect(wrapper.get('form .extra').text()).toBe('Extra field')
     wrapper.unmount()
   })
 
