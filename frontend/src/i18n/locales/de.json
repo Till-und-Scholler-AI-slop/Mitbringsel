@@ -73,6 +73,7 @@
   },
   "invite": {
     "title": "Du bist eingeladen!",
+    "tagline": "Gemeinsam einkaufen, live synchron.",
     "loadingText": "Einladung wird geladen …",
     "card": "Einladung",
     "invitedBy": "{name} lädt dich ein in",

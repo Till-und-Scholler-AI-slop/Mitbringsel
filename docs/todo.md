@@ -6,7 +6,7 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
-- [ ] **Desktop-Variante der Einladung** (`markt2-einladung-desktop-*`): Kopf und Karte nebeneinander. `InviteView` ist vorerst einspaltig. (Verwalten ist zweispaltig, siehe `GroupSettingsView`.)
+- [ ] **Einladung im schmalen Desktop-Fenster:** Zwischen 768 und etwa 880 px rutscht der Inhalt unter das grüne Feld; das Feld behält dann seine Ecken rechts oben und unten, wie im Design (`markt2-einladung-desktop-*`) vorgesehen, wirkt aber gestaucht. Bei Bedarf dort die Ecken unten setzen (zweiter Breakpoint).
 - [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
 - [ ] **Löschen-Text mit Anzahlen** (`verwalten-loeschen-*`): Das Design nennt beim Löschen eines Haushalts, wie viele Listen und Mitglieder betroffen sind („mit allen 3 Listen … für alle 6 Mitglieder“). Der Text nennt bisher nur den Namen; die Listenanzahl kennt die Verwalten-Seite noch nicht.
 - [ ] **Fehler bei leerem Namen nach Verlassen des Felds** (`verwalten-umbenennen-*`): Das Design zeigt „Gib deinem Haushalt einen Namen.“, wenn das Feld leer verlassen wird. `BaseNameDialog` behandelt einen leeren Namen bewusst nicht als Fehler, der Knopf wartet nur.

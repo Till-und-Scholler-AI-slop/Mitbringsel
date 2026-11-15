@@ -2,14 +2,21 @@
 import { useI18n } from 'vue-i18n'
 
 // The tilted app name sticker in the green bar. flat: without the sticker
-// shadow, as in the compact head of the list view.
-withDefaults(defineProps<{ small?: boolean; flat?: boolean }>(), { small: false, flat: false })
+// shadow, as in the compact head of the list view. large: the big sticker
+// of a desktop brand panel (invite page).
+withDefaults(defineProps<{ small?: boolean; large?: boolean; flat?: boolean }>(), {
+  small: false,
+  large: false,
+  flat: false,
+})
 
 const { t } = useI18n()
 </script>
 
 <template>
-  <span :class="['logo', { 'logo--small': small, 'logo--flat': flat }]">{{ t('app.name') }}</span>
+  <span :class="['logo', { 'logo--small': small, 'logo--large': large, 'logo--flat': flat }]">{{
+    t('app.name')
+  }}</span>
 </template>
 
 <style scoped>
@@ -31,6 +38,11 @@ const { t } = useI18n()
   padding: var(--space-1) var(--space-3);
   font-size: var(--font-size-md);
 }
+.logo--large {
+  padding: var(--space-2) var(--space-5);
+  font-size: 2rem;
+}
+
 .logo--flat {
   box-shadow: none;
 }
