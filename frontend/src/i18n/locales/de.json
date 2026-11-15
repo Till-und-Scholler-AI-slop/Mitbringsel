@@ -226,7 +226,9 @@
       "justChanged": "{name} · gerade geändert",
       "justChangedAnon": "Gerade geändert",
       "justChangedBy": "gerade von {name} geändert",
-      "justChangedByAnon": "gerade geändert"
+      "justChangedByAnon": "gerade geändert",
+      "editing": "Wird bearbeitet",
+      "editingLabel": "wird bearbeitet"
     },
     "done": {
       "title": "Erledigt ({count})",

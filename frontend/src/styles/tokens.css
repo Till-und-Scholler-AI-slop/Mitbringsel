@@ -141,6 +141,10 @@
   /* An item another member just changed. */
   --color-recent-bg: #ffede6;
   --shadow-recent: 0 0 0 3px #16181d, 0 0 0 7px #ff7a59;
+  /* The item whose form is open in the panel, and that panel (desktop). */
+  --color-edit-tag-bg: #16181d;
+  --color-edit-tag-text: #ffffff;
+  --color-panel-border: #16181d;
   --color-spinner-track: rgb(22 24 29 / 0.15);
   --color-scrim: rgb(22 24 29 / 0.45);
   /* Toasts: an ink surface that stands out from the light page. */
@@ -216,6 +220,9 @@
     --color-offline-border: #dce3ee;
     --color-recent-bg: #3a2230;
     --shadow-recent: 0 0 0 3px #ff7a59, 0 0 18px rgb(255 122 89 / 0.4);
+    --color-edit-tag-bg: #dce3ee;
+    --color-edit-tag-text: #16181d;
+    --color-panel-border: #ff7a59;
     --color-spinner-track: rgb(242 245 250 / 0.2);
     --color-scrim: rgb(0 0 0 / 0.55);
     /* Toasts: a light surface that stands out from the dark page. */
@@ -286,6 +293,9 @@
   --color-offline-border: #dce3ee;
   --color-recent-bg: #3a2230;
   --shadow-recent: 0 0 0 3px #ff7a59, 0 0 18px rgb(255 122 89 / 0.4);
+  --color-edit-tag-bg: #dce3ee;
+  --color-edit-tag-text: #16181d;
+  --color-panel-border: #ff7a59;
   --color-spinner-track: rgb(242 245 250 / 0.2);
   --color-scrim: rgb(0 0 0 / 0.55);
   /* Toasts: a light surface that stands out from the dark page. */

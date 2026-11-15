@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -8,9 +8,12 @@ import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import DoneSection from '@/components/list/DoneSection.vue'
 import ItemFormDialog from '@/components/list/ItemFormDialog.vue'
+import ItemFormPanel from '@/components/list/ItemFormPanel.vue'
+import { ITEM_PANEL_QUERY, ITEM_PANEL_TARGET } from '@/components/list/itemPanel'
 import ItemRow from '@/components/list/ItemRow.vue'
 import QuickAddBar from '@/components/list/QuickAddBar.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useRemoveItems } from '@/composables/useRemoveItems'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { useGroupsStore } from '@/stores/groups'
@@ -21,8 +24,9 @@ import { useToastsStore } from '@/stores/toasts'
 import type { GroupMember, Item, List } from '@/types/api'
 
 // The items of the open list: quick-add bar, open and done items, and the
-// form dialogs to add details or edit. Switching lists resets open dialogs
-// and check errors while keeping typed quick-add text and the folded state.
+// item form to add details or edit: a dialog, or on a wide screen a panel
+// next to the list. Switching lists closes the form and resets check errors
+// while keeping typed quick-add text and the folded state.
 const props = defineProps<{ list: List; members: GroupMember[] }>()
 
 const { t } = useI18n()
@@ -33,9 +37,18 @@ const recentChanges = useRecentChangesStore()
 const toasts = useToastsStore()
 const { removeChecked, removeItem } = useRemoveItems()
 
+const panelMode = useMediaQuery(ITEM_PANEL_QUERY)
+const panel = ref<InstanceType<typeof ItemFormPanel> | null>(null)
+// Where the focus goes back to when the panel closes. A dialog does that
+// itself; the panel is no dialog.
+let opener: HTMLElement | null = null
+
 // The item form for a new item, with the name typed into the quick-add bar.
+// The key changes with every opening, so the panel starts afresh even if it
+// was open already.
 const newItemOpen = ref(false)
 const newItemName = ref('')
+const newItemKey = ref(0)
 // The item whose form is open, and its name for the case that someone else
 // deletes it meanwhile.
 const editingId = ref<string | null>(null)
@@ -90,15 +103,48 @@ function creatorOf(item: Item) {
   return props.members.find((m) => m.userId === item.createdBy)?.displayName ?? null
 }
 
+// The panel stays open while the list is used beside it, so opening the form
+// for something else just switches it.
+function rememberOpener() {
+  const active = document.activeElement
+  if (active instanceof HTMLElement && active !== document.body) opener = active
+}
+
 function startEdit(item: Item) {
+  rememberOpener()
+  newItemOpen.value = false
+  if (editingId.value === item.id) {
+    panel.value?.focusName()
+    return
+  }
   editingName = item.name
   editingId.value = item.id
+}
+
+function openNewItem(name: string) {
+  rememberOpener()
+  editingId.value = null
+  newItemName.value = name
+  newItemKey.value++
+  newItemOpen.value = true
+}
+
+// Only for the panel: the focus goes back to where the form was opened from,
+// if that is still there (a deleted item takes its row along).
+async function closePanel() {
+  newItemOpen.value = false
+  editingId.value = null
+  const target = opener
+  opener = null
+  await nextTick()
+  if (target?.isConnected) target.focus()
 }
 
 // Deleting closes the form; the list offers undo in a toast.
 function removeEditing(fromKeyboard: boolean) {
   const id = editingId.value
-  editingId.value = null
+  if (panelMode.value) void closePanel()
+  else editingId.value = null
   if (id) removeItem(id, fromKeyboard)
 }
 
@@ -128,18 +174,18 @@ watch(editing, (now, before) => {
     toasts.show({ kind: 'info', text: t('list.itemForm.deletedMeanwhile', { name: editingName }) })
   }
 })
-
-function openNewItem(name: string) {
-  newItemName.value = name
-  newItemOpen.value = true
-}
 </script>
 
 <template>
   <div class="list-items">
     <!-- First in the DOM and on the desktop, so it comes first for the
        keyboard; on the phone CSS moves it to the bottom of the screen. -->
-    <QuickAddBar class="add-bar" :list-id="list.id" @details="openNewItem" />
+    <QuickAddBar
+      class="add-bar"
+      :list-id="list.id"
+      :opens-dialog="!panelMode"
+      @details="openNewItem"
+    />
 
     <p v-if="list.archivedAt" class="archived">
       <BaseIcon name="archive" :size="18" /> {{ t('list.archivedBadge') }}
@@ -178,6 +224,8 @@ function openNewItem(name: string) {
           :item="item"
           :person="personOf(item)"
           :recent="recentOf(item)"
+          :editing="panelMode && editingId === item.id"
+          :opens-dialog="!panelMode"
           @toggle="toggle(item)"
           @edit="startEdit(item)"
         />
@@ -192,22 +240,40 @@ function openNewItem(name: string) {
       />
     </template>
 
-    <ItemFormDialog
-      v-model:open="newItemOpen"
-      :list-id="list.id"
-      :list-name="list.name"
-      :initial-name="newItemName"
-    />
-    <ItemFormDialog
-      v-if="editing"
-      :open="true"
-      :list-id="list.id"
-      :list-name="list.name"
-      :item="editing"
-      :creator-name="creatorOf(editing)"
-      @update:open="editingId = null"
-      @remove="removeEditing"
-    />
+    <template v-if="!panelMode">
+      <ItemFormDialog
+        v-model:open="newItemOpen"
+        :list-id="list.id"
+        :list-name="list.name"
+        :initial-name="newItemName"
+      />
+      <ItemFormDialog
+        v-if="editing"
+        :open="true"
+        :list-id="list.id"
+        :list-name="list.name"
+        :item="editing"
+        :creator-name="creatorOf(editing)"
+        @update:open="editingId = null"
+        @remove="removeEditing"
+      />
+    </template>
+    <!-- defer: the target is rendered by ListView in the same pass. The key
+       starts a new form for another item; a live change of the same item
+       keeps what was typed. -->
+    <Teleport v-else-if="newItemOpen || editing" defer :to="`#${ITEM_PANEL_TARGET}`">
+      <ItemFormPanel
+        ref="panel"
+        :key="editing ? editing.id : `new-${newItemKey}`"
+        :list-id="list.id"
+        :list-name="list.name"
+        :initial-name="editing ? undefined : newItemName"
+        :item="editing"
+        :creator-name="editing ? creatorOf(editing) : undefined"
+        @close="closePanel"
+        @remove="removeEditing"
+      />
+    </Teleport>
   </div>
 </template>
 

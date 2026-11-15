@@ -14,8 +14,11 @@ const MAX_NAME_LENGTH = 100
 // Adds an item with just its name: type, Enter, type the next one (design
 // "markt2-liste", "markt2-desktop"). On the phone the bar sits at the bottom,
 // near the thumb; the page places it.
-// "With details" hands what was typed so far to the item form.
-const props = defineProps<{ listId: string }>()
+// "With details" hands what was typed so far to the item form; opensDialog
+// is false when that form is a panel next to the list.
+const props = withDefaults(defineProps<{ listId: string; opensDialog?: boolean }>(), {
+  opensDialog: true,
+})
 const emit = defineEmits<{ details: [name: string] }>()
 
 const { t } = useI18n()
@@ -73,7 +76,7 @@ async function add() {
       class="details press-sticker"
       :aria-label="t('list.quickAdd.details')"
       :title="t('list.quickAdd.details')"
-      aria-haspopup="dialog"
+      :aria-haspopup="opensDialog ? 'dialog' : undefined"
       @click="openDetails"
     >
       <BaseIcon name="sliders" :size="22" />
