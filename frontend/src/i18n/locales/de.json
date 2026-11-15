@@ -268,6 +268,7 @@
       "description": "Lege eine Liste an, zum Beispiel für den Wocheneinkauf.",
       "create": "Liste anlegen"
     },
+    "deletedMeanwhile": "„{name}“ wurde gelöscht",
     "name": {
       "createTitle": "Neue Liste",
       "renameTitle": "Liste umbenennen",

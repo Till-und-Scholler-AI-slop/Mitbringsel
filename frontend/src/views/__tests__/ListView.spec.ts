@@ -482,6 +482,53 @@ describe('ListView: list actions', () => {
 
     expect(listsService.remove).toHaveBeenCalledWith('l1')
     expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l2' })
+    expect(wrapper.find('.toast').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('shows a toast and moves to the next active list when another member deletes the open list', async () => {
+    const { wrapper, router } = await mountView()
+
+    serverEvents.emit({
+      type: 'listDeleted',
+      payload: { groupId: 'g1', listId: 'l1', actorId: 'user-2' },
+    })
+    await flushPromises()
+
+    expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l2' })
+    expect(wrapper.get('.toast .text').text()).toBe('“Supermarkt” was deleted')
+    wrapper.unmount()
+  })
+
+  it('shows a toast when the open list is gone after a reload', async () => {
+    const { wrapper, router } = await mountView()
+    listsService.list.mockResolvedValue([list('l2', 'Baumarkt')])
+
+    serverEvents.emit({ type: 'ready' })
+    await flushPromises()
+
+    expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l2' })
+    expect(wrapper.get('.toast .text').text()).toBe('“Supermarkt” was deleted')
+    wrapper.unmount()
+  })
+
+  it('closes an open item form and shows only the list toast when someone deletes the list', async () => {
+    itemsService.list.mockResolvedValue([item('i1', 'Milch')])
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.open .edit').trigger('click')
+    expect(wrapper.find('dialog[open]').exists()).toBe(true)
+
+    serverEvents.emit({
+      type: 'listDeleted',
+      payload: { groupId: 'g1', listId: 'l1', actorId: 'user-2' },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(wrapper.findAll('.toast .text').map((t) => t.text())).toEqual([
+      '“Supermarkt” was deleted',
+    ])
     wrapper.unmount()
   })
 

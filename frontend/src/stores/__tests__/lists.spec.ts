@@ -677,3 +677,49 @@ describe('lists store: ready', () => {
     expect(names(store.listsOf('g1'))).toEqual(['Eins'])
   })
 })
+
+describe('lists store: deletions', () => {
+  it('remembers when another member deletes a list, and keeps self on own delete', async () => {
+    const service = fakeService([list('l1', 'Supermarkt'), list('l2', 'Baumarkt')])
+    const { store, events } = setup(service)
+    await store.load('g1')
+
+    expect(store.deletionOf('l1')).toBeUndefined()
+
+    events.emit(deleted('l1'))
+    expect(store.deletionOf('l1')).toEqual({ name: 'Supermarkt', cause: 'deleted' })
+
+    await store.remove('l2')
+    events.emit({ type: 'listDeleted', payload: { groupId: 'g1', listId: 'l2', actorId: ANNA } })
+    expect(store.deletionOf('l2')).toEqual({ name: 'Baumarkt', cause: 'self' })
+  })
+
+  it('marks a list deleted by our own listDeleted event before remove settles as self', async () => {
+    const service = fakeService([list('l1', 'Supermarkt')])
+    const removing = deferred<void>()
+    service.remove.mockReturnValueOnce(removing.promise)
+    const { store, events } = setup(service)
+    await store.load('g1')
+
+    const call = store.remove('l1')
+    events.emit({ type: 'listDeleted', payload: { groupId: 'g1', listId: 'l1', actorId: ANNA } })
+    removing.resolve(undefined)
+    await call
+
+    expect(store.deletionOf('l1')).toEqual({ name: 'Supermarkt', cause: 'self' })
+  })
+
+  it('remembers a list missing after reload as unknown and forgets deletions on user change', async () => {
+    const service = fakeService([list('l1', 'Supermarkt')])
+    const { store, user } = setup(service)
+    await store.load('g1')
+    service.list.mockResolvedValueOnce([])
+
+    await store.load('g1')
+    expect(store.deletionOf('l1')).toEqual({ name: 'Supermarkt', cause: 'unknown' })
+
+    user.value = null
+    await flushPromises()
+    expect(store.deletionOf('l1')).toBeUndefined()
+  })
+})

@@ -11,6 +11,14 @@ import type { List } from '@/types/api'
 /** idle: not loaded yet. error: the last load failed (lists may still be shown). */
 export type ListsStatus = 'idle' | 'loading' | 'ready' | 'error'
 
+/** Why a list disappeared from the store; self means the user deleted it. */
+export type ListDeletionCause = 'self' | 'deleted' | 'unknown'
+
+export interface ListDeletion {
+  name: string
+  cause: ListDeletionCause
+}
+
 /** The lists of one group and how loading them went. */
 interface GroupLists {
   lists: List[]
@@ -70,6 +78,8 @@ export function defineListsStore(
     const touchedAt = new Map<string, number>()
     // The start of the newest load whose answer was applied, per group.
     const appliedLoadStart = new Map<string, number>()
+    // Why each list disappeared, read once by the view that was showing it.
+    const deletions = new Map<string, ListDeletion>()
 
     function reset() {
       generation++
@@ -77,6 +87,7 @@ export function defineListsStore(
       tombstones.clear()
       touchedAt.clear()
       appliedLoadStart.clear()
+      deletions.clear()
     }
 
     watch(currentUserId, reset)
@@ -120,6 +131,11 @@ export function defineListsStore(
         }
       }
       return undefined
+    }
+
+    /** Why a list is gone; undefined while it is still in the store. */
+    function deletionOf(listId: string): ListDeletion | undefined {
+      return byId(listId) ? undefined : deletions.get(listId)
     }
 
     // The order of the server: oldest first, ties by ID. Dates are compared
@@ -172,12 +188,17 @@ export function defineListsStore(
     }
 
     // A list is deleted on the server, by us or someone else. Its items go
-    // with it.
-    function takeDeletion(groupId: string | undefined, listId: string) {
+    // with it. Keeps the first cause if it is already gone (e.g. our own
+    // delete followed by our own listDeleted event).
+    function takeDeletion(groupId: string | undefined, listId: string, cause: ListDeletionCause) {
       tombstones.add(listId)
       const entry = groupId === undefined ? undefined : byGroup.value[groupId]
       if (entry) {
-        entry.lists = entry.lists.filter((list) => list.id !== listId)
+        const target = entry.lists.find((list) => list.id === listId)
+        if (target) {
+          deletions.set(listId, { name: target.name, cause })
+          entry.lists = entry.lists.filter((list) => list.id !== listId)
+        }
       }
       forgetItems(listId)
     }
@@ -236,6 +257,7 @@ export function defineListsStore(
           merged.push(held)
         } else {
           tombstones.add(id)
+          deletions.set(id, { name: held.name, cause: 'unknown' })
           forgetItems(id)
         }
       }
@@ -318,7 +340,7 @@ export function defineListsStore(
       const groupId = byId(listId)?.groupId
       await service.remove(listId)
       if (started === generation) {
-        takeDeletion(groupId, listId)
+        takeDeletion(groupId, listId, 'self')
       }
     }
 
@@ -327,7 +349,13 @@ export function defineListsStore(
     // store, as the socket outlives it.
     const unsubscribes = [
       events.on('listChanged', ({ payload }) => takeServerList(payload.list, 'event')),
-      events.on('listDeleted', ({ payload }) => takeDeletion(payload.groupId, payload.listId)),
+      events.on('listDeleted', ({ payload }) =>
+        takeDeletion(
+          payload.groupId,
+          payload.listId,
+          payload.actorId === currentUserId() ? 'self' : 'deleted',
+        ),
+      ),
       events.on('groupRemoved', ({ payload }) => forgetGroup(payload.groupId)),
       // Events are best effort and the connection may have been down:
       // every group we have loaded (or are loading) may be outdated.
@@ -352,6 +380,7 @@ export function defineListsStore(
       statusOf,
       errorCodeOf,
       byId,
+      deletionOf,
       load,
       create,
       rename,
