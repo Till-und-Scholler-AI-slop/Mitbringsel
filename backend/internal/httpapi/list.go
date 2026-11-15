@@ -224,6 +224,8 @@ func writeListError(w http.ResponseWriter, op string, err error) {
 		writeError(w, http.StatusBadRequest, apigen.ErrorCodeListNameInvalid)
 	case errors.Is(err, list.ErrInvalidIcon):
 		writeError(w, http.StatusBadRequest, apigen.ErrorCodeListIconInvalid)
+	case errors.Is(err, list.ErrTooManyLists):
+		writeError(w, http.StatusConflict, apigen.ErrorCodeTooManyLists)
 	default:
 		slog.Error("lists: "+op, "error", err)
 		writeError(w, http.StatusInternalServerError, apigen.ErrorCodeInternal)

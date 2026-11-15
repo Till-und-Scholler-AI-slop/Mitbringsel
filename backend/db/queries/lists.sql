@@ -7,6 +7,11 @@ RETURNING *;
 SELECT * FROM lists
 WHERE id = $1;
 
+-- name: CountListsForGroup :one
+-- All of the group's lists, archived ones included.
+SELECT count(*) FROM lists
+WHERE group_id = $1;
+
 -- name: ListListsForGroup :many
 -- Oldest first, so the order does not jump when a list is renamed.
 -- Archived lists only come along if the caller asks for them.

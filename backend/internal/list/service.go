@@ -69,6 +69,16 @@ func (s *Service) Create(ctx context.Context, actor, groupID uuid.UUID, name str
 	if err != nil {
 		return List{}, err
 	}
+	// Two requests at the same moment can both pass this check and exceed
+	// the limit by one. The limit only keeps the table small, so that is
+	// not worth a lock (like group.MaxOwnedGroups).
+	count, err := s.repo.CountForGroup(ctx, groupID)
+	if err != nil {
+		return List{}, fmt.Errorf("count lists: %w", err)
+	}
+	if count >= MaxListsPerGroup {
+		return List{}, ErrTooManyLists
+	}
 	l, err := s.repo.Create(ctx, groupID, name, icon)
 	if err != nil {
 		return List{}, fmt.Errorf("create list: %w", err)

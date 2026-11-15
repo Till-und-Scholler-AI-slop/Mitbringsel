@@ -302,6 +302,7 @@ func TestListErrors(t *testing.T) {
 		{"forbidden", list.ErrForbidden, http.StatusForbidden, "FORBIDDEN"},
 		{"invalid name", fmt.Errorf("%w: name is empty", list.ErrInvalidName), http.StatusBadRequest, "LIST_NAME_INVALID"},
 		{"invalid icon", fmt.Errorf("%w: %q", list.ErrInvalidIcon, "x"), http.StatusBadRequest, "LIST_ICON_INVALID"},
+		{"too many lists", list.ErrTooManyLists, http.StatusConflict, "TOO_MANY_LISTS"},
 		{"database failure", errors.New("connection refused"), http.StatusInternalServerError, "INTERNAL_ERROR"},
 	}
 	routes := []struct {

@@ -37,6 +37,7 @@ const (
 	ErrorCodeRateLimited         ErrorCode = "RATE_LIMITED"
 	ErrorCodeTooManyGroups       ErrorCode = "TOO_MANY_GROUPS"
 	ErrorCodeTooManyInvites      ErrorCode = "TOO_MANY_INVITES"
+	ErrorCodeTooManyLists        ErrorCode = "TOO_MANY_LISTS"
 	ErrorCodeUnauthenticated     ErrorCode = "UNAUTHENTICATED"
 )
 
@@ -94,6 +95,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeTooManyGroups:
 		return true
 	case ErrorCodeTooManyInvites:
+		return true
+	case ErrorCodeTooManyLists:
 		return true
 	case ErrorCodeUnauthenticated:
 		return true

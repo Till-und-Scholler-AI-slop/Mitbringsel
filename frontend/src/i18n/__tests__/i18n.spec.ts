@@ -53,6 +53,7 @@ const API_ERROR_CODES: Record<ApiErrorCode, true> = {
   LIST_NOT_FOUND: true,
   LIST_NAME_INVALID: true,
   LIST_ICON_INVALID: true,
+  TOO_MANY_LISTS: true,
   ITEM_NOT_FOUND: true,
   ITEM_NAME_INVALID: true,
   ITEM_QUANTITY_INVALID: true,
