@@ -29,7 +29,7 @@ Alles, was mehr als einmal vorkommt, wird eine Komponente in `components/base/` 
 
 | Komponente | Zweck |
 | --- | --- |
-| `BaseButton` | Varianten primary, secondary, ghost, danger; Größen; Lade- und Disabled-Zustand |
+| `BaseButton` | Varianten primary, secondary, ghost, danger, danger-solid (endgültiges „Ja“ in Bestätigungsdialogen); Größen; Lade- und Disabled-Zustand |
 | `BaseIconButton` | Button nur mit Icon und verpflichtendem `aria-label` |
 | `BaseInput` / `BaseTextarea` | Label, Fehlermeldung, `v-model` |
 | `BaseSelect` | Auswahl, z.B. für Einheiten |

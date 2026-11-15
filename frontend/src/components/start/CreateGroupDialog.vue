@@ -12,6 +12,10 @@ const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
 const groups = useGroupsStore()
 
+// Says by how much to shorten (design "verwalten-umbenennen-zulang").
+const tooLong = (excess: number) =>
+  t('common.groupNameTooLong', { max: GROUP_NAME_MAX_LENGTH, n: excess }, excess)
+
 async function save(trimmed: string) {
   emit('created', await groups.create(trimmed))
 }
@@ -27,7 +31,7 @@ async function save(trimmed: string) {
     :cancel-label="t('start.create.cancel')"
     :submit-label="t('start.create.submit')"
     :max-length="GROUP_NAME_MAX_LENGTH"
-    :too-long-error="t('errors.GROUP_NAME_INVALID')"
+    :too-long-error="tooLong"
     :validate="validateGroupName"
     :save="save"
   />

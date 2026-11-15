@@ -30,6 +30,7 @@ function mountDialog(options?: {
   open?: boolean
   initialName?: string
   changed?: boolean
+  tooLongError?: string | ((excess: number) => string)
   save?: (name: string) => Promise<void>
 }) {
   const save = options?.save ?? vi.fn<(name: string) => Promise<void>>().mockResolvedValue()
@@ -43,7 +44,7 @@ function mountDialog(options?: {
       cancelLabel: 'Cancel',
       submitLabel: 'Save',
       maxLength: MAX_LENGTH,
-      tooLongError: 'Too long',
+      tooLongError: options?.tooLongError ?? 'Too long',
       initialName: options?.initialName,
       changed: options?.changed,
       validate,
@@ -115,6 +116,16 @@ describe('BaseNameDialog', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('Too long')
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
     expect(save).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('builds tooLongError from how many characters are too many', async () => {
+    const { wrapper } = mountDialog({ tooLongError: (excess) => `Cut ${excess}` })
+
+    // Spaces around the name do not count; an emoji is one character.
+    await wrapper.get('input').setValue(`  ${'x'.repeat(MAX_LENGTH + 1)}🥖  `)
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('Cut 2')
     wrapper.unmount()
   })
 

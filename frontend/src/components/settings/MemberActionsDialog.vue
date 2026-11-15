@@ -7,6 +7,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import type { IconName } from '@/components/base/icons'
+import MemberRoleChip from '@/components/settings/MemberRoleChip.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { memberActions, type MemberAction } from '@/services/groupRoles'
@@ -18,7 +19,7 @@ const AVATAR_SIZE = 48
 const ACTION_ICONS: Record<MemberAction, IconName> = {
   promote: 'shield',
   demote: 'user',
-  remove: 'userX',
+  remove: 'userMinus',
 }
 
 // The parent renders this dialog only while a member is selected, so every
@@ -64,9 +65,11 @@ async function run(action: MemberAction) {
 </script>
 
 <template>
-  <BaseDialog v-model:open="open" :title="t('settings.member.title')">
+  <!-- Named after the person, with their role below (design "verwalten-aktionen"). -->
+  <BaseDialog v-model:open="open" :title="member.displayName">
+    <template #subtitle><MemberRoleChip :role="member.role" /></template>
     <div class="body">
-      <div class="who">
+      <div v-if="!confirmingRemove" class="who">
         <BaseAvatar :name="member.displayName" :src="member.avatarUrl" :size="AVATAR_SIZE" />
         <span class="question">
           {{ t('settings.member.question', { name: member.displayName }) }}
@@ -87,7 +90,7 @@ async function run(action: MemberAction) {
           @click="run(action)"
         >
           <span class="action-icon" aria-hidden="true">
-            <BaseIcon :name="ACTION_ICONS[action]" :size="20" />
+            <BaseIcon :name="ACTION_ICONS[action]" :size="20" :stroke-width="2.5" />
           </span>
           <span class="action-text">
             <span class="action-title">{{ t(`settings.member.${action}.title`) }}</span>
@@ -106,7 +109,7 @@ async function run(action: MemberAction) {
           <BaseButton variant="secondary" class="back" @click="confirmingRemove = false">
             {{ t('settings.member.confirm.back') }}
           </BaseButton>
-          <BaseButton variant="danger" class="remove" :loading="busy" @click="run('remove')">
+          <BaseButton variant="danger-solid" class="remove" :loading="busy" @click="run('remove')">
             {{ t('settings.member.confirm.remove') }}
           </BaseButton>
         </div>
@@ -119,17 +122,21 @@ async function run(action: MemberAction) {
 .body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 0.625rem;
 }
 
 .who {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  padding-bottom: var(--space-1);
 }
 
 .question {
-  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.25rem;
   overflow-wrap: anywhere;
 }
 
@@ -142,16 +149,19 @@ async function run(action: MemberAction) {
   font-weight: var(--font-weight-bold);
 }
 
+/* One card per action: icon on a round badge, title, what it does. */
 .action {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: var(--size-touch);
-  padding: var(--space-3) var(--space-4);
+  width: 100%;
+  min-height: 4rem;
+  padding: var(--space-2) 0.875rem var(--space-2) 0.625rem;
   border: var(--border-width-md) solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   color: var(--color-text);
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
@@ -161,56 +171,85 @@ async function run(action: MemberAction) {
   opacity: 0.6;
 }
 
+.action-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.625rem;
+  height: 2.625rem;
+  border-radius: var(--radius-full);
+  background: var(--color-muted-bg);
+  color: var(--color-text);
+}
+
+.action-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.action-title {
+  font-size: 1.0625rem;
+  font-weight: var(--font-weight-black);
+  line-height: 1.375rem;
+}
+
+.action-description {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.1875rem;
+  overflow-wrap: anywhere;
+}
+
+/* Removing: red card, white icon on red, the description in text color. */
 .action--danger {
   border-color: var(--color-danger);
   background: var(--color-danger-surface);
   color: var(--color-danger-text);
 }
 
-.action-icon {
-  flex: none;
-  display: grid;
-  place-items: center;
+.action--danger .action-icon {
+  background: var(--color-danger);
+  color: var(--color-on-danger);
 }
 
-.action-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.action-title {
-  font-weight: var(--font-weight-black);
-}
-
-.action-description {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  overflow-wrap: anywhere;
+.action--danger .action-description {
+  color: var(--color-text);
 }
 
 .confirm {
-  margin: 0;
-  padding: var(--space-3);
+  margin: 0 0 0.375rem;
+  padding: 0.875rem;
   border: var(--border-width-md) solid var(--color-danger);
   border-radius: var(--radius-lg);
   background: var(--color-danger-surface);
-  color: var(--color-danger-text);
+  color: var(--color-text);
+  font-size: 0.9375rem;
   font-weight: var(--font-weight-semibold);
+  line-height: 1.3125rem;
   overflow-wrap: anywhere;
 }
 
 .buttons {
   display: flex;
-  gap: var(--space-3);
+  gap: 0.625rem;
+}
+
+/* The extra room goes 1 : 1.3 like in the design. Growing from the text
+   width (auto) and a smaller side padding keep a long label like
+   "Endgültig löschen" on one line on a phone. */
+.back,
+.remove {
+  padding-inline: var(--space-3);
 }
 
 .back {
-  flex: 1;
+  flex: 1 1 auto;
 }
 
 .remove {
-  flex: 1.5;
+  flex: 1.3 1 auto;
 }
 </style>

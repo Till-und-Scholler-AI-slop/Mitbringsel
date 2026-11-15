@@ -102,12 +102,7 @@ export const ICONS = {
     'M22 21v-2a4 4 0 0 0-3-3.87',
     'M16 3.13a4 4 0 0 1 0 7.75',
   ],
-  userX: [
-    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
-    'M5 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0',
-    'm17 8 5 5',
-    'm22 8-5 5',
-  ],
+  userMinus: ['M2 21a8 8 0 0 1 13.292-6', 'M10 3a5 5 0 1 0 0 10a5 5 0 1 0 0-10', 'M22 19h-6'],
   // Lucide's "info" without the circle: it sits on a round badge.
   info: ['M12 16v-4', 'M12 8h.01'],
   trash: [

@@ -32,6 +32,18 @@ function mountDialog(open: boolean) {
 }
 
 describe('BaseDialog', () => {
+  it('shows a subtitle below the title', () => {
+    const wrapper = mount(BaseDialog, {
+      props: { open: true, title: 'Mehmet', 'onUpdate:open': vi.fn() },
+      slots: { subtitle: '<span class="chip">Admin</span>' },
+      global: { plugins: [createAppI18n(['en'], null)] },
+      attachTo: document.body,
+    })
+
+    expect(wrapper.get('.heading h2 + .chip').text()).toBe('Admin')
+    wrapper.unmount()
+  })
+
   it('is closed while open is false', () => {
     const wrapper = mountDialog(false)
 

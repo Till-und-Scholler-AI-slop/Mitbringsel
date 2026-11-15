@@ -1,7 +1,8 @@
 {
   "common": {
     "close": "Close",
-    "retry": "Try again"
+    "retry": "Try again",
+    "groupNameTooLong": "The name can have at most {max} characters. Please shorten it by one character. | The name can have at most {max} characters. Please shorten it by {n} characters."
   },
   "toast": {
     "close": "Close message"
@@ -349,7 +350,8 @@
     },
     "rename": {
       "title": "Rename household",
-      "nameLabel": "New name",
+      "nameLabel": "Name of the household",
+      "hint": "All members see the new name right away.",
       "cancel": "Cancel",
       "submit": "Save"
     },
@@ -366,7 +368,6 @@
       "explain": "The founder deletes the household and appoints admins. Admins invite, rename and remove members. Members use the lists and can leave."
     },
     "member": {
-      "title": "Manage member",
       "question": "What should happen to {name}?",
       "promote": {
         "title": "Make admin",

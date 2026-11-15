@@ -76,6 +76,14 @@ function actionTitles(wrapper: ReturnType<typeof mountDialog>) {
 }
 
 describe('MemberActionsDialog', () => {
+  it('is named after the member and shows their role', () => {
+    const wrapper = mountDialog('owner', 'admin')
+
+    expect(wrapper.get('h2').text()).toBe('Mehmet')
+    expect(wrapper.get('.heading .role').text()).toBe('Admin')
+    wrapper.unmount()
+  })
+
   it.each([
     ['owner', 'member', ['Make admin', 'Remove from household']],
     ['owner', 'admin', ['Remove admin rights', 'Remove from household']],
@@ -115,6 +123,8 @@ describe('MemberActionsDialog', () => {
     await wrapper.get('.action').trigger('click')
 
     expect(service.removeMember).not.toHaveBeenCalled()
+    // The final "yes" is the filled red button.
+    expect(wrapper.get('.remove').classes()).toContain('base-button--danger-solid')
     expect(wrapper.get('.confirm').text()).toContain(
       'Mehmet loses access to all lists of “WG Kaiserstraße”.',
     )

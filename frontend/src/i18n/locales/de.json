@@ -1,7 +1,8 @@
 {
   "common": {
     "close": "Schließen",
-    "retry": "Nochmal versuchen"
+    "retry": "Nochmal versuchen",
+    "groupNameTooLong": "Der Name darf höchstens {max} Zeichen haben. Bitte kürze ihn um ein Zeichen. | Der Name darf höchstens {max} Zeichen haben. Bitte kürze ihn um {n} Zeichen."
   },
   "toast": {
     "close": "Meldung schließen"
@@ -349,7 +350,8 @@
     },
     "rename": {
       "title": "Haushalt umbenennen",
-      "nameLabel": "Neuer Name",
+      "nameLabel": "Name des Haushalts",
+      "hint": "Alle Mitglieder sehen den neuen Namen sofort.",
       "cancel": "Abbrechen",
       "submit": "Speichern"
     },
@@ -366,7 +368,6 @@
       "explain": "Gründer:in löscht den Haushalt und ernennt Admins. Admins laden ein, benennen um und entfernen Mitglieder. Mitglieder nutzen die Listen und können austreten."
     },
     "member": {
-      "title": "Mitglied verwalten",
       "question": "Was soll mit {name} passieren?",
       "promote": {
         "title": "Zum Admin machen",

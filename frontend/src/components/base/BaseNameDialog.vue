@@ -21,7 +21,8 @@ const props = defineProps<{
   cancelLabel: string
   submitLabel: string
   maxLength: number
-  tooLongError: string
+  /** A text, or one built from how many characters are too many. */
+  tooLongError: string | ((excess: number) => string)
   initialName?: string
   changed?: boolean
   validate: (name: string) => NameProblem | null
@@ -41,7 +42,10 @@ const problem = computed(() => props.validate(name.value))
 // "Too long" is shown while typing. An empty name is not an error, the
 // button just waits. A server error is shown until the name changes.
 const error = computed(() => {
-  if (problem.value === 'tooLong') return props.tooLongError
+  if (problem.value === 'tooLong') {
+    if (typeof props.tooLongError === 'string') return props.tooLongError
+    return props.tooLongError(Array.from(name.value.trim()).length - props.maxLength)
+  }
   return errorCode.value ? serverError.value : null
 })
 
