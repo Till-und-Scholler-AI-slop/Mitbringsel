@@ -4,16 +4,18 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { LONG_PRESS_MS } from '@/composables/useLongPress'
 import { createAppI18n } from '@/i18n'
-import type { List } from '@/types/api'
+import type { List, ListIcon } from '@/types/api'
+
+import { STICKERS } from '@/components/base/stickers'
 
 import ListChips from '../ListChips.vue'
 
-function list(id: string, name: string): List {
+function list(id: string, name: string, icon: ListIcon = 'general'): List {
   return {
     id,
     groupId: 'g1',
     name,
-    icon: 'general',
+    icon,
     archivedAt: null,
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',
@@ -40,7 +42,7 @@ async function mountChips({
   const wrapper = mount(ListChips, {
     props: {
       groupId: 'g1',
-      lists: [list('l1', 'Supermarkt'), list('l2', 'Baumarkt')],
+      lists: [list('l1', 'Supermarkt', 'supermarket'), list('l2', 'Baumarkt', 'hardware')],
       currentId: 'l1',
       openCount,
       archivedCount,
@@ -76,6 +78,19 @@ describe('ListChips', () => {
     expect(current!.find('.count').text()).toBe('3')
     expect(other!.classes()).not.toContain('chip--current')
     expect(other!.find('.count').exists()).toBe(false)
+  })
+
+  it('shows the sticker of each list in front of its name', async () => {
+    const { wrapper } = await mountChips()
+
+    const rotations = wrapper
+      .findAll('.chip--list')
+      .map((chip) => chip.get('.sticker > g').attributes('transform'))
+    expect(rotations).toEqual([
+      `rotate(${STICKERS.supermarket.rotate} 24 24)`,
+      `rotate(${STICKERS.hardware.rotate} 24 24)`,
+    ])
+    expect(wrapper.find('.chip--archive .sticker').exists()).toBe(false)
   })
 
   it('shows no count when nothing is open', async () => {

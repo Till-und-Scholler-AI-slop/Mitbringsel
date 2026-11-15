@@ -4,11 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseSticker from '@/components/base/BaseSticker.vue'
 import { useLongPress } from '@/composables/useLongPress'
 import type { List } from '@/types/api'
 
-// The lists of a household as chips in the green bar; the current one looks
-// pressed in and shows how many items are still open.
+// The lists of a household as chips in the green bar, each with the sticker
+// of its icon; the current one looks pressed in and shows how many items are
+// still open.
 //
 // The actions of a list (rename, archive, delete) open with a long press or
 // right click on its chip, or by choosing the current chip again; the last
@@ -55,6 +57,7 @@ function onClick(list: List) {
       v-on="press.handlers(list)"
       @click="onClick(list)"
     >
+      <BaseSticker :icon="list.icon" />
       <span class="chip-name">{{ list.name }}</span>
       <span v-if="list.id === currentId && openCount > 0" class="count">{{ openCount }}</span>
     </button>
@@ -99,9 +102,9 @@ function onClick(list: List) {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: var(--size-touch);
+  min-height: 3.25rem;
   padding: 0 var(--space-4);
-  border: var(--border-width-sm) solid var(--color-border);
+  border: var(--border-width-md) solid var(--color-border);
   border-radius: var(--radius-full);
   background: var(--color-surface);
   box-shadow: var(--shadow-sticker);
@@ -115,12 +118,23 @@ function onClick(list: List) {
   user-select: none;
 }
 
-/* Pressed in = the list that is open. */
+/* The sticker sits close to the left edge, like on a real chip. */
+.chip--list {
+  padding-left: 2px;
+}
+
+/* Pressed in = the list that is open. Ink border in both themes: it sits on
+   tomato, not on the page. */
 .chip--current {
+  border-color: var(--color-on-accent);
   background: var(--color-primary);
   color: var(--color-primary-contrast);
-  box-shadow: none;
+  box-shadow: inset 0 3px 0 color-mix(in srgb, var(--color-on-accent) 20%, transparent);
   transform: translateY(3px);
+}
+
+.chip--list.chip--current {
+  padding-right: var(--space-3);
 }
 
 .chip-name {
@@ -130,16 +144,17 @@ function onClick(list: List) {
   white-space: nowrap;
 }
 
+/* Ink with white in both themes, like the border of the current chip. */
 .count {
   display: grid;
   place-items: center;
-  min-width: 1.375rem;
-  height: 1.375rem;
-  padding: 0 var(--space-1-5);
+  min-width: 1.625rem;
+  height: 1.5rem;
+  padding: 0 0.4375rem;
   border-radius: var(--radius-full);
-  background: var(--color-selected-bg);
-  color: var(--color-primary);
-  font-size: 0.75rem;
+  background: var(--color-on-accent);
+  color: var(--color-accent-white);
+  font-size: 0.8125rem;
   font-weight: var(--font-weight-heavy);
 }
 
@@ -165,10 +180,6 @@ function onClick(list: List) {
     margin: 0;
     padding: 2px 0 var(--space-1);
     overflow-x: visible;
-  }
-
-  .chip {
-    min-height: 3.125rem;
   }
 
   .add {

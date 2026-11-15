@@ -37,6 +37,7 @@ Alles, was mehr als einmal vorkommt, wird eine Komponente in `components/base/` 
 | `BaseModal` / `BaseBottomSheet` | Dialoge; Bottom Sheet auf dem Smartphone |
 | `BaseToast` | Hinweise, z.B. bei abgelehnten Änderungen; gezeigt über `useToastsStore`, gestapelt in `AppToasts` |
 | `BaseAvatar` | Profilbild mit Initialen-Fallback |
+| `BaseSticker` | Listen-Icon als ausgeschnittener Sticker (Daten in `stickers.ts`), immer `aria-hidden` |
 | `BaseEmptyState` | Leere Listen und Gruppen |
 | `BaseSyncIndicator` | Status online, offline, synchronisiert ausstehende Änderungen |
 
