@@ -111,7 +111,7 @@ async function run(action: ListAction) {
           >
             {{ t('list.actions.confirm.back') }}
           </BaseButton>
-          <BaseButton variant="danger" class="delete" :loading="busy" @click="run('delete')">
+          <BaseButton variant="danger-solid" class="delete" :loading="busy" @click="run('delete')">
             {{ t('list.actions.confirm.delete') }}
           </BaseButton>
         </div>

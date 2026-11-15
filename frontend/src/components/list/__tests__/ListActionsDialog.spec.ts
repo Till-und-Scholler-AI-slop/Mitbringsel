@@ -148,6 +148,8 @@ describe('ListActionsDialog', () => {
     expect(service.remove).not.toHaveBeenCalled()
     expect(wrapper.get('.confirm').text()).toContain('“Supermarkt” is deleted')
     expect(wrapper.findAll('.action')).toHaveLength(0)
+    // The final "yes" is the filled red button, as in the household settings.
+    expect(wrapper.get('.delete').classes()).toContain('base-button--danger-solid')
     wrapper.unmount()
   })
 
