@@ -36,7 +36,8 @@ einkaufsliste/
 │       ├── stores/               # Pinia-Stores
 │       ├── composables/          # Wiederverwendbare Logik
 │       ├── services/api/         # REST-Client
-│       ├── services/sync/        # WebSocket, Outbox, IndexedDB
+│       ├── services/sync/        # WebSocket, HLC, Outbox
+│       ├── services/storage/     # Lokale Daten in IndexedDB (offline)
 │       ├── i18n/locales/         # de.json, en.json
 │       ├── styles/tokens.css     # Design-Tokens (hell/dunkel)
 │       └── types/                # api.ts mit kurzen Namen, openapi.gen.ts generiert

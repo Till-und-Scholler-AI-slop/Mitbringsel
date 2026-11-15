@@ -36,8 +36,12 @@ Jede Phase endet mit einem lauffähigen, getesteten Stand.
     2. HLC vom Client über REST (`clock` bei `createItem` und `updateItem`)
     3. Artikel eines Haushalts (`GET /groups/{groupId}/items`)
     4. Aufräum-Job für Tombstones
-    5. HLC im Frontend (`services/sync/hlc.ts`, Knoten-ID pro Gerät)
-    6. Lokaler Speicher (`idb`): Stores starten aus IndexedDB, Vorladen aller aktiven Listen
+    5. HLC im Frontend (`services/sync/hlc.ts`, Knoten-ID pro Tab)
+    6. Lokaler Speicher (`idb`), in vier PRs:
+        1. Speicher-Service (`services/storage/localData.ts`), gehört immer einem Nutzer
+        2. Start ohne Netz: letzter Nutzer aus dem Speicher, Logout löscht ihn
+        3. Stores starten aus IndexedDB und schreiben ihren Stand zurück
+        4. Vorladen der Listen und Artikel aller Haushalte
     7. Outbox (Warteschlange, Senden, Wiederholen, Rollback, ein sendender Tab)
     8. Artikel-Store über die Outbox
     9. „Abgehakte entfernen“ über die Outbox
