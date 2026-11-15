@@ -116,6 +116,17 @@ describe('ListNameDialog: new list', () => {
     wrapper.unmount()
   })
 
+  it('asks for a name when the field is left empty', async () => {
+    const wrapper = await mountDialog()
+
+    await wrapper.get('input').setValue('Market')
+    await wrapper.get('input').setValue('')
+    await wrapper.get('input').trigger('blur')
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('Give the list a name.')
+    wrapper.unmount()
+  })
+
   it('shows the error of the server and stays open', async () => {
     service.create.mockRejectedValue(new ApiError('NETWORK'))
     const wrapper = await mountDialog()

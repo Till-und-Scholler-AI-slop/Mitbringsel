@@ -46,6 +46,7 @@ async function save(trimmed: string) {
     :submit-label="list ? t('list.name.save') : t('list.name.create')"
     :max-length="LIST_NAME_MAX_LENGTH"
     :too-long-error="t('errors.LIST_NAME_INVALID')"
+    :empty-error="t('list.name.empty')"
     :initial-name="list?.name"
     :changed="icon !== startIcon"
     :validate="validateListName"

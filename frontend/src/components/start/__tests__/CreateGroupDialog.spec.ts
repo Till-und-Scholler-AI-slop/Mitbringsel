@@ -95,6 +95,17 @@ describe('CreateGroupDialog', () => {
     wrapper.unmount()
   })
 
+  it('asks for a name when the field is left empty', async () => {
+    const wrapper = await mountDialog()
+
+    await wrapper.get('input').setValue('Home')
+    await wrapper.get('input').setValue('')
+    await wrapper.get('input').trigger('blur')
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('Give your household a name.')
+    wrapper.unmount()
+  })
+
   it('shows the message of a server error and stays open, until the name changes', async () => {
     service.create.mockRejectedValue(new ApiError('RATE_LIMITED', 429))
     const wrapper = await mountDialog()

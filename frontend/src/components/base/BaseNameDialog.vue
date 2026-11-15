@@ -23,6 +23,8 @@ const props = defineProps<{
   maxLength: number
   /** A text, or one built from how many characters are too many. */
   tooLongError: string | ((excess: number) => string)
+  /** Shown once the field was edited and then left empty. */
+  emptyError: string
   initialName?: string
   changed?: boolean
   validate: (name: string) => NameProblem | null
@@ -39,13 +41,26 @@ const serverError = useErrorMessage(errorCode)
 
 const problem = computed(() => props.validate(name.value))
 
-// "Too long" is shown while typing. An empty name is not an error, the
-// button just waits. A server error is shown until the name changes.
+// True once the user typed in the field and then left it. Only then is an
+// empty name an error: whoever opens the dialog and cancels right away is
+// not scolded, and the message does not push the buttons away under the
+// pointer on the way to "Cancel".
+const edited = ref(false)
+const touched = ref(false)
+
+function onBlur() {
+  if (edited.value) touched.value = true
+}
+
+// "Too long" is shown while typing, "empty" after leaving the field (and
+// then live, until a name is there again). A server error is shown until
+// the name changes.
 const error = computed(() => {
   if (problem.value === 'tooLong') {
     if (typeof props.tooLongError === 'string') return props.tooLongError
     return props.tooLongError(Array.from(name.value.trim()).length - props.maxLength)
   }
+  if (problem.value === 'empty' && touched.value) return props.emptyError
   return errorCode.value ? serverError.value : null
 })
 
@@ -57,6 +72,8 @@ watch(
     if (isOpen) {
       name.value = props.initialName ?? ''
       errorCode.value = null
+      edited.value = false
+      touched.value = false
     }
   },
   { immediate: true },
@@ -98,10 +115,16 @@ async function submit() {
         :max-length="maxLength"
         autocomplete="off"
         autofocus
+        @input="edited = true"
+        @blur="onBlur"
       />
       <slot />
       <div class="actions">
-        <BaseButton variant="secondary" class="cancel" @click="open = false">
+        <!-- mousedown.prevent: pressing "Cancel" must not take the focus from
+             the field. Otherwise the field is left (maybe empty), the error
+             appears, pushes the button down under the pointer, and the
+             click is lost. -->
+        <BaseButton variant="secondary" class="cancel" @mousedown.prevent @click="open = false">
           {{ cancelLabel }}
         </BaseButton>
         <BaseButton type="submit" class="submit" :loading="submitting" :disabled="problem !== null">

@@ -2,7 +2,8 @@
   "common": {
     "close": "Close",
     "retry": "Try again",
-    "groupNameTooLong": "The name can have at most {max} characters. Please shorten it by one character. | The name can have at most {max} characters. Please shorten it by {n} characters."
+    "groupNameTooLong": "The name can have at most {max} characters. Please shorten it by one character. | The name can have at most {max} characters. Please shorten it by {n} characters.",
+    "groupNameEmpty": "Give your household a name."
   },
   "toast": {
     "close": "Close message"
@@ -277,6 +278,7 @@
       "renameTitle": "Edit list",
       "label": "Name of the list",
       "placeholder": "e.g. Weekly shopping",
+      "empty": "Give the list a name.",
       "cancel": "Cancel",
       "create": "Create",
       "save": "Save"

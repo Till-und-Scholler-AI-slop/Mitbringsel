@@ -105,6 +105,16 @@ describe('RenameGroupDialog', () => {
     wrapper.unmount()
   })
 
+  it('asks for a name when the field is left empty', async () => {
+    const wrapper = await mountDialog()
+
+    await wrapper.get('input').setValue('')
+    await wrapper.get('input').trigger('blur')
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('Give your household a name.')
+    wrapper.unmount()
+  })
+
   it('says by how many characters to shorten the name', async () => {
     const wrapper = await mountDialog()
 

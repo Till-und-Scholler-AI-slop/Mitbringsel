@@ -32,6 +32,7 @@ async function save(trimmed: string) {
     :submit-label="t('start.create.submit')"
     :max-length="GROUP_NAME_MAX_LENGTH"
     :too-long-error="tooLong"
+    :empty-error="t('common.groupNameEmpty')"
     :validate="validateGroupName"
     :save="save"
   />
