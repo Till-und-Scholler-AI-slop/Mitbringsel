@@ -19,8 +19,8 @@ Go im Backend, Vue 3 mit TypeScript im Frontend, PostgreSQL als Datenbank. Fest 
 | State | Pinia | Stores für Auth, Gruppen, Listen, Sync | Ja |
 | Routing | Vue Router | Seiten | Vorschlag |
 | i18n | `vue-i18n` | Mehrsprachigkeit | Vorschlag |
-| PWA | `vite-plugin-pwa` (Workbox) | Installierbarkeit, Offline-Caching der App | Vorschlag |
-| Offline-Speicher | IndexedDB über `Dexie` | Lokale Daten und Änderungs-Warteschlange | Vorschlag |
+| PWA | `vite-plugin-pwa` (Workbox, `generateSW`) | Installierbarkeit, Offline-Caching der App | Ja ([ADR 0006](adr/0006-offline-phase-6.md)) |
+| Offline-Speicher | IndexedDB über `idb`, in Tests `fake-indexeddb` | Lokale Daten und Änderungs-Warteschlange (Outbox) | Ja ([ADR 0006](adr/0006-offline-phase-6.md)) |
 | Tests Frontend | Vitest + Vue Test Utils, Playwright für E2E | Unit-, Komponenten-, Sync-Tests | Vorschlag |
 | Tests Backend | `testing` + `testcontainers-go` | Unit- und Integrationstests gegen echtes Postgres | Vorschlag |
 | Code-Stil | ESLint, Prettier, `gofmt`, `golangci-lint` | Einheitlicher Stil | Vorschlag |

@@ -16,7 +16,7 @@ Der Agent spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hi
 Jede Phase endet mit einem lauffähigen, getesteten Stand.
 
 1. **Fundament:** Monorepo, `Makefile`, lokales Postgres per Compose, Go-Server mit Health-Endpunkt, Vue-Projekt mit Router, Pinia, i18n und Platzhalter-Tokens, CI mit Lint und Tests.
-2. **Auth:** Google Login, Sessions, Dev-Login, `GET /api/v1/me`, Logout. Abgelaufene Sessions werden zunächst nur abgewiesen; ein periodischer Aufräum-Job (`internal/cleanup`) löscht seit Phase 5 Sessions und Einladungen, `processed_ops` und Tombstones folgen in Phase 6.
+2. **Auth:** Google Login, Sessions, Dev-Login, `GET /api/v1/me`, Logout. Abgelaufene Sessions werden zunächst nur abgewiesen; ein periodischer Aufräum-Job (`internal/cleanup`) löscht seit Phase 5 Sessions und Einladungen, Tombstones folgen in Phase 6.
 3. **Gruppen und Einladungen:** REST-Endpunkte, Rollen, Einladungslinks, zugehörige Views.
 4. **Listen und Artikel online:** CRUD über REST, Seed-Daten, Basis-Komponenten.
 5. **Live-Sync:** WebSocket-Hub, Protokoll, LWW-Merge (seit Phase 4 im Backend), Broadcast an Gruppenmitglieder. REST schreibt, der WebSocket verteilt nur Ereignisse (siehe [ADR 0005](adr/0005-live-sync-phase-5.md)). Schritte, je ein PR:
@@ -31,7 +31,20 @@ Jede Phase endet mit einem lauffähigen, getesteten Stand.
     9. Sync-Chip (`BaseSyncIndicator`) und Hervorhebung „gerade geändert“
     10. Aufräum-Job (Sessions, Einladungen)
     11. Abgehakte gesammelt entfernen
-6. **Offline und PWA:** IndexedDB, Outbox, HLC, Wiederverbinden mit `sync`, Service Worker, Installierbarkeit.
+6. **Offline und PWA:** IndexedDB, Outbox, HLC vom Client, Wiederverbinden mit Neuladen, Service Worker, Installierbarkeit. Die Outbox schreibt per REST, der WebSocket verteilt weiter nur (siehe [ADR 0006](adr/0006-offline-phase-6.md)). Schritte, je ein PR:
+    1. Entscheidungen
+    2. HLC vom Client über REST (`clock` bei `createItem` und `updateItem`)
+    3. Artikel eines Haushalts (`GET /groups/{groupId}/items`)
+    4. Aufräum-Job für Tombstones
+    5. HLC im Frontend (`services/sync/hlc.ts`, Knoten-ID pro Gerät)
+    6. Lokaler Speicher (`idb`): Stores starten aus IndexedDB, Vorladen aller aktiven Listen
+    7. Outbox (Warteschlange, Senden, Wiederholen, Rollback, ein sendender Tab)
+    8. Artikel-Store über die Outbox
+    9. „Abgehakte entfernen“ über die Outbox
+    10. Wiederverbinden: Outbox senden und neu laden
+    11. UI: Sync-Chip „ausstehend“, Uhr-Symbol in der Artikelzeile, Offline-Texte, Hinweise bei Aktionen nur online
+    12. PWA (`vite-plugin-pwa`, Manifest, Icons)
+    13. Prüfung auf Staging mit echten Geräten
 7. **Design-Umsetzung:** Tokens und Komponenten nach der gewählten Claude-Design-Richtung. Kann ab Phase 3 parallel laufen, sobald das Design steht.
 8. **Deployment:** Compose für Staging und Production hinter dem bestehenden Traefik, Authelia-Schutz für Staging, Backups, automatisches Deployment: `main` auf Staging, GitHub Release auf Production (siehe [ADR 0001](adr/0001-staging-und-production.md)). Vorgezogen und parallel zu Phase 2, damit jeder weitere Stand früh unter echten Bedingungen auf Staging läuft. Schritte: Container-Images, Compose mit Traefik-Labels, Images nach GHCR, Deploy auf Staging, Promote nach Production, Backups.
 
