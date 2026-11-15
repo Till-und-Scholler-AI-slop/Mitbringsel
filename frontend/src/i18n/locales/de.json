@@ -160,6 +160,7 @@
     "ITEM_UNIT_INVALID": "Diese Einheit gibt es nicht.",
     "LIST_NAME_INVALID": "Der Name der Liste muss 1 bis 50 Zeichen lang sein.",
     "LIST_ICON_INVALID": "Dieses Symbol gibt es nicht.",
+    "TOO_MANY_LISTS": "Dieser Haushalt hat schon 100 Listen, archivierte mitgezählt. Lösche eine, um eine neue anzulegen.",
     "LIST_NOT_FOUND": "Diese Liste gibt es nicht, oder du bist kein Mitglied des Haushalts.",
     "METHOD_NOT_ALLOWED": "Diese Aktion ist hier nicht möglich.",
     "NETWORK": "Der Server ist nicht erreichbar.",

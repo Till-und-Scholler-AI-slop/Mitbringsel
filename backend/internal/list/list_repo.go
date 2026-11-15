@@ -41,6 +41,11 @@ func (r *PostgresRepository) Get(ctx context.Context, listID uuid.UUID) (List, e
 	return fromRow(row), nil
 }
 
+func (r *PostgresRepository) CountForGroup(ctx context.Context, groupID uuid.UUID) (int, error) {
+	n, err := r.q.CountListsForGroup(ctx, groupID)
+	return int(n), err
+}
+
 func (r *PostgresRepository) ListForGroup(ctx context.Context, groupID uuid.UUID, includeArchived bool) ([]List, error) {
 	rows, err := r.q.ListListsForGroup(ctx, sqlcgen.ListListsForGroupParams{GroupID: groupID, IncludeArchived: includeArchived})
 	if err != nil {

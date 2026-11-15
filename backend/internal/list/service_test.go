@@ -3,6 +3,7 @@ package list
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -74,6 +75,19 @@ func (r *fakeRepo) ListForGroup(_ context.Context, groupID uuid.UUID, includeArc
 		}
 	}
 	return out, nil
+}
+
+func (r *fakeRepo) CountForGroup(_ context.Context, groupID uuid.UUID) (int, error) {
+	if r.fail {
+		return 0, errRepo
+	}
+	n := 0
+	for _, l := range r.lists {
+		if l.GroupID == groupID {
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (r *fakeRepo) Update(_ context.Context, listID uuid.UUID, name string, icon Icon) (List, error) {
@@ -206,6 +220,39 @@ func TestService_Create(t *testing.T) {
 			if l.Name != "Supermarkt" || l.GroupID != f.groupID {
 				t.Errorf("%s: Create() = %+v, want trimmed name in the group", name, l)
 			}
+		}
+	})
+
+	t.Run("a group can have MaxListsPerGroup lists, archived ones included", func(t *testing.T) {
+		f := newFixture()
+		var first List
+		for i := range MaxListsPerGroup - 1 {
+			l := f.newList(t, fmt.Sprintf("Liste %d", i+1))
+			if i == 0 {
+				first = l
+			}
+		}
+		if _, err := f.svc.Archive(ctx, f.member, first.ID); err != nil {
+			t.Fatalf("Archive() error = %v", err)
+		}
+		if _, err := f.svc.Create(ctx, f.member, f.groupID, "Die letzte", ""); err != nil {
+			t.Fatalf("Create() of the last list error = %v", err)
+		}
+
+		writes := f.repo.writes
+		if _, err := f.svc.Create(ctx, f.member, f.groupID, "Eine zu viel", ""); !errors.Is(err, ErrTooManyLists) {
+			t.Fatalf("Create() over the limit error = %v, want %v", err, ErrTooManyLists)
+		}
+		if f.repo.writes != writes {
+			t.Error("Create() over the limit stored something")
+		}
+
+		// Deleting a list frees its place.
+		if err := f.svc.Delete(ctx, f.admin, first.ID); err != nil {
+			t.Fatalf("Delete() error = %v", err)
+		}
+		if _, err := f.svc.Create(ctx, f.member, f.groupID, "Wieder Platz", ""); err != nil {
+			t.Errorf("Create() after Delete() error = %v", err)
 		}
 	})
 
@@ -482,6 +529,9 @@ func TestService_repositoryFailure(t *testing.T) {
 	}
 	if _, err := f.svc.ListForGroup(ctx, f.member, f.groupID, false); !errors.Is(err, errRepo) {
 		t.Errorf("ListForGroup() error = %v, want %v", err, errRepo)
+	}
+	if _, err := f.svc.Create(ctx, f.member, f.groupID, "Drogerie", ""); !errors.Is(err, errRepo) {
+		t.Errorf("Create() error = %v, want %v", err, errRepo)
 	}
 }
 

@@ -19,7 +19,6 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 - [ ] **Account löschen und letzter Owner:** Löscht der letzte Owner einer Gruppe seinen Account, fällt seine Mitgliedschaft per `ON DELETE CASCADE` weg und die Gruppe hat keinen Owner mehr. Beim Bau der Account-Löschung festlegen: vorher einen Owner bestimmen lassen, das älteste Mitglied automatisch befördern oder leere Gruppen löschen.
 - [ ] **Owner-Übergabe:** Der Owner kann die Gruppe nur löschen, nicht übergeben (siehe [Überblick](overview.md)). Nachrüsten, falls sich das im Alltag als Lücke zeigt.
 - [ ] **Limit für Mitglieder pro Gruppe:** Wer gründen darf, ist begrenzt (`group.MaxOwnedGroups`), wer beitreten darf, nicht: Über einen weitergegebenen Link kann jeder mit Google-Konto beitreten. Jedes Mitglied braucht ein eigenes Konto, die Tabelle lässt sich so kaum füllen. Falls nötig, eine Obergrenze beim Beitritt mit eigenem Fehlercode und einem Fall „Haushalt ist voll“ auf der Einladungsseite.
-- [ ] **Limit für Listen pro Gruppe:** `Service.Create` im Paket `list` legt beliebig viele Listen an. Wie beim Gruppen-Limit (`group.MaxOwnedGroups`) eine Obergrenze im Service festlegen, mit eigenem Fehlercode.
 
 ## Artikel
 

@@ -11,6 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+const countListsForGroup = `-- name: CountListsForGroup :one
+SELECT count(*) FROM lists
+WHERE group_id = $1
+`
+
+// All of the group's lists, archived ones included.
+func (q *Queries) CountListsForGroup(ctx context.Context, groupID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countListsForGroup, groupID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createList = `-- name: CreateList :one
 INSERT INTO lists (group_id, name, icon)
 VALUES ($1, $2, $3)

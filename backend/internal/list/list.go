@@ -17,6 +17,11 @@ import (
 // database checks the same limit.
 const MaxNameLength = 50
 
+// MaxListsPerGroup caps the lists of one group, so nobody can fill the
+// table by creating lists in a loop. Archived lists count too: they are
+// stored all the same, and otherwise archiving would lift the limit.
+const MaxListsPerGroup = 100
+
 var (
 	// ErrNotFound means the list does not exist or the user is not a member
 	// of its group. Both look the same to the caller, so nobody can find
@@ -29,6 +34,8 @@ var (
 	ErrInvalidName = errors.New("invalid list name")
 	// ErrInvalidIcon means the icon is not one of the fixed set.
 	ErrInvalidIcon = errors.New("invalid list icon")
+	// ErrTooManyLists means the group already has MaxListsPerGroup lists.
+	ErrTooManyLists = errors.New("too many lists")
 )
 
 // Icon is the sticker shown next to the list's name. The set is fixed (the
@@ -110,6 +117,9 @@ type Repository interface {
 	// ListForGroup returns the group's lists, oldest first. Archived lists
 	// are only included if includeArchived is true.
 	ListForGroup(ctx context.Context, groupID uuid.UUID, includeArchived bool) ([]List, error)
+	// CountForGroup returns how many lists the group has, archived ones
+	// included.
+	CountForGroup(ctx context.Context, groupID uuid.UUID) (int, error)
 	// Update sets name and icon; the service passes the current value for
 	// whatever does not change.
 	Update(ctx context.Context, listID uuid.UUID, name string, icon Icon) (List, error)

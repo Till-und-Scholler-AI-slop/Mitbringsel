@@ -510,7 +510,9 @@ paths:
     post:
       operationId: createList
       summary: Create a list in a group
-      description: Every member may do this.
+      description: |
+        Every member may do this. A group can have 100 lists, archived ones
+        included (`TOO_MANY_LISTS`).
       tags: [lists]
       security:
         - sessionCookie: []
@@ -532,6 +534,8 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
         "500":
           $ref: "#/components/responses/Error"
@@ -1580,6 +1584,7 @@ components:
         - LIST_NOT_FOUND
         - LIST_NAME_INVALID
         - LIST_ICON_INVALID
+        - TOO_MANY_LISTS
         - ITEM_NOT_FOUND
         - ITEM_NAME_INVALID
         - ITEM_QUANTITY_INVALID
@@ -1610,6 +1615,7 @@ components:
         - ListNotFound
         - ListNameInvalid
         - ListIconInvalid
+        - TooManyLists
         - ItemNotFound
         - ItemNameInvalid
         - ItemQuantityInvalid

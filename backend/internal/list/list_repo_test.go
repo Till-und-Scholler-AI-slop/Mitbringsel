@@ -106,6 +106,31 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("count includes archived lists and only the group's own", func(t *testing.T) {
+		anna := newTestUser(t, pool, "count-anna")
+		ben := newTestUser(t, pool, "count-ben")
+		annasGroup := newGroup(t, anna)
+		for _, name := range []string{"Supermarkt", "Drogerie"} {
+			if _, err := svc.Create(ctx, anna, annasGroup, name, ""); err != nil {
+				t.Fatalf("Create() error = %v", err)
+			}
+		}
+		archived, err := svc.Create(ctx, anna, annasGroup, "Baumarkt", "")
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if _, err := svc.Archive(ctx, anna, archived.ID); err != nil {
+			t.Fatalf("Archive() error = %v", err)
+		}
+		if _, err := svc.Create(ctx, ben, newGroup(t, ben), "Bens Liste", ""); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+
+		if got, err := repo.CountForGroup(ctx, annasGroup); err != nil || got != 3 {
+			t.Errorf("CountForGroup() = %d, %v, want 3", got, err)
+		}
+	})
+
 	t.Run("update draws a new server_seq and updates the timestamp", func(t *testing.T) {
 		anna := newTestUser(t, pool, "rename-anna")
 		groupID := newGroup(t, anna)

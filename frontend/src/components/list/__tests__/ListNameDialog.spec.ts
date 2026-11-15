@@ -140,6 +140,20 @@ describe('ListNameDialog: new list', () => {
     wrapper.unmount()
   })
 
+  it('says when the household has too many lists', async () => {
+    service.create.mockRejectedValue(new ApiError('TOO_MANY_LISTS', 409))
+    const wrapper = await mountDialog()
+
+    await wrapper.get('input').setValue('Baumarkt')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[role="alert"]').text()).toContain(
+      'This household already has 100 lists, archived ones included.',
+    )
+    wrapper.unmount()
+  })
+
   it('starts empty again when it is opened a second time', async () => {
     const wrapper = await mountDialog()
     await wrapper.get('input').setValue('Baumarkt')
