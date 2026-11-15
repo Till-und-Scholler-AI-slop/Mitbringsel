@@ -1,16 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { flushPromises } from '@vue/test-utils'
 
 import { ApiError } from '@/services/api/client'
 import type { AuthService } from '@/services/api/auth'
 import type { SignedInMarker } from '@/services/signedInMarker'
+import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
 import type { DevLoginRequest, MeResponse } from '@/types/api'
 
-import { defineAuthStore } from '../auth'
+import { defineAuthStore, type LocalProfile } from '../auth'
 
-function me(email: string): MeResponse {
+const ANNA_ID = '0190a8c4-0000-7000-8000-000000000001'
+const BEN_ID = '0190a8c4-0000-7000-8000-000000000002'
+
+function me(email: string, id = ANNA_ID): MeResponse {
   return {
-    id: '0190a8c4-0000-7000-8000-000000000001',
+    id,
     email,
     displayName: email.split('@')[0] ?? email,
     avatarUrl: null,
@@ -54,6 +59,36 @@ function fakeMarker(initiallySet = false): SignedInMarker & { value: boolean } {
     },
   }
   return marker
+}
+
+/** The profile stored on the device, in memory. */
+function fakeLocal(initial: MeResponse | null = null) {
+  let stored = initial
+  return {
+    get stored() {
+      return stored
+    },
+    readMe: vi.fn((): Promise<MeResponse | null> => Promise.resolve(stored)),
+    claim: vi.fn((profile: MeResponse) => {
+      stored = profile
+      return Promise.resolve()
+    }),
+    clear: vi.fn(() => {
+      stored = null
+      return Promise.resolve()
+    }),
+  } satisfies LocalProfile & { readonly stored: MeResponse | null }
+}
+
+/** A promise the test settles by hand, for a server that has not answered yet. */
+function pending<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (err: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 beforeEach(() => {
@@ -246,5 +281,192 @@ describe('session expiry', () => {
 
     expect(store.status).toBe('authenticated')
     expect(store.sessionExpired).toBe(false)
+  })
+})
+
+describe('local profile', () => {
+  // A store with a fake device storage and fake live events; the marker says
+  // someone was signed in on the last visit, as it does after a stored sign-in.
+  function setup(service: ReturnType<typeof fakeService>, stored: MeResponse | null) {
+    const local = fakeLocal(stored)
+    const events = createFakeServerEvents()
+    const marker = fakeMarker(stored !== null)
+    const store = defineAuthStore(service, null, marker, local, events)()
+    return { store, local, events, marker }
+  }
+
+  it('stores the profile after a sign-in', async () => {
+    const { store, local } = setup(fakeService('anna@example.com'), null)
+
+    await store.load()
+
+    expect(local.claim).toHaveBeenCalledWith(me('anna@example.com'))
+    expect(store.fromCache).toBe(false)
+  })
+
+  it('starts with the stored profile at once and confirms it in the background', async () => {
+    const answer = pending<MeResponse>()
+    const service = { ...fakeService(), getMe: vi.fn(() => answer.promise) }
+    const { store, local } = setup(service, me('anna@example.com'))
+
+    await store.load()
+
+    expect(store.status).toBe('authenticated')
+    expect(store.user).toEqual(me('anna@example.com'))
+    expect(store.fromCache).toBe(true)
+
+    const renamed = { ...me('anna@example.com'), displayName: 'Anna B.' }
+    answer.resolve(renamed)
+    await flushPromises()
+
+    expect(store.user).toEqual(renamed)
+    expect(store.fromCache).toBe(false)
+    expect(local.claim).toHaveBeenCalledWith(renamed)
+  })
+
+  it('switches to another user the server reports, and hands the storage over first', async () => {
+    const { store, local } = setup(
+      { ...fakeService(), getMe: vi.fn(() => Promise.resolve(me('ben@example.com', BEN_ID))) },
+      me('anna@example.com'),
+    )
+    // The storage must belong to Ben before the stores see him.
+    let userWhileClaiming: string | undefined
+    local.claim.mockImplementation(() => {
+      userWhileClaiming = store.user?.id
+      return Promise.resolve()
+    })
+
+    await store.load()
+    await flushPromises()
+
+    expect(local.claim).toHaveBeenCalledWith(me('ben@example.com', BEN_ID))
+    expect(userWhileClaiming).toBe(ANNA_ID)
+    expect(store.user?.id).toBe(BEN_ID)
+  })
+
+  it('reports an expired session when the server does not know the stored user', async () => {
+    const { store, local, marker } = setup(fakeService(), me('anna@example.com'))
+
+    await store.load()
+    await flushPromises()
+
+    expect(store.status).toBe('anonymous')
+    expect(store.user).toBeNull()
+    expect(store.fromCache).toBe(false)
+    expect(store.sessionExpired).toBe(true)
+    expect(marker.value).toBe(false)
+    // Kept for when the same user signs in again.
+    expect(local.clear).not.toHaveBeenCalled()
+  })
+
+  it('keeps the stored profile when the server cannot be reached', async () => {
+    const service = {
+      ...fakeService(),
+      getMe: vi.fn(() => Promise.reject(new ApiError('NETWORK'))),
+    }
+    const { store } = setup(service, me('anna@example.com'))
+
+    await store.load()
+    await flushPromises()
+
+    expect(store.status).toBe('authenticated')
+    expect(store.user).toEqual(me('anna@example.com'))
+    expect(store.fromCache).toBe(true)
+    expect(store.errorCode).toBe('NETWORK')
+  })
+
+  it('is an error without a stored profile when the server cannot be reached', async () => {
+    const service = {
+      ...fakeService(),
+      getMe: vi.fn(() => Promise.reject(new ApiError('NETWORK'))),
+    }
+    const { store } = setup(service, null)
+
+    await store.load()
+
+    expect(store.status).toBe('error')
+    expect(store.user).toBeNull()
+  })
+
+  it('confirms the stored profile once the live socket is back', async () => {
+    const service = {
+      ...fakeService(),
+      getMe: vi.fn((): Promise<MeResponse> => Promise.reject(new ApiError('NETWORK'))),
+    }
+    const { store, events } = setup(service, me('anna@example.com'))
+    await store.load()
+    await flushPromises()
+
+    service.getMe.mockImplementation(() => Promise.resolve(me('anna@example.com')))
+    events.emit({ type: 'ready' })
+    await flushPromises()
+
+    expect(store.fromCache).toBe(false)
+    expect(store.status).toBe('authenticated')
+  })
+
+  it('does not ask again on ready once the server confirmed the user', async () => {
+    const service = fakeService('anna@example.com')
+    const { store, events } = setup(service, null)
+    await store.load()
+
+    events.emit({ type: 'ready' })
+    await flushPromises()
+
+    expect(service.getMe).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not use the stored profile after the session expired', async () => {
+    const service = fakeService('anna@example.com')
+    const { store } = setup(service, me('anna@example.com'))
+    await store.load()
+    await flushPromises()
+    store.expireSession()
+
+    service.getMe.mockImplementation(() => Promise.reject(new ApiError('NETWORK')))
+    await store.load()
+
+    expect(store.status).toBe('error')
+    expect(store.user).toBeNull()
+  })
+
+  it('clears the device on logout', async () => {
+    const { store, local } = setup(fakeService('anna@example.com'), null)
+    await store.load()
+
+    await store.logout()
+
+    expect(local.clear).toHaveBeenCalled()
+    expect(local.stored).toBeNull()
+  })
+
+  it('clears the device even if logout fails on the server', async () => {
+    const service = {
+      ...fakeService('anna@example.com'),
+      logout: vi.fn(() => Promise.reject(new ApiError('NETWORK'))),
+    }
+    const { store, local } = setup(service, null)
+    await store.load()
+
+    await expect(store.logout()).rejects.toThrow()
+
+    expect(local.clear).toHaveBeenCalled()
+  })
+
+  it('does not sign in again when a check answers after the logout', async () => {
+    const answer = pending<MeResponse>()
+    const service = { ...fakeService(), getMe: vi.fn(() => answer.promise) }
+    const { store, local } = setup(service, me('anna@example.com'))
+    await store.load()
+
+    await store.logout()
+    answer.resolve(me('anna@example.com'))
+    await flushPromises()
+
+    expect(store.status).toBe('anonymous')
+    expect(store.user).toBeNull()
+    // The profile must not land on the device again.
+    expect(local.claim).not.toHaveBeenCalled()
+    expect(local.stored).toBeNull()
   })
 })

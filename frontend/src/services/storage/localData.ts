@@ -105,8 +105,12 @@ export function createLocalData(name = LOCAL_DATA_DB_NAME): LocalData {
     return p
   }
 
-  // Runs fn and turns every failure into a warning and the fallback.
+  // Runs fn and turns every failure into a warning and the fallback. A
+  // browser without IndexedDB at all is a state, not a failure: no warning.
   async function safely<T>(action: string, fallback: T, fn: (d: DB) => Promise<T>): Promise<T> {
+    if (typeof indexedDB === 'undefined') {
+      return fallback
+    }
     try {
       return await fn(await db())
     } catch (err) {

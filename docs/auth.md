@@ -30,8 +30,18 @@ Die Google-Endpunkte sind fest im Code hinterlegt statt beim Start aus Googles D
 - Konfiguration über `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` und `PUBLIC_BASE_URL`. Auf Staging und Production sind alle Pflicht (`PUBLIC_BASE_URL` leitet Compose aus `APP_DOMAIN` ab), lokal sind sie optional: Ohne Client gibt es nur den Dev-Login, und die Google-Endpunkte antworten `404`.
 - Die Weiterleitungs-URL entsteht aus `PUBLIC_BASE_URL`, nie aus dem `Host`-Header: Den kann ein Client beliebig setzen, und der Vite-Proxy schreibt ihn um. Stellt das Frontend fest, dass eine Sitzung abgelaufen ist, leitet es auf `/login?reason=session_expired` um, damit die Seite erklärt, warum man sich neu anmelden muss. Das passiert in zwei Fällen:
 
-- **Während der Nutzung:** Der API-Client meldet jedes `401` an einen zentralen Handler (`router/sessionExpiry.ts`). Ist der Nutzer laut Auth-Store angemeldet, setzt der Store ihn zurück und der Handler leitet um. So greift das für jeden Endpunkt, ohne dass ein Store `401` selbst behandeln muss; ein `401` von `/me` beim Start oder ein zweites `401` danach lösen nichts aus.
+- **Während der Nutzung:** Der API-Client meldet jedes `401` an einen zentralen Handler (`router/sessionExpiry.ts`). Ist der Nutzer laut Auth-Store angemeldet, setzt der Store ihn zurück und der Handler leitet um. So greift das für jeden Endpunkt, ohne dass ein Store `401` selbst behandeln muss; ein `401` von `/me` beim Start ohne gespeichertes Profil (siehe „Start ohne Netz“) oder ein zweites `401` danach lösen nichts aus.
 - **Beim Start:** Nach jeder erfolgreichen Anmeldung merkt sich der Browser in `localStorage` nur, dass jemand angemeldet war (`mitbringsel.signedIn`, keine Daten). Antwortet `/me` beim Start mit `401` und der Merker ist gesetzt, ist die Sitzung inzwischen abgelaufen oder wurde woanders beendet; der Router-Guard leitet dann mit dem Hinweis um. Ein bewusster Logout löscht den Merker, danach erscheint kein Hinweis.
+
+### Start ohne Netz
+
+Damit die App offline startet ([ADR 0006](adr/0006-offline-phase-6.md)), speichert der Auth-Store nach jeder Bestätigung durch `/me` das Profil in IndexedDB (`services/storage/localData.ts`). Das Profil bestimmt auch, wem die lokalen Daten gehören: Meldet `/me` einen anderen Nutzer, löscht der Speicher erst alles. Der Store setzt den neuen Nutzer erst danach, damit die Stores nie Daten des vorigen finden.
+
+- **Beim Start** gilt ein gespeichertes Profil sofort: Der Nutzer ist angemeldet (`fromCache`), und `/me` prüft im Hintergrund. So hängt der Start auch bei schlechtem Netz nicht am Server.
+- **Antwortet `/me`**, ersetzt die Antwort das Profil (`fromCache` wird `false`). Bei `401` greift der übliche Weg über die abgelaufene Sitzung; die lokalen Daten bleiben, damit derselbe Nutzer nach dem Anmelden weitermacht. Bei einem Netzfehler oder `5xx` bleibt der Nutzer angemeldet, und der Store fragt `/me` erneut, sobald der Socket `ready` meldet.
+- **Ohne gespeichertes Profil** wartet der Start wie zuvor auf `/me`.
+- **Nur beim Start:** Nach einem Logout oder einer abgelaufenen Sitzung meldet das gespeicherte Profil niemanden an.
+- **Ein bewusster Logout** löscht alle lokalen Daten, das Gerät kann geteilt sein. Eine Antwort von `/me`, die erst danach eintrifft, verwirft der Store.
 
 ## Sessions und Sicherheit
 
