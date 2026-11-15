@@ -82,7 +82,7 @@ function onFocusOut(event: FocusEvent) {
   position: fixed;
   left: var(--space-3);
   right: var(--space-3);
-  bottom: calc(var(--space-4) + var(--app-bottom-bar, 0px) + env(safe-area-inset-bottom));
+  bottom: calc(var(--space-2) + var(--app-bottom-bar, 0px) + env(safe-area-inset-bottom));
   z-index: 20;
   display: flex;
   flex-direction: column;

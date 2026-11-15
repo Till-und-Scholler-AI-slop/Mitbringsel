@@ -139,7 +139,8 @@ const label = computed(() => {
   align-items: center;
   gap: var(--space-3);
   min-height: 3.625rem;
-  padding: var(--space-3);
+  /* Design "markt2-liste": tight on the right, where the edit button follows. */
+  padding: 10px var(--space-1) 10px 14px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -187,7 +188,7 @@ const label = computed(() => {
 
 .row--done .toggle {
   min-height: var(--size-touch);
-  padding-block: var(--space-1);
+  padding: var(--space-1) 14px;
 }
 
 .box {
@@ -213,7 +214,7 @@ const label = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-1);
+  gap: 3px;
 }
 
 .name {
@@ -228,6 +229,8 @@ const label = computed(() => {
 
 .row--done .name {
   color: var(--color-done-text);
+  font-size: 1.0625rem;
+  line-height: 1.375rem;
   font-weight: var(--font-weight-semibold);
   text-decoration: line-through;
   text-decoration-thickness: 2px;
@@ -264,13 +267,14 @@ const label = computed(() => {
 
 .quantity {
   flex: none;
-  padding: var(--space-1) var(--space-3);
+  padding: 3px 10px;
   border: var(--border-width-sm) solid var(--color-qty-border);
   border-radius: var(--radius-full);
   background: var(--color-qty-bg);
   color: var(--color-qty-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
+  line-height: 1.125rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
