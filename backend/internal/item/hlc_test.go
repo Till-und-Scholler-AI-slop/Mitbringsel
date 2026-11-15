@@ -1,7 +1,9 @@
 package item
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -72,33 +74,58 @@ func TestNewHLC(t *testing.T) {
 	})
 }
 
+// hlcCases are the test cases shared with the frontend (api/testdata), so
+// the Go and the TypeScript clock agree on what is valid and on the order.
+type hlcCases struct {
+	Valid []struct {
+		Name string `json:"name"`
+		In   string `json:"in"`
+	} `json:"valid"`
+	Invalid []struct {
+		Name string `json:"name"`
+		In   string `json:"in"`
+	} `json:"invalid"`
+	Ordered []struct {
+		Name  string `json:"name"`
+		Older string `json:"older"`
+		Newer string `json:"newer"`
+	} `json:"ordered"`
+}
+
+func loadHLCCases(t *testing.T) hlcCases {
+	t.Helper()
+	// Tests run in the package directory; the file is at the repository root.
+	data, err := os.ReadFile("../../../api/testdata/hlc.json")
+	if err != nil {
+		t.Fatalf("read shared cases: %v", err)
+	}
+	var cases hlcCases
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatalf("decode shared cases: %v", err)
+	}
+	return cases
+}
+
 func TestParseHLC(t *testing.T) {
-	valid := "0000019a2b3c4d5e-0001-3f2a9c"
-	if _, err := ParseHLC(valid); err != nil {
-		t.Fatalf("ParseHLC(%q) error = %v", valid, err)
+	cases := loadHLCCases(t)
+
+	for _, tt := range cases.Valid {
+		t.Run("valid: "+tt.Name, func(t *testing.T) {
+			h, err := ParseHLC(tt.In)
+			if err != nil || string(h) != tt.In {
+				t.Fatalf("ParseHLC(%q) = %q, %v", tt.In, h, err)
+			}
+			// Building it again from its parts gives the same string.
+			if again := mustHLC(t, h.Wall(), h.Counter(), h.Node()); again != h {
+				t.Errorf("NewHLC(parts) = %q, want %q", again, h)
+			}
+		})
 	}
 
-	tests := []struct {
-		name string
-		in   string
-	}{
-		{"empty", ""},
-		{"no node", "0000019a2b3c4d5e-0001-"},
-		{"no node and no second dash", "0000019a2b3c4d5e-0001"},
-		{"uppercase hex in the wall time", "0000019A2B3C4D5E-0001-a"},
-		{"uppercase hex in the counter", "0000019a2b3c4d5e-00AB-a"},
-		{"wall time too short", "19a2b3c4d5e-0001-a"},
-		{"counter too short", "0000019a2b3c4d5e-1-a"},
-		{"not hex", "000000000000000g-0001-a"},
-		{"wall time over 63 bits", "ffffffffffffffff-0001-a"},
-		{"wrong separator", "0000019a2b3c4d5e_0001_a"},
-		{"bad node", "0000019a2b3c4d5e-0001-a b"},
-		{"surrounding space", " 0000019a2b3c4d5e-0001-a"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if h, err := ParseHLC(tt.in); !errors.Is(err, ErrInvalidHLC) {
-				t.Errorf("ParseHLC(%q) = %q, %v, want %v", tt.in, h, err, ErrInvalidHLC)
+	for _, tt := range cases.Invalid {
+		t.Run("invalid: "+tt.Name, func(t *testing.T) {
+			if h, err := ParseHLC(tt.In); !errors.Is(err, ErrInvalidHLC) {
+				t.Errorf("ParseHLC(%q) = %q, %v, want %v", tt.In, h, err, ErrInvalidHLC)
 			}
 		})
 	}
@@ -115,28 +142,15 @@ func TestParseHLC(t *testing.T) {
 // comparing the strings compares the clocks by wall time, then counter, then
 // node.
 func TestHLC_stringOrderIsClockOrder(t *testing.T) {
-	tests := []struct {
-		name         string
-		older, newer HLC
-	}{
-		{"wall time beats counter and node",
-			mustHLC(t, time.UnixMilli(1), 9, "zzz"), mustHLC(t, time.UnixMilli(2), 0, "aaa")},
-		{"counter beats node",
-			mustHLC(t, time.UnixMilli(2), 1, "zzz"), mustHLC(t, time.UnixMilli(2), 2, "aaa")},
-		{"node decides last",
-			mustHLC(t, time.UnixMilli(2), 2, "aaa"), mustHLC(t, time.UnixMilli(2), 2, "bbb")},
-		// Fixed widths: without the leading zeros "ff" would sort after "100".
-		{"wall time across a hex digit boundary",
-			mustHLC(t, time.UnixMilli(0xff), 0, "a"), mustHLC(t, time.UnixMilli(0x100), 0, "a")},
-		{"counter across a hex digit boundary",
-			mustHLC(t, time.UnixMilli(2), 0x0f, "a"), mustHLC(t, time.UnixMilli(2), 0x10, "a")},
-		{"today against a far future date",
-			mustHLC(t, at, 0, "a"), mustHLC(t, time.UnixMilli(1<<45), 0, "a")},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.older >= tt.newer {
-				t.Errorf("%q < %q is false, want true", tt.older, tt.newer)
+	for _, tt := range loadHLCCases(t).Ordered {
+		t.Run(tt.Name, func(t *testing.T) {
+			older, errOlder := ParseHLC(tt.Older)
+			newer, errNewer := ParseHLC(tt.Newer)
+			if errOlder != nil || errNewer != nil {
+				t.Fatalf("invalid case: %v, %v", errOlder, errNewer)
+			}
+			if older >= newer {
+				t.Errorf("%q < %q is false, want true", older, newer)
 			}
 		})
 	}
