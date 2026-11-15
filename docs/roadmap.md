@@ -37,4 +37,20 @@ Jede Phase endet mit einem lauffähigen, getesteten Stand.
 
 ## Später
 
-Push-Benachrichtigungen, Kategorien, Sortieren per Drag & Drop, Autovervollständigung aus früheren Einkäufen, Offline-Bearbeitung auch für Listen und Gruppen, weitere Sprachen.
+Push-Benachrichtigungen, Kategorien, Sortieren per Drag & Drop, Autovervollständigung aus früheren Einkäufen, Offline-Bearbeitung auch für Listen und Gruppen, weitere Sprachen, [Anlass-Listen](#ausbaustufe-anlass-listen).
+
+## Ausbaustufe: Anlass-Listen
+
+Nur geplant, nicht umgesetzt. Listen für Anlässe, die anders funktionieren als normale Einkaufslisten, zum Beispiel Grillabend, Geburtstag, Party, Silvester, Weihnachten, Brunch mit Gästen, Picknick, Camping, Urlaub oder Umzug. Der App-Name „Mitbringsel“ passt genau zu diesem Fall; das Feature ist daher ein guter Kandidat für eine spätere Ausbaustufe.
+
+**Unterschiede zur normalen Einkaufsliste**
+
+- **Zeitlich begrenzt:** Eine Anlass-Liste hat ein Datum, etwa als Badge am Listen-Chip („Sa, 21.6.“), und ist nach dem Anlass erledigt. Sie sollte dann archiviert oder ausgeblendet werden können, statt dauerhaft in der Listenleiste zu stehen.
+- **Wer bringt was mit:** Bei Feiern geht es weniger ums gemeinsame Einkaufen und mehr darum, Aufgaben zu verteilen. Mitglieder sollen Einträge übernehmen können („Ich bring den Salat“).
+- **Bedeutung des Avatars am Eintrag:** Bei normalen Listen zeigt er, wer den Eintrag hinzugefügt hat. Bei Anlass-Listen sollte er zeigen, wer sich darum kümmert bzw. es mitbringt. Nicht übernommene Einträge brauchen einen eigenen Zustand („noch offen, wer übernimmt?“).
+
+**Offene Fragen** (noch nicht entschieden)
+
+- Können auch Personen außerhalb der Gruppe (in der Oberfläche: Haushalt), etwa Partygäste, zu einer Anlass-Liste eingeladen werden, ohne der Gruppe beizutreten?
+- Ist „Anlass-Liste“ ein eigener Listentyp oder eine Option (Datum und Übernehmen-Modus) für jede Liste?
+- Was passiert mit der Liste nach dem Datum: automatisch archivieren, nachfragen oder manuell?

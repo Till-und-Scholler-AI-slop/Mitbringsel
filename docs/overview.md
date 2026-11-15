@@ -55,4 +55,4 @@ Die Hierarchie ist: Nutzer gehören zu Gruppen, Gruppen haben mehrere Listen, Li
 - Mehrsprachig (Deutsch und Englisch zum Start)
 - Hell- und Dunkelmodus
 
-**Bewusst nicht im ersten Release:** Push-Benachrichtigungen, Kategorien, Sortieren per Drag & Drop, Autovervollständigung aus früheren Einkäufen. Diese Punkte stehen in der [Roadmap](roadmap.md).
+**Bewusst nicht im ersten Release:** Push-Benachrichtigungen, Kategorien, Sortieren per Drag & Drop, Autovervollständigung aus früheren Einkäufen, Anlass-Listen (Grillabend, Geburtstag, „wer bringt was mit“). Diese Punkte stehen in der [Roadmap](roadmap.md).
