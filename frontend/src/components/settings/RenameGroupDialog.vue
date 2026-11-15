@@ -31,6 +31,7 @@ async function save(trimmed: string) {
     :submit-label="t('settings.rename.submit')"
     :max-length="GROUP_NAME_MAX_LENGTH"
     :too-long-error="tooLong"
+    :empty-error="t('common.groupNameEmpty')"
     :initial-name="group.name"
     :validate="validateGroupName"
     :save="save"

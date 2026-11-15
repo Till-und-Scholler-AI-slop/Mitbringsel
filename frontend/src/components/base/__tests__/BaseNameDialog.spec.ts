@@ -45,6 +45,7 @@ function mountDialog(options?: {
       submitLabel: 'Save',
       maxLength: MAX_LENGTH,
       tooLongError: options?.tooLongError ?? 'Too long',
+      emptyError: 'Empty',
       initialName: options?.initialName,
       changed: options?.changed,
       validate,
@@ -126,6 +127,52 @@ describe('BaseNameDialog', () => {
     await wrapper.get('input').setValue(`  ${'x'.repeat(MAX_LENGTH + 1)}🥖  `)
 
     expect(wrapper.get('[role="alert"]').text()).toContain('Cut 2')
+    wrapper.unmount()
+  })
+
+  it('does not call an untouched empty field an error when it is left', async () => {
+    const { wrapper } = mountDialog()
+
+    await wrapper.get('input').trigger('blur')
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Hint')
+    wrapper.unmount()
+  })
+
+  it('shows emptyError once an edited field is left empty, until a name is back', async () => {
+    const { wrapper } = mountDialog({ initialName: 'Old' })
+
+    await wrapper.get('input').setValue('  ')
+    // Not while typing: the user may just be replacing the name.
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+
+    await wrapper.get('input').trigger('blur')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Empty')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('input').setValue('New')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+
+    // Once left, clearing the field again shows the error right away.
+    await wrapper.get('input').setValue('')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Empty')
+    wrapper.unmount()
+  })
+
+  it('forgets a field left empty when reopened', async () => {
+    const { wrapper } = mountDialog()
+
+    await wrapper.get('input').setValue('x')
+    await wrapper.get('input').setValue('')
+    await wrapper.get('input').trigger('blur')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await wrapper.get('input').trigger('blur')
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

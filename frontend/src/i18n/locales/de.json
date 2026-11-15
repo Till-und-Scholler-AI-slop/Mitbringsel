@@ -2,7 +2,8 @@
   "common": {
     "close": "Schließen",
     "retry": "Nochmal versuchen",
-    "groupNameTooLong": "Der Name darf höchstens {max} Zeichen haben. Bitte kürze ihn um ein Zeichen. | Der Name darf höchstens {max} Zeichen haben. Bitte kürze ihn um {n} Zeichen."
+    "groupNameTooLong": "Der Name darf höchstens {max} Zeichen haben. Bitte kürze ihn um ein Zeichen. | Der Name darf höchstens {max} Zeichen haben. Bitte kürze ihn um {n} Zeichen.",
+    "groupNameEmpty": "Gib deinem Haushalt einen Namen."
   },
   "toast": {
     "close": "Meldung schließen"
@@ -277,6 +278,7 @@
       "renameTitle": "Liste bearbeiten",
       "label": "Name der Liste",
       "placeholder": "z. B. Wocheneinkauf",
+      "empty": "Gib der Liste einen Namen.",
       "cancel": "Abbrechen",
       "create": "Anlegen",
       "save": "Speichern"

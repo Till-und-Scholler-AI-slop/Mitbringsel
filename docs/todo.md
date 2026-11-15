@@ -7,7 +7,6 @@ Dinge, die bewusst auf später verschoben wurden, damit sie nicht verloren gehen
 Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](design.md), Navigation und Desktop). Reihenfolge der Schritte, je ein PR:
 
 - [ ] **Einladung im schmalen Desktop-Fenster:** Zwischen 768 und etwa 880 px rutscht der Inhalt unter das grüne Feld; das Feld behält dann seine Ecken rechts oben und unten, wie im Design (`markt2-einladung-desktop-*`) vorgesehen, wirkt aber gestaucht. Bei Bedarf dort die Ecken unten setzen (zweiter Breakpoint).
-- [ ] **Fehler bei leerem Namen nach Verlassen des Felds** (`verwalten-umbenennen-*`): Das Design zeigt „Gib deinem Haushalt einen Namen.“, wenn das Feld leer verlassen wird. `BaseNameDialog` behandelt einen leeren Namen bewusst nicht als Fehler, der Knopf wartet nur.
 
 ## Login
 
