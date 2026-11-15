@@ -15,6 +15,7 @@ import ListHeader from '@/components/list/ListHeader.vue'
 import ListItems from '@/components/list/ListItems.vue'
 import ListNameDialog from '@/components/list/ListNameDialog.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useLeaveDeletedList } from '@/composables/useLeaveDeletedList'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
 import { canManage } from '@/services/groupRoles'
 import { listToOpen, rememberLastList } from '@/services/lastList'
@@ -104,19 +105,12 @@ watch(list, (now) => {
   if (now) rememberLastList(props.groupId, now.id)
 })
 
-// The open list was deleted: go on with the household, which opens the
-// first active list or offers to create one. A new URL with an unknown list
-// is not a deletion; that one shows "not found". If the household went with
-// it, useLeaveRemovedGroup goes to the start page instead.
-watch(
-  [() => props.listId, list, group],
-  ([listId, now, groupNow], [listIdBefore, before, groupBefore]) => {
-    if (!before || now || listId !== listIdBefore) return
-    if (groupBefore && !groupNow) return
-    router.replace({ name: 'group', params: { groupId: props.groupId } })
-  },
+useLeaveDeletedList(
+  () => props.groupId,
+  () => props.listId,
+  list,
+  group,
 )
-
 useLeaveRemovedGroup(() => props.groupId)
 
 function startRename(listId: string) {

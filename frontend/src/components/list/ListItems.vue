@@ -13,7 +13,9 @@ import QuickAddBar from '@/components/list/QuickAddBar.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useRemoveItems } from '@/composables/useRemoveItems'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
+import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
+import { useListsStore } from '@/stores/lists'
 import { useRecentChangesStore } from '@/stores/recentChanges'
 import { useToastsStore } from '@/stores/toasts'
 import type { GroupMember, Item, List } from '@/types/api'
@@ -24,7 +26,9 @@ import type { GroupMember, Item, List } from '@/types/api'
 const props = defineProps<{ list: List; members: GroupMember[] }>()
 
 const { t } = useI18n()
+const groups = useGroupsStore()
 const items = useItemsStore()
+const lists = useListsStore()
 const recentChanges = useRecentChangesStore()
 const toasts = useToastsStore()
 const { removeChecked, removeItem } = useRemoveItems()
@@ -110,9 +114,16 @@ watch(
 )
 
 // Someone else deleted the item while its form was open: the form has
-// nothing left to save, so it closes and says why.
+// nothing left to save, so it closes and says why. If the list or household
+// itself went away, their own toast explains it instead.
 watch(editing, (now, before) => {
-  if (before && !now && editingId.value) {
+  if (
+    before &&
+    !now &&
+    editingId.value &&
+    !lists.deletionOf(props.list.id) &&
+    !groups.departureOf(props.list.groupId)
+  ) {
     editingId.value = null
     toasts.show({ kind: 'info', text: t('list.itemForm.deletedMeanwhile', { name: editingName }) })
   }

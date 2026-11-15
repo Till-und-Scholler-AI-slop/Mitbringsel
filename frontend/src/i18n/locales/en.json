@@ -268,6 +268,7 @@
       "description": "Create a list, for example for the weekly shopping.",
       "create": "Create list"
     },
+    "deletedMeanwhile": "“{name}” was deleted",
     "name": {
       "createTitle": "New list",
       "renameTitle": "Rename list",
