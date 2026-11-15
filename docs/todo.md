@@ -8,7 +8,7 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 - [ ] **Dialoge von Verwalten nach dem Design** (`verwalten-aktionen-hell`, `verwalten-entfernen-hell`, `verwalten-umbenennen-hell`, `verwalten-umbenennen-zulang-*`): Mitglied-Aktionen, Entfernen-Bestätigung und Umbenennen angleichen; die Seite selbst ist angeglichen, die Dialoge noch im alten Stil.
 - [ ] **Desktop-Varianten von Verwalten und Einladung** (`verwalten-desktop-*`, `markt2-einladung-desktop-*`): Verwalten zweispaltig, Einladung mit Kopf und Karte nebeneinander. `GroupSettingsView` und `InviteView` sind vorerst einspaltig.
-- [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): aktiver Chip mit Innenschatten (er sitzt schon eingedrückt, die Animation kommt von `press-sticker`), erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
+- [ ] **Feinabgleich Listenansicht** (`markt2-liste-hell`): erledigte Artikel 17/22 px mit 14 px Innenabstand, Mengen-Pille 3/10 px, Zeilen-Innenabstand `10px 4px 10px 14px`.
 
 ## Login
 
@@ -25,7 +25,7 @@ Die Umsetzung weicht an grundlegenden Stellen vom Design ab (siehe [Design](desi
 
 ## Artikel
 
-- [ ] **Listen-Icons im Frontend:** `lists.icon` und das API-Feld `icon` gibt es (Design: Die-Cut-Sticker, Iteration 3, `icons3-sticker`). Offen: Sticker-Komponente und Chips in der Listenleiste (nächster PR), danach die Auswahl im Dialog zum Anlegen und Umbenennen (`ListNameDialog`, `listsService.create`/`rename` senden das Icon noch nicht).
+- [ ] **Listen-Icon auswählen:** Die Chips zeigen den Sticker der Liste (`BaseSticker`, Design `icons3-sticker`), wählen lässt er sich noch nicht. Im Dialog zum Anlegen und Umbenennen (`ListNameDialog`) ein Raster mit den drei Gruppen aus dem Design anbieten; `listsService.create`/`rename` senden das Icon noch nicht.
 - [ ] **Listen-Icons in Seitenleiste und auf den Startkarten:** Laut Design stehen die Sticker auch in der Desktop-Seitenleiste und auf den Karten der Startseite. Nach den Chips nachziehen.
 - [ ] **Desktop-Panel für Artikel:** Auf dem Desktop steht das Formular als Panel rechts neben der Liste, nicht als Dialog, und die bearbeitete Zeile zeigt „Wird bearbeitet“ (`markt2-desktop-*`). Nach dem Formular als eigener Schritt.
 - [ ] **Abgehakte entfernen übersteht kein Schließen des Tabs:** `useRemoveItems` sendet erst, wenn der Toast endet (etwa 5 Sekunden). Wird der Tab vorher geschlossen, bleibt alles auf dem Server, und die Artikel stehen beim nächsten Öffnen wieder da. Mit der Outbox in Phase 6 das Entfernen sofort in die Outbox legen und erst beim Senden die Zeit des Toasts abwarten, oder beim Verlassen der Seite (`pagehide`) sofort senden.
