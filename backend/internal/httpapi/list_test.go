@@ -45,8 +45,8 @@ func (f *fakeLists) first() (list.List, error) {
 	return f.lists[0], nil
 }
 
-func (f *fakeLists) Create(_ context.Context, actor, groupID uuid.UUID, name string) (list.List, error) {
-	f.record("Create %s %s %q", actor, groupID, name)
+func (f *fakeLists) Create(_ context.Context, actor, groupID uuid.UUID, name string, icon list.Icon) (list.List, error) {
+	f.record("Create %s %s %q %q", actor, groupID, name, icon)
 	return f.first()
 }
 
@@ -60,8 +60,8 @@ func (f *fakeLists) Get(_ context.Context, actor, listID uuid.UUID) (list.List, 
 	return f.first()
 }
 
-func (f *fakeLists) Rename(_ context.Context, actor, listID uuid.UUID, name string) (list.List, error) {
-	f.record("Rename %s %s %q", actor, listID, name)
+func (f *fakeLists) Update(_ context.Context, actor, listID uuid.UUID, name string, icon list.Icon) (list.List, error) {
+	f.record("Update %s %s %q %q", actor, listID, name, icon)
 	return f.first()
 }
 
@@ -85,6 +85,7 @@ func testList() list.List {
 		ID:        testListID,
 		GroupID:   testGroupID,
 		Name:      "Supermarkt",
+		Icon:      list.IconSupermarket,
 		CreatedAt: listTime,
 		UpdatedAt: listTime,
 		ServerSeq: 42,
@@ -137,15 +138,29 @@ func TestListResponses(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantCalls:  []string{fmt.Sprintf("Get %s %s", testUserID, testListID)},
 		},
+		// Without an icon the handler passes "" on; the service picks the
+		// default or keeps the current one.
 		{
 			name: "create", method: http.MethodPost, path: groupListsPathFor(), body: `{"name":"Supermarkt"}`, list: testList(),
 			wantStatus: http.StatusCreated,
-			wantCalls:  []string{fmt.Sprintf("Create %s %s %q", testUserID, testGroupID, "Supermarkt")},
+			wantCalls:  []string{fmt.Sprintf("Create %s %s %q %q", testUserID, testGroupID, "Supermarkt", "")},
+		},
+		{
+			name: "create with icon", method: http.MethodPost, path: groupListsPathFor(), body: `{"name":"Supermarkt","icon":"supermarket"}`, list: testList(),
+			wantStatus: http.StatusCreated,
+			wantCalls:  []string{fmt.Sprintf("Create %s %s %q %q", testUserID, testGroupID, "Supermarkt", "supermarket")},
 		},
 		{
 			name: "rename", method: http.MethodPatch, path: listPathFor(""), body: `{"name":"Supermarkt"}`, list: testList(),
 			wantStatus: http.StatusOK,
-			wantCalls:  []string{fmt.Sprintf("Rename %s %s %q", testUserID, testListID, "Supermarkt")},
+			wantCalls:  []string{fmt.Sprintf("Update %s %s %q %q", testUserID, testListID, "Supermarkt", "")},
+		},
+		// Unknown icons are the service's to reject, so the handler passes
+		// them on unchanged.
+		{
+			name: "update with icon", method: http.MethodPatch, path: listPathFor(""), body: `{"name":"Supermarkt","icon":"spaceship"}`, list: testList(),
+			wantStatus: http.StatusOK,
+			wantCalls:  []string{fmt.Sprintf("Update %s %s %q %q", testUserID, testListID, "Supermarkt", "spaceship")},
 		},
 		{
 			name: "archive", method: http.MethodPut, path: listPathFor("/archived"), body: `{"archived":true}`, list: archived,
@@ -176,7 +191,7 @@ func TestListResponses(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 				t.Fatalf("decode body %s: %v", rec.Body, err)
 			}
-			if got.ID != testListID || got.GroupID != testGroupID || got.Name != "Supermarkt" || got.ServerSeq != 42 {
+			if got.ID != testListID || got.GroupID != testGroupID || got.Name != "Supermarkt" || got.Icon != apigen.ListIconSupermarket || got.ServerSeq != 42 {
 				t.Errorf("list = %+v", got)
 			}
 			if !got.CreatedAt.Equal(listTime) || !got.UpdatedAt.Equal(listTime) {
@@ -286,6 +301,7 @@ func TestListErrors(t *testing.T) {
 		{"not found", fmt.Errorf("get list: %w", list.ErrNotFound), http.StatusNotFound, "LIST_NOT_FOUND"},
 		{"forbidden", list.ErrForbidden, http.StatusForbidden, "FORBIDDEN"},
 		{"invalid name", fmt.Errorf("%w: name is empty", list.ErrInvalidName), http.StatusBadRequest, "LIST_NAME_INVALID"},
+		{"invalid icon", fmt.Errorf("%w: %q", list.ErrInvalidIcon, "x"), http.StatusBadRequest, "LIST_ICON_INVALID"},
 		{"database failure", errors.New("connection refused"), http.StatusInternalServerError, "INTERNAL_ERROR"},
 	}
 	routes := []struct {
@@ -297,7 +313,7 @@ func TestListErrors(t *testing.T) {
 		{"list", http.MethodGet, groupListsPathFor(), ""},
 		{"create", http.MethodPost, groupListsPathFor(), `{"name":"x"}`},
 		{"get", http.MethodGet, listPathFor(""), ""},
-		{"rename", http.MethodPatch, listPathFor(""), `{"name":"x"}`},
+		{"update", http.MethodPatch, listPathFor(""), `{"name":"x"}`},
 		{"archive", http.MethodPut, listPathFor("/archived"), `{"archived":true}`},
 		{"unarchive", http.MethodPut, listPathFor("/archived"), `{"archived":false}`},
 		{"delete", http.MethodDelete, listPathFor(""), ""},
@@ -331,12 +347,12 @@ func TestListBadRequests(t *testing.T) {
 		{"list ID is no UUID when archiving", http.MethodPut, "/api/v1/lists/nope/archived", `{"archived":true}`},
 		{"create without JSON", http.MethodPost, groupListsPathFor(), "name=x"},
 		{"create without body", http.MethodPost, groupListsPathFor(), ""},
-		{"rename with broken JSON", http.MethodPatch, listPathFor(""), `{"name":`},
+		{"update with broken JSON", http.MethodPatch, listPathFor(""), `{"name":`},
 		// A missing field must not count as false and unarchive the list.
 		{"archive without the field", http.MethodPut, listPathFor("/archived"), `{}`},
 		{"archive with null", http.MethodPut, listPathFor("/archived"), `{"archived":null}`},
 		{"archive with a string", http.MethodPut, listPathFor("/archived"), `{"archived":"true"}`},
-		{"rename with oversized body", http.MethodPatch, listPathFor(""),
+		{"update with oversized body", http.MethodPatch, listPathFor(""),
 			`{"name":"` + strings.Repeat("a", maxGroupBodyBytes) + `"}`},
 	}
 

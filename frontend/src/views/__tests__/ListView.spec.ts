@@ -102,6 +102,7 @@ function list(id: string, name: string, archivedAt: string | null = null): List 
     id,
     groupId: 'g1',
     name,
+    icon: 'general',
     archivedAt,
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',

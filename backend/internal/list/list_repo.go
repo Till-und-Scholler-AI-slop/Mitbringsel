@@ -25,8 +25,8 @@ func NewPostgresRepository(q *sqlcgen.Queries) *PostgresRepository {
 
 var _ Repository = (*PostgresRepository)(nil)
 
-func (r *PostgresRepository) Create(ctx context.Context, groupID uuid.UUID, name string) (List, error) {
-	row, err := r.q.CreateList(ctx, sqlcgen.CreateListParams{GroupID: groupID, Name: name})
+func (r *PostgresRepository) Create(ctx context.Context, groupID uuid.UUID, name string, icon Icon) (List, error) {
+	row, err := r.q.CreateList(ctx, sqlcgen.CreateListParams{GroupID: groupID, Name: name, Icon: string(icon)})
 	if err != nil {
 		return List{}, err
 	}
@@ -53,8 +53,8 @@ func (r *PostgresRepository) ListForGroup(ctx context.Context, groupID uuid.UUID
 	return out, nil
 }
 
-func (r *PostgresRepository) Rename(ctx context.Context, listID uuid.UUID, name string) (List, error) {
-	row, err := r.q.RenameList(ctx, sqlcgen.RenameListParams{ID: listID, Name: name})
+func (r *PostgresRepository) Update(ctx context.Context, listID uuid.UUID, name string, icon Icon) (List, error) {
+	row, err := r.q.UpdateList(ctx, sqlcgen.UpdateListParams{ID: listID, Name: name, Icon: string(icon)})
 	if err != nil {
 		return List{}, notFoundIfNoRows(err)
 	}
@@ -85,6 +85,7 @@ func fromRow(row sqlcgen.List) List {
 		ID:         row.ID,
 		GroupID:    row.GroupID,
 		Name:       row.Name,
+		Icon:       Icon(row.Icon),
 		ArchivedAt: row.ArchivedAt,
 		CreatedAt:  row.CreatedAt,
 		UpdatedAt:  row.UpdatedAt,

@@ -109,7 +109,7 @@ func TestPostgresRepository(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create group: %v", err)
 		}
-		l, err := lists.Create(ctx, user, g.ID, "Supermarkt")
+		l, err := lists.Create(ctx, user, g.ID, "Supermarkt", "")
 		if err != nil {
 			t.Fatalf("create list: %v", err)
 		}

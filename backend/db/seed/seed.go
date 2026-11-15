@@ -193,7 +193,7 @@ func (s *seeder) addMember(ctx context.Context, owner, groupID uuid.UUID, m memb
 // spec asks for it. The list is archived last, like a list that was in use
 // before it was put away.
 func (s *seeder) createList(ctx context.Context, owner, groupID uuid.UUID, spec listSpec) (int, error) {
-	l, err := s.lists.Create(ctx, owner, groupID, spec.Name)
+	l, err := s.lists.Create(ctx, owner, groupID, spec.Name, spec.Icon)
 	if err != nil {
 		return 0, fmt.Errorf("create list: %w", err)
 	}

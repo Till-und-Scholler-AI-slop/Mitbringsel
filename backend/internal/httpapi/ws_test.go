@@ -554,8 +554,8 @@ type publishingLists struct {
 	pub list.Publisher
 }
 
-func (p publishingLists) Create(ctx context.Context, actor, groupID uuid.UUID, name string) (list.List, error) {
-	l, err := p.fakeLists.Create(ctx, actor, groupID, name)
+func (p publishingLists) Create(ctx context.Context, actor, groupID uuid.UUID, name string, icon list.Icon) (list.List, error) {
+	l, err := p.fakeLists.Create(ctx, actor, groupID, name, icon)
 	if err == nil {
 		p.pub.ListChanged(ctx, actor, l)
 	}

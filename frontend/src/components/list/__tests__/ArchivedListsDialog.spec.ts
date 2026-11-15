@@ -12,6 +12,7 @@ function list(id: string, name: string): List {
     id,
     groupId: 'g1',
     name,
+    icon: 'general',
     archivedAt: '2026-02-01T10:00:00Z',
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',

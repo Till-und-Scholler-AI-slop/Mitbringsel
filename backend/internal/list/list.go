@@ -5,6 +5,7 @@ package list
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,13 +27,60 @@ var (
 	ErrForbidden = errors.New("not allowed for this role")
 	// ErrInvalidName means the name is empty or too long after trimming.
 	ErrInvalidName = errors.New("invalid list name")
+	// ErrInvalidIcon means the icon is not one of the fixed set.
+	ErrInvalidIcon = errors.New("invalid list icon")
 )
+
+// Icon is the sticker shown next to the list's name. The set is fixed (the
+// database checks it, too); the frontend draws each one.
+type Icon string
+
+// The icons, grouped like the picker in the design: food, household and
+// care, everything else.
+const (
+	IconSupermarket Icon = "supermarket"
+	IconMarket      Icon = "market"
+	IconBakery      Icon = "bakery"
+	IconButcher     Icon = "butcher"
+	IconDrinks      Icon = "drinks"
+	IconOrganic     Icon = "organic"
+
+	IconDrugstore Icon = "drugstore"
+	IconPharmacy  Icon = "pharmacy"
+	IconBaby      Icon = "baby"
+	IconPets      Icon = "pets"
+	IconHardware  Icon = "hardware"
+	IconGarden    Icon = "garden"
+
+	IconFurniture   Icon = "furniture"
+	IconElectronics Icon = "electronics"
+	IconStationery  Icon = "stationery"
+	IconClothing    Icon = "clothing"
+	IconOnline      Icon = "online"
+	IconGeneral     Icon = "general"
+)
+
+// DefaultIcon is what a list gets if nobody picks one.
+const DefaultIcon = IconGeneral
+
+// Icons lists every valid icon in the order above.
+var Icons = []Icon{
+	IconSupermarket, IconMarket, IconBakery, IconButcher, IconDrinks, IconOrganic,
+	IconDrugstore, IconPharmacy, IconBaby, IconPets, IconHardware, IconGarden,
+	IconFurniture, IconElectronics, IconStationery, IconClothing, IconOnline, IconGeneral,
+}
+
+// Valid reports whether i is one of the icons above.
+func (i Icon) Valid() bool {
+	return slices.Contains(Icons, i)
+}
 
 // List is a stored list.
 type List struct {
 	ID      uuid.UUID
 	GroupID uuid.UUID
 	Name    string
+	Icon    Icon
 	// ArchivedAt is nil for an active list.
 	ArchivedAt *time.Time
 	CreatedAt  time.Time
@@ -57,12 +105,14 @@ type MemberLookup interface {
 // Repository stores lists. The service has already checked who may do what;
 // methods that look up one list return ErrNotFound if it does not exist.
 type Repository interface {
-	Create(ctx context.Context, groupID uuid.UUID, name string) (List, error)
+	Create(ctx context.Context, groupID uuid.UUID, name string, icon Icon) (List, error)
 	Get(ctx context.Context, listID uuid.UUID) (List, error)
 	// ListForGroup returns the group's lists, oldest first. Archived lists
 	// are only included if includeArchived is true.
 	ListForGroup(ctx context.Context, groupID uuid.UUID, includeArchived bool) ([]List, error)
-	Rename(ctx context.Context, listID uuid.UUID, name string) (List, error)
+	// Update sets name and icon; the service passes the current value for
+	// whatever does not change.
+	Update(ctx context.Context, listID uuid.UUID, name string, icon Icon) (List, error)
 	// SetArchived archives or unarchives the list. Archiving an archived
 	// list keeps its original ArchivedAt.
 	SetArchived(ctx context.Context, listID uuid.UUID, archived bool) (List, error)

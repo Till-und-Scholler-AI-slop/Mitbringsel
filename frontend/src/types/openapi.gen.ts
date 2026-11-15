@@ -338,7 +338,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename a list
+         * Rename a list or change its icon
          * @description Every member may do this.
          */
         patch: operations["updateList"];
@@ -602,6 +602,7 @@ export interface components {
             /** Format: uuid */
             groupId: string;
             name: string;
+            icon: components["schemas"]["ListIcon"];
             /**
              * Format: date-time
              * @description null for an active list.
@@ -621,13 +622,23 @@ export interface components {
         ListList: {
             lists: components["schemas"]["List"][];
         };
-        ListNameRequest: {
+        ListRequest: {
             /**
              * @description 1 to 50 characters after trimming whitespace, otherwise
              *     `LIST_NAME_INVALID`.
              */
             name: string;
+            /**
+             * @description Optional. Left out, a new list gets `general` and a changed
+             *     list keeps its icon. Unknown values give `LIST_ICON_INVALID`.
+             */
+            icon?: components["schemas"]["ListIcon"];
         };
+        /**
+         * @description The sticker shown next to the list's name; the frontend draws it.
+         * @enum {string}
+         */
+        ListIcon: "supermarket" | "market" | "bakery" | "butcher" | "drinks" | "organic" | "drugstore" | "pharmacy" | "baby" | "pets" | "hardware" | "garden" | "furniture" | "electronics" | "stationery" | "clothing" | "online" | "general";
         SetListArchivedRequest: {
             archived: boolean;
         };
@@ -802,7 +813,7 @@ export interface components {
          * @description Machine-readable error; the frontend translates it.
          * @enum {string}
          */
-        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID" | "ITEM_NOT_FOUND" | "ITEM_NAME_INVALID" | "ITEM_QUANTITY_INVALID" | "ITEM_UNIT_INVALID" | "ITEM_NOTE_INVALID" | "ITEM_ID_TAKEN";
+        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID" | "LIST_ICON_INVALID" | "ITEM_NOT_FOUND" | "ITEM_NAME_INVALID" | "ITEM_QUANTITY_INVALID" | "ITEM_UNIT_INVALID" | "ITEM_NOTE_INVALID" | "ITEM_ID_TAKEN";
         /** @description Client to server: keeps the connection alive. Sent every 25 seconds; the server disconnects after 60 seconds of silence. */
         PingMessage: {
             /**
@@ -1510,7 +1521,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ListNameRequest"];
+                "application/json": components["schemas"]["ListRequest"];
             };
         };
         responses: {
@@ -1591,11 +1602,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ListNameRequest"];
+                "application/json": components["schemas"]["ListRequest"];
             };
         };
         responses: {
-            /** @description The renamed list. */
+            /** @description The changed list. */
             200: {
                 headers: {
                     [name: string]: unknown;

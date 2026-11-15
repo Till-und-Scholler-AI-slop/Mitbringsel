@@ -39,7 +39,7 @@ func newFakeRepo() *fakeRepo {
 	return &fakeRepo{lists: map[uuid.UUID]List{}}
 }
 
-func (r *fakeRepo) Create(_ context.Context, groupID uuid.UUID, name string) (List, error) {
+func (r *fakeRepo) Create(_ context.Context, groupID uuid.UUID, name string, icon Icon) (List, error) {
 	if r.fail {
 		return List{}, errRepo
 	}
@@ -47,7 +47,7 @@ func (r *fakeRepo) Create(_ context.Context, groupID uuid.UUID, name string) (Li
 		return List{}, err
 	}
 	now := time.Now()
-	l := List{ID: uuid.New(), GroupID: groupID, Name: name, CreatedAt: now, UpdatedAt: now}
+	l := List{ID: uuid.New(), GroupID: groupID, Name: name, Icon: icon, CreatedAt: now, UpdatedAt: now}
 	r.lists[l.ID] = l
 	return l, nil
 }
@@ -76,7 +76,7 @@ func (r *fakeRepo) ListForGroup(_ context.Context, groupID uuid.UUID, includeArc
 	return out, nil
 }
 
-func (r *fakeRepo) Rename(_ context.Context, listID uuid.UUID, name string) (List, error) {
+func (r *fakeRepo) Update(_ context.Context, listID uuid.UUID, name string, icon Icon) (List, error) {
 	l, err := r.Get(context.Background(), listID)
 	if err != nil {
 		return List{}, err
@@ -85,6 +85,7 @@ func (r *fakeRepo) Rename(_ context.Context, listID uuid.UUID, name string) (Lis
 		return List{}, err
 	}
 	l.Name = name
+	l.Icon = icon
 	r.lists[listID] = l
 	return l, nil
 }
@@ -182,10 +183,10 @@ func newFixture() fixture {
 	return f
 }
 
-// newList stores a list in the fixture's group.
+// newList stores a list with the default icon in the fixture's group.
 func (f fixture) newList(t *testing.T, name string) List {
 	t.Helper()
-	l, err := f.repo.Create(context.Background(), f.groupID, name)
+	l, err := f.repo.Create(context.Background(), f.groupID, name, DefaultIcon)
 	if err != nil {
 		t.Fatalf("create list: %v", err)
 	}
@@ -198,7 +199,7 @@ func TestService_Create(t *testing.T) {
 	t.Run("every role may create, the name is trimmed", func(t *testing.T) {
 		f := newFixture()
 		for name, actor := range map[string]uuid.UUID{"owner": f.owner, "admin": f.admin, "member": f.member} {
-			l, err := f.svc.Create(ctx, actor, f.groupID, "  Supermarkt  ")
+			l, err := f.svc.Create(ctx, actor, f.groupID, "  Supermarkt  ", "")
 			if err != nil {
 				t.Fatalf("%s: Create() error = %v", name, err)
 			}
@@ -214,7 +215,7 @@ func TestService_Create(t *testing.T) {
 			"outsider":      {f.outsider, f.groupID},
 			"unknown group": {f.owner, uuid.New()},
 		} {
-			if _, err := f.svc.Create(ctx, tc.actor, tc.group, "Supermarkt"); !errors.Is(err, ErrNotFound) {
+			if _, err := f.svc.Create(ctx, tc.actor, tc.group, "Supermarkt", ""); !errors.Is(err, ErrNotFound) {
 				t.Errorf("%s: error = %v, want %v", name, err, ErrNotFound)
 			}
 		}
@@ -237,7 +238,7 @@ func TestService_Create(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				f := newFixture()
-				_, err := f.svc.Create(ctx, f.member, f.groupID, tt.input)
+				_, err := f.svc.Create(ctx, f.member, f.groupID, tt.input, "")
 				if !errors.Is(err, tt.wantErr) {
 					t.Errorf("error = %v, want %v", err, tt.wantErr)
 				}
@@ -245,17 +246,50 @@ func TestService_Create(t *testing.T) {
 		}
 	})
 
-	t.Run("outsider learns nothing about the name rules", func(t *testing.T) {
+	t.Run("icons", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    Icon
+			wantIcon Icon
+			wantErr  error
+		}{
+			{"none gets the default", "", DefaultIcon, nil},
+			{"a known one is kept", IconBakery, IconBakery, nil},
+			{"an unknown one is refused", "spaceship", "", ErrInvalidIcon},
+			// The set is case-sensitive like the database CHECK.
+			{"wrong case is refused", "Bakery", "", ErrInvalidIcon},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f := newFixture()
+				l, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt", tt.input)
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("error = %v, want %v", err, tt.wantErr)
+				}
+				if l.Icon != tt.wantIcon {
+					t.Errorf("icon = %q, want %q", l.Icon, tt.wantIcon)
+				}
+				if tt.wantErr != nil && len(f.repo.lists) != 0 {
+					t.Errorf("stored %d lists, want none", len(f.repo.lists))
+				}
+			})
+		}
+	})
+
+	t.Run("outsider learns nothing about the name and icon rules", func(t *testing.T) {
 		f := newFixture()
-		if _, err := f.svc.Create(ctx, f.outsider, f.groupID, ""); !errors.Is(err, ErrNotFound) {
+		if _, err := f.svc.Create(ctx, f.outsider, f.groupID, "", ""); !errors.Is(err, ErrNotFound) {
 			t.Errorf("error = %v, want %v, not %v", err, ErrNotFound, ErrInvalidName)
+		}
+		if _, err := f.svc.Create(ctx, f.outsider, f.groupID, "Supermarkt", "spaceship"); !errors.Is(err, ErrNotFound) {
+			t.Errorf("error = %v, want %v, not %v", err, ErrNotFound, ErrInvalidIcon)
 		}
 	})
 
 	t.Run("repository failure is passed on", func(t *testing.T) {
 		f := newFixture()
 		f.repo.fail = true
-		if _, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt"); !errors.Is(err, errRepo) {
+		if _, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt", ""); !errors.Is(err, errRepo) {
 			t.Errorf("error = %v, want %v", err, errRepo)
 		}
 	})
@@ -314,16 +348,16 @@ func TestService_Get(t *testing.T) {
 	}
 }
 
-func TestService_Rename(t *testing.T) {
+func TestService_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("every role may rename", func(t *testing.T) {
 		f := newFixture()
 		l := f.newList(t, "Old")
 		for name, actor := range map[string]uuid.UUID{"owner": f.owner, "admin": f.admin, "member": f.member} {
-			got, err := f.svc.Rename(ctx, actor, l.ID, " New ")
+			got, err := f.svc.Update(ctx, actor, l.ID, " New ", "")
 			if err != nil || got.Name != "New" {
-				t.Errorf("%s: Rename() = %+v, %v, want name New", name, got, err)
+				t.Errorf("%s: Update() = %+v, %v, want name New", name, got, err)
 			}
 		}
 	})
@@ -331,7 +365,7 @@ func TestService_Rename(t *testing.T) {
 	t.Run("outsider is not found and nothing changes", func(t *testing.T) {
 		f := newFixture()
 		l := f.newList(t, "Old")
-		if _, err := f.svc.Rename(ctx, f.outsider, l.ID, "New"); !errors.Is(err, ErrNotFound) {
+		if _, err := f.svc.Update(ctx, f.outsider, l.ID, "New", ""); !errors.Is(err, ErrNotFound) {
 			t.Errorf("error = %v, want %v", err, ErrNotFound)
 		}
 		if f.repo.lists[l.ID].Name != "Old" {
@@ -342,8 +376,40 @@ func TestService_Rename(t *testing.T) {
 	t.Run("invalid name", func(t *testing.T) {
 		f := newFixture()
 		l := f.newList(t, "Old")
-		if _, err := f.svc.Rename(ctx, f.member, l.ID, " "); !errors.Is(err, ErrInvalidName) {
+		if _, err := f.svc.Update(ctx, f.member, l.ID, " ", ""); !errors.Is(err, ErrInvalidName) {
 			t.Errorf("error = %v, want %v", err, ErrInvalidName)
+		}
+	})
+
+	t.Run("a new icon is stored, the name may stay", func(t *testing.T) {
+		f := newFixture()
+		l := f.newList(t, "Supermarkt")
+		got, err := f.svc.Update(ctx, f.member, l.ID, "Supermarkt", IconSupermarket)
+		if err != nil || got.Icon != IconSupermarket || got.Name != "Supermarkt" {
+			t.Errorf("Update() = %+v, %v, want icon %q and the old name", got, err, IconSupermarket)
+		}
+	})
+
+	t.Run("no icon keeps the current one", func(t *testing.T) {
+		f := newFixture()
+		l := f.newList(t, "Old")
+		if _, err := f.svc.Update(ctx, f.member, l.ID, "Old", IconBakery); err != nil {
+			t.Fatal(err)
+		}
+		got, err := f.svc.Update(ctx, f.member, l.ID, "New", "")
+		if err != nil || got.Icon != IconBakery || got.Name != "New" {
+			t.Errorf("Update() = %+v, %v, want name New and icon %q", got, err, IconBakery)
+		}
+	})
+
+	t.Run("invalid icon changes nothing", func(t *testing.T) {
+		f := newFixture()
+		l := f.newList(t, "Old")
+		if _, err := f.svc.Update(ctx, f.member, l.ID, "New", "spaceship"); !errors.Is(err, ErrInvalidIcon) {
+			t.Errorf("error = %v, want %v", err, ErrInvalidIcon)
+		}
+		if got := f.repo.lists[l.ID]; got.Name != "Old" || got.Icon != DefaultIcon {
+			t.Errorf("stored %+v, want it unchanged", got)
 		}
 	})
 }
@@ -439,7 +505,7 @@ func TestService_publishes(t *testing.T) {
 		{
 			name: "create",
 			act: func(f fixture, _ List) error {
-				_, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt")
+				_, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt", "")
 				return err
 			},
 			wantKind:  "changed",
@@ -453,12 +519,27 @@ func TestService_publishes(t *testing.T) {
 		{
 			name:      "rename",
 			setup:     func(t *testing.T, f fixture) List { return f.newList(t, "Old") },
-			act:       func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.member, l.ID, " New "); return err },
+			act:       func(f fixture, l List) error { _, err := f.svc.Update(ctx, f.member, l.ID, " New ", ""); return err },
 			wantKind:  "changed",
 			wantWrite: true,
 			check: func(t *testing.T, got List) {
 				if got.Name != "New" {
 					t.Errorf("published name = %q, want the stored name New", got.Name)
+				}
+			},
+		},
+		{
+			name:  "change only the icon",
+			setup: func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act: func(f fixture, l List) error {
+				_, err := f.svc.Update(ctx, f.member, l.ID, "Supermarkt", IconMarket)
+				return err
+			},
+			wantKind:  "changed",
+			wantWrite: true,
+			check: func(t *testing.T, got List) {
+				if got.Icon != IconMarket {
+					t.Errorf("published icon = %q, want %q", got.Icon, IconMarket)
 				}
 			},
 		},
@@ -507,13 +588,13 @@ func TestService_publishes(t *testing.T) {
 		},
 		{
 			name:    "create with an invalid name",
-			act:     func(f fixture, _ List) error { _, err := f.svc.Create(ctx, f.member, f.groupID, " "); return err },
+			act:     func(f fixture, _ List) error { _, err := f.svc.Create(ctx, f.member, f.groupID, " ", ""); return err },
 			wantErr: ErrInvalidName,
 		},
 		{
 			name: "create by an outsider",
 			act: func(f fixture, _ List) error {
-				_, err := f.svc.Create(ctx, f.outsider, f.groupID, "Supermarkt")
+				_, err := f.svc.Create(ctx, f.outsider, f.groupID, "Supermarkt", "")
 				return err
 			},
 			wantErr: ErrNotFound,
@@ -521,19 +602,39 @@ func TestService_publishes(t *testing.T) {
 		{
 			name:    "rename with an invalid name",
 			setup:   func(t *testing.T, f fixture) List { return f.newList(t, "Old") },
-			act:     func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.member, l.ID, ""); return err },
+			act:     func(f fixture, l List) error { _, err := f.svc.Update(ctx, f.member, l.ID, "", ""); return err },
 			wantErr: ErrInvalidName,
 		},
 		{
 			name:    "rename by an outsider",
 			setup:   func(t *testing.T, f fixture) List { return f.newList(t, "Old") },
-			act:     func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.outsider, l.ID, "New"); return err },
+			act:     func(f fixture, l List) error { _, err := f.svc.Update(ctx, f.outsider, l.ID, "New", ""); return err },
 			wantErr: ErrNotFound,
 		},
 		{
 			name:  "rename to the same name",
 			setup: func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
-			act:   func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.member, l.ID, " Supermarkt "); return err },
+			act: func(f fixture, l List) error {
+				_, err := f.svc.Update(ctx, f.member, l.ID, " Supermarkt ", "")
+				return err
+			},
+		},
+		{
+			name:  "update to the same name and icon",
+			setup: func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act: func(f fixture, l List) error {
+				_, err := f.svc.Update(ctx, f.member, l.ID, "Supermarkt", DefaultIcon)
+				return err
+			},
+		},
+		{
+			name:  "update with an invalid icon",
+			setup: func(t *testing.T, f fixture) List { return f.newList(t, "Supermarkt") },
+			act: func(f fixture, l List) error {
+				_, err := f.svc.Update(ctx, f.member, l.ID, "Supermarkt", "x")
+				return err
+			},
+			wantErr: ErrInvalidIcon,
 		},
 		{
 			name: "archive an archived list",
@@ -574,7 +675,7 @@ func TestService_publishes(t *testing.T) {
 			name:  "create fails in the repository",
 			setup: func(t *testing.T, f fixture) List { f.repo.failWrites = true; return List{} },
 			act: func(f fixture, _ List) error {
-				_, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt")
+				_, err := f.svc.Create(ctx, f.member, f.groupID, "Supermarkt", "")
 				return err
 			},
 			wantWrite: true,
@@ -587,7 +688,7 @@ func TestService_publishes(t *testing.T) {
 				f.repo.failWrites = true
 				return l
 			},
-			act:       func(f fixture, l List) error { _, err := f.svc.Rename(ctx, f.member, l.ID, "New"); return err },
+			act:       func(f fixture, l List) error { _, err := f.svc.Update(ctx, f.member, l.ID, "New", ""); return err },
 			wantWrite: true,
 			wantErr:   errRepo,
 		},
@@ -652,12 +753,12 @@ func TestNewService_nilPublisher(t *testing.T) {
 	svc := NewService(f.repo, fakeMembers{f.groupID: {f.owner: group.RoleOwner}}, nil)
 	ctx := context.Background()
 
-	l, err := svc.Create(ctx, f.owner, f.groupID, "Supermarkt")
+	l, err := svc.Create(ctx, f.owner, f.groupID, "Supermarkt", "")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	if _, err := svc.Rename(ctx, f.owner, l.ID, "Baumarkt"); err != nil {
-		t.Fatalf("Rename() error = %v", err)
+	if _, err := svc.Update(ctx, f.owner, l.ID, "Baumarkt", ""); err != nil {
+		t.Fatalf("Update() error = %v", err)
 	}
 	if _, err := svc.Archive(ctx, f.owner, l.ID); err != nil {
 		t.Fatalf("Archive() error = %v", err)

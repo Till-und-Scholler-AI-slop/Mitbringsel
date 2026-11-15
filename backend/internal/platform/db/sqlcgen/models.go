@@ -60,6 +60,7 @@ type List struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	ServerSeq  int64
+	Icon       string
 }
 
 type Session struct {

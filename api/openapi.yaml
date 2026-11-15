@@ -515,7 +515,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ListNameRequest"
+              $ref: "#/components/schemas/ListRequest"
       responses:
         "201":
           description: The new list.
@@ -558,7 +558,7 @@ paths:
           $ref: "#/components/responses/Error"
     patch:
       operationId: updateList
-      summary: Rename a list
+      summary: Rename a list or change its icon
       description: Every member may do this.
       tags: [lists]
       security:
@@ -568,10 +568,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ListNameRequest"
+              $ref: "#/components/schemas/ListRequest"
       responses:
         "200":
-          description: The renamed list.
+          description: The changed list.
           content:
             application/json:
               schema:
@@ -1123,7 +1123,7 @@ components:
 
     List:
       type: object
-      required: [id, groupId, name, archivedAt, createdAt, updatedAt, serverSeq]
+      required: [id, groupId, name, icon, archivedAt, createdAt, updatedAt, serverSeq]
       properties:
         id:
           type: string
@@ -1139,6 +1139,8 @@ components:
             path: github.com/google/uuid
         name:
           type: string
+        icon:
+          $ref: "#/components/schemas/ListIcon"
         archivedAt:
           type: string
           format: date-time
@@ -1166,7 +1168,7 @@ components:
           items:
             $ref: "#/components/schemas/List"
 
-    ListNameRequest:
+    ListRequest:
       type: object
       required: [name]
       properties:
@@ -1175,6 +1177,36 @@ components:
           description: |
             1 to 50 characters after trimming whitespace, otherwise
             `LIST_NAME_INVALID`.
+        icon:
+          allOf:
+            - $ref: "#/components/schemas/ListIcon"
+          description: |
+            Optional. Left out, a new list gets `general` and a changed
+            list keeps its icon. Unknown values give `LIST_ICON_INVALID`.
+
+    ListIcon:
+      type: string
+      description: |
+        The sticker shown next to the list's name; the frontend draws it.
+      enum:
+        - supermarket
+        - market
+        - bakery
+        - butcher
+        - drinks
+        - organic
+        - drugstore
+        - pharmacy
+        - baby
+        - pets
+        - hardware
+        - garden
+        - furniture
+        - electronics
+        - stationery
+        - clothing
+        - online
+        - general
 
     SetListArchivedRequest:
       type: object
@@ -1542,6 +1574,7 @@ components:
         - RATE_LIMITED
         - LIST_NOT_FOUND
         - LIST_NAME_INVALID
+        - LIST_ICON_INVALID
         - ITEM_NOT_FOUND
         - ITEM_NAME_INVALID
         - ITEM_QUANTITY_INVALID
@@ -1570,6 +1603,7 @@ components:
         - RateLimited
         - ListNotFound
         - ListNameInvalid
+        - ListIconInvalid
         - ItemNotFound
         - ItemNameInvalid
         - ItemQuantityInvalid

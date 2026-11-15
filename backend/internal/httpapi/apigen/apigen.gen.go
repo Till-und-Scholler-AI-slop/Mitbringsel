@@ -28,6 +28,7 @@ const (
 	ErrorCodeItemNoteInvalid     ErrorCode = "ITEM_NOTE_INVALID"
 	ErrorCodeItemQuantityInvalid ErrorCode = "ITEM_QUANTITY_INVALID"
 	ErrorCodeItemUnitInvalid     ErrorCode = "ITEM_UNIT_INVALID"
+	ErrorCodeListIconInvalid     ErrorCode = "LIST_ICON_INVALID"
 	ErrorCodeListNameInvalid     ErrorCode = "LIST_NAME_INVALID"
 	ErrorCodeListNotFound        ErrorCode = "LIST_NOT_FOUND"
 	ErrorCodeMethodNotAllowed    ErrorCode = "METHOD_NOT_ALLOWED"
@@ -74,6 +75,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeItemQuantityInvalid:
 		return true
 	case ErrorCodeItemUnitInvalid:
+		return true
+	case ErrorCodeListIconInvalid:
 		return true
 	case ErrorCodeListNameInvalid:
 		return true
@@ -228,6 +231,72 @@ const (
 func (e ListDeletedMessageType) Valid() bool {
 	switch e {
 	case ListDeletedMessageTypeListDeleted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListIcon.
+const (
+	ListIconBaby        ListIcon = "baby"
+	ListIconBakery      ListIcon = "bakery"
+	ListIconButcher     ListIcon = "butcher"
+	ListIconClothing    ListIcon = "clothing"
+	ListIconDrinks      ListIcon = "drinks"
+	ListIconDrugstore   ListIcon = "drugstore"
+	ListIconElectronics ListIcon = "electronics"
+	ListIconFurniture   ListIcon = "furniture"
+	ListIconGarden      ListIcon = "garden"
+	ListIconGeneral     ListIcon = "general"
+	ListIconHardware    ListIcon = "hardware"
+	ListIconMarket      ListIcon = "market"
+	ListIconOnline      ListIcon = "online"
+	ListIconOrganic     ListIcon = "organic"
+	ListIconPets        ListIcon = "pets"
+	ListIconPharmacy    ListIcon = "pharmacy"
+	ListIconStationery  ListIcon = "stationery"
+	ListIconSupermarket ListIcon = "supermarket"
+)
+
+// Valid indicates whether the value is a known member of the ListIcon enum.
+func (e ListIcon) Valid() bool {
+	switch e {
+	case ListIconBaby:
+		return true
+	case ListIconBakery:
+		return true
+	case ListIconButcher:
+		return true
+	case ListIconClothing:
+		return true
+	case ListIconDrinks:
+		return true
+	case ListIconDrugstore:
+		return true
+	case ListIconElectronics:
+		return true
+	case ListIconFurniture:
+		return true
+	case ListIconGarden:
+		return true
+	case ListIconGeneral:
+		return true
+	case ListIconHardware:
+		return true
+	case ListIconMarket:
+		return true
+	case ListIconOnline:
+		return true
+	case ListIconOrganic:
+		return true
+	case ListIconPets:
+		return true
+	case ListIconPharmacy:
+		return true
+	case ListIconStationery:
+		return true
+	case ListIconSupermarket:
 		return true
 	default:
 		return false
@@ -699,8 +768,11 @@ type List struct {
 	ArchivedAt *time.Time `json:"archivedAt"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	GroupID    uuid.UUID  `json:"groupId"`
-	ID         uuid.UUID  `json:"id"`
-	Name       string     `json:"name"`
+
+	// Icon The sticker shown next to the list's name; the frontend draws it.
+	Icon ListIcon  `json:"icon"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 
 	// ServerSeq Orders changes across lists and items; clients ask for what
 	// changed after the last one they saw.
@@ -743,13 +815,20 @@ type ListDeletedPayload struct {
 	ListID  uuid.UUID `json:"listId"`
 }
 
+// ListIcon The sticker shown next to the list's name; the frontend draws it.
+type ListIcon string
+
 // ListList defines model for ListList.
 type ListList struct {
 	Lists []List `json:"lists"`
 }
 
-// ListNameRequest defines model for ListNameRequest.
-type ListNameRequest struct {
+// ListRequest defines model for ListRequest.
+type ListRequest struct {
+	// Icon Optional. Left out, a new list gets `general` and a changed
+	// list keeps its icon. Unknown values give `LIST_ICON_INVALID`.
+	Icon *ListIcon `json:"icon,omitempty"`
+
 	// Name 1 to 50 characters after trimming whitespace, otherwise
 	// `LIST_NAME_INVALID`.
 	Name string `json:"name"`
@@ -904,7 +983,7 @@ type CreateGroupJSONRequestBody = GroupNameRequest
 type UpdateGroupJSONRequestBody = GroupNameRequest
 
 // CreateListJSONRequestBody defines body for CreateList for application/json ContentType.
-type CreateListJSONRequestBody = ListNameRequest
+type CreateListJSONRequestBody = ListRequest
 
 // SetGroupMemberRoleJSONRequestBody defines body for SetGroupMemberRole for application/json ContentType.
 type SetGroupMemberRoleJSONRequestBody = SetRoleRequest
@@ -913,7 +992,7 @@ type SetGroupMemberRoleJSONRequestBody = SetRoleRequest
 type UpdateItemJSONRequestBody = UpdateItemRequest
 
 // UpdateListJSONRequestBody defines body for UpdateList for application/json ContentType.
-type UpdateListJSONRequestBody = ListNameRequest
+type UpdateListJSONRequestBody = ListRequest
 
 // SetListArchivedJSONRequestBody defines body for SetListArchived for application/json ContentType.
 type SetListArchivedJSONRequestBody = SetListArchivedRequest
