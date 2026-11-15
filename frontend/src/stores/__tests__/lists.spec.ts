@@ -709,6 +709,16 @@ describe('lists store: deletions', () => {
     expect(store.deletionOf('l1')).toEqual({ name: 'Supermarkt', cause: 'self' })
   })
 
+  it('treats a listDeleted event of the same user from another device or tab as deleted', async () => {
+    const service = fakeService([list('l1', 'Supermarkt')])
+    const { store, events } = setup(service)
+    await store.load('g1')
+
+    events.emit({ type: 'listDeleted', payload: { groupId: 'g1', listId: 'l1', actorId: ANNA } })
+
+    expect(store.deletionOf('l1')).toEqual({ name: 'Supermarkt', cause: 'deleted' })
+  })
+
   it('remembers a list missing after reload as unknown and forgets deletions on user change', async () => {
     const service = fakeService([list('l1', 'Supermarkt')])
     const { store, user } = setup(service)

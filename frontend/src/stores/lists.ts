@@ -80,6 +80,9 @@ export function defineListsStore(
     const appliedLoadStart = new Map<string, number>()
     // Why each list disappeared, read once by the view that was showing it.
     const deletions = new Map<string, ListDeletion>()
+    // Lists currently being deleted by this tab's remove() call, so an early
+    // listDeleted event before the REST answer still counts as 'self'.
+    const selfDeleting = new Set<string>()
 
     function reset() {
       generation++
@@ -88,6 +91,7 @@ export function defineListsStore(
       touchedAt.clear()
       appliedLoadStart.clear()
       deletions.clear()
+      selfDeleting.clear()
     }
 
     watch(currentUserId, reset)
@@ -338,7 +342,14 @@ export function defineListsStore(
       // Looked up first: the list is gone from the answer, and the group is
       // needed to drop it from the right place.
       const groupId = byId(listId)?.groupId
-      await service.remove(listId)
+      selfDeleting.add(listId)
+      try {
+        await service.remove(listId)
+      } finally {
+        if (started === generation) {
+          selfDeleting.delete(listId)
+        }
+      }
       if (started === generation) {
         takeDeletion(groupId, listId, 'self')
       }
@@ -353,7 +364,7 @@ export function defineListsStore(
         takeDeletion(
           payload.groupId,
           payload.listId,
-          payload.actorId === currentUserId() ? 'self' : 'deleted',
+          selfDeleting.has(payload.listId) ? 'self' : 'deleted',
         ),
       ),
       events.on('groupRemoved', ({ payload }) => forgetGroup(payload.groupId)),
