@@ -6,7 +6,7 @@ Getestet wird, was kaputtgehen darf, ohne dass man es sofort merkt: Sync- und Ko
 
 | Bereich | Testart | Beispiele |
 | --- | --- | --- |
-| LWW-Merge (Go) und HLC (Go und TypeScript) | Unit, tabellengetrieben | Gleichzeitige Änderungen an verschiedenen und gleichen Feldern, Gleichstand, Löschen gewinnt, Uhr in der Zukunft; die HLC in TypeScript mit denselben Fällen wie in Go |
+| LWW-Merge (Go) und HLC (Go und TypeScript) | Unit, tabellengetrieben | Gleichzeitige Änderungen an verschiedenen und gleichen Feldern, Gleichstand, Löschen gewinnt, Uhr in der Zukunft; gültige und ungültige HLCs und ihre Reihenfolge stehen in `api/testdata/hlc.json`, beide Testsuiten lesen sie |
 | Services | Unit mit Fake-Repositories | Nicht-Mitglied darf nicht lesen oder schreiben, Rechte von Owner, Admin und Member, abgelaufene Einladung |
 | Repositories und Migrationen | Integration gegen echtes Postgres (`testcontainers-go`) | Queries, Constraints, `server_seq`, wiederholte Änderungen ändern nichts |
 | WebSocket-Hub | Unit und Integration | Unit (`realtime`): Räume, langsamer Client, Limit, Rennen beim Verbinden; Integration mit zwei Clients ab Schritt 3. Phase 5: zwei Clients, Änderung von A kommt bei B an; Entfernen aus der Gruppe; langsamer Client. Phase 6: Wiederverbinden mit Outbox und Neuladen |

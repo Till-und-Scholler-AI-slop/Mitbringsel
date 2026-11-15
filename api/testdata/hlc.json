@@ -1,0 +1,35 @@
+{
+  "comment": "Shared test cases for the hybrid logical clock (HLC), read by backend/internal/item/hlc_test.go and frontend/src/services/sync/__tests__/hlc.spec.ts, so both implementations agree. Format: docs/sync.md.",
+  "valid": [
+    { "name": "example from the docs", "in": "0000019a2b3c4d5e-0001-3f2a9c" },
+    { "name": "every node character", "in": "0000019ca8d72d00-beef-Anna-Handy_2" },
+    { "name": "uuid as node", "in": "0000019ca8d72d00-0000-0190a8c4-0000-7000-8000-0000000000b1" },
+    { "name": "node at the limit", "in": "0000019ca8d72d00-0000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    { "name": "zero time and counter", "in": "0000000000000000-0000-a" },
+    { "name": "largest counter", "in": "0000019ca8d72d00-ffff-a" }
+  ],
+  "invalid": [
+    { "name": "empty", "in": "" },
+    { "name": "no node", "in": "0000019a2b3c4d5e-0001-" },
+    { "name": "no node and no second dash", "in": "0000019a2b3c4d5e-0001" },
+    { "name": "uppercase hex in the wall time", "in": "0000019A2B3C4D5E-0001-a" },
+    { "name": "uppercase hex in the counter", "in": "0000019a2b3c4d5e-00AB-a" },
+    { "name": "wall time too short", "in": "19a2b3c4d5e-0001-a" },
+    { "name": "counter too short", "in": "0000019a2b3c4d5e-1-a" },
+    { "name": "not hex", "in": "000000000000000g-0001-a" },
+    { "name": "wall time over 63 bits", "in": "ffffffffffffffff-0001-a" },
+    { "name": "wrong separator", "in": "0000019a2b3c4d5e_0001_a" },
+    { "name": "bad node", "in": "0000019a2b3c4d5e-0001-a b" },
+    { "name": "node with a dot", "in": "0000019a2b3c4d5e-0001-a.b" },
+    { "name": "node over the limit", "in": "0000019a2b3c4d5e-0001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+    { "name": "surrounding space", "in": " 0000019a2b3c4d5e-0001-a" }
+  ],
+  "ordered": [
+    { "name": "wall time beats counter and node", "older": "0000000000000001-0009-zzz", "newer": "0000000000000002-0000-aaa" },
+    { "name": "counter beats node", "older": "0000000000000002-0001-zzz", "newer": "0000000000000002-0002-aaa" },
+    { "name": "node decides last", "older": "0000000000000002-0002-aaa", "newer": "0000000000000002-0002-bbb" },
+    { "name": "wall time across a hex digit boundary", "older": "00000000000000ff-0000-a", "newer": "0000000000000100-0000-a" },
+    { "name": "counter across a hex digit boundary", "older": "0000000000000002-000f-a", "newer": "0000000000000002-0010-a" },
+    { "name": "today against a far future date", "older": "0000019ca8d72d00-0000-a", "newer": "0000200000000000-0000-a" }
+  ]
+}
