@@ -20,6 +20,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import { useInvitesStore } from '@/stores/invites'
 
+// The kinds of shops the app is made for, as stickers in the desktop header.
+const SHOPS = ['supermarket', 'drugstore', 'hardware'] as const
+
 // How long to wait after a rate limit if the server did not say.
 const DEFAULT_WAIT_SECONDS = 30
 
@@ -128,9 +131,20 @@ async function retry() {
 
 <template>
   <div class="invite">
+    <!-- Phone: a green bar on top. Desktop: the left half of the page, with
+         slogan and shop chips (design "markt2-einladung-desktop-*"). -->
     <header class="bar">
-      <BrandLogo small />
-      <h1 class="title">{{ title }}</h1>
+      <BrandLogo class="logo--phone" small />
+      <BrandLogo class="logo--desktop" large />
+      <div class="heading">
+        <h1 class="title">{{ title }}</h1>
+        <p class="tagline">{{ t('invite.tagline') }}</p>
+      </div>
+      <div class="chips" aria-hidden="true">
+        <span v-for="shop in SHOPS" :key="shop" :class="['chip', `chip--${shop}`]">
+          {{ t(`login.shops.${shop}`) }}
+        </span>
+      </div>
     </header>
 
     <main class="content">
@@ -227,6 +241,20 @@ async function retry() {
   overflow-wrap: break-word;
 }
 
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Desktop-only parts of the header. With .bar in front, these win over
+   the display of BrandLogo's own root class. */
+.bar .logo--desktop,
+.tagline,
+.chips {
+  display: none;
+}
+
 .content {
   flex: 1;
   display: flex;
@@ -293,5 +321,113 @@ async function retry() {
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+}
+
+/* Desktop: header and content side by side. The header starts at 420 px,
+   the content takes the rest; in a narrow window (up to about 880 px) the
+   content wraps below. */
+@media (min-width: 48rem) {
+  .invite {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .bar {
+    flex: 1 1 26.25rem;
+    min-width: 0;
+    justify-content: space-between;
+    gap: var(--space-12);
+    padding: var(--space-12) var(--space-14);
+    border-radius: 0 2.5rem 2.5rem 0;
+  }
+
+  .bar .logo--phone {
+    display: none;
+  }
+
+  .bar .logo--desktop {
+    display: inline-block;
+  }
+
+  .title {
+    font-size: 3.5rem;
+    line-height: 3.875rem;
+  }
+
+  .tagline {
+    display: block;
+    max-width: 26.25rem;
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.75rem;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: var(--space-3);
+    padding: var(--space-1) 0 var(--space-1) var(--space-1);
+  }
+
+  .content {
+    flex: 999 1 28.75rem;
+    justify-content: center;
+    gap: var(--space-5);
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+    padding: var(--space-12) var(--space-8);
+  }
+
+  /* Everything in one centered column as wide as the card. */
+  .content > * {
+    align-self: center;
+    width: 100%;
+    max-width: 30rem;
+  }
+
+  .spacer {
+    display: none;
+  }
+}
+
+/* Overlapping, slightly turned stickers in the shop colors. */
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--size-touch);
+  padding: 0 1.125rem;
+  border: var(--border-width-sm) solid var(--color-on-accent);
+  border-radius: var(--radius-full);
+  color: var(--color-on-accent);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-heavy);
+  white-space: nowrap;
+  box-shadow: var(--shadow-sticker);
+}
+
+.chip + .chip {
+  margin-left: calc(-1 * var(--space-2));
+}
+
+.chip--supermarket {
+  z-index: 3;
+  background: var(--color-accent-tomato);
+  transform: rotate(-4deg);
+}
+
+.chip--drugstore {
+  z-index: 2;
+  background: var(--color-accent-lilac);
+  transform: rotate(3deg);
+}
+
+.chip--hardware {
+  z-index: 1;
+  background: var(--color-accent-sky);
+  transform: rotate(-2deg);
 }
 </style>

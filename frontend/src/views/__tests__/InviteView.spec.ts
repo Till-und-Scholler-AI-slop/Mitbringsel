@@ -92,6 +92,20 @@ describe('InviteView', () => {
     wrapper.unmount()
   })
 
+  it('has the slogan and the shop stickers for the desktop header, hidden from screen readers', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('.tagline').text()).toBe('Shopping together, live in sync.')
+    const chips = wrapper.get('.chips')
+    expect(chips.attributes('aria-hidden')).toBe('true')
+    expect(chips.findAll('.chip').map((c) => c.text())).toEqual([
+      'Supermarket',
+      'Drugstore',
+      'Hardware',
+    ])
+    wrapper.unmount()
+  })
+
   it('asks someone who is not signed in to join with Google and come back here', async () => {
     const { wrapper } = await mountView('anonymous')
 

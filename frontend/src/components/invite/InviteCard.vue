@@ -193,4 +193,16 @@ const others = computed(() => Math.max(0, props.preview.memberCount - props.prev
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
+
+/* Desktop (design "markt2-einladung-desktop-*"): a little more room. */
+@media (min-width: 48rem) {
+  .card {
+    padding: var(--space-6);
+  }
+
+  .group-name {
+    font-size: 1.875rem;
+    line-height: 2.1875rem;
+  }
+}
 </style>

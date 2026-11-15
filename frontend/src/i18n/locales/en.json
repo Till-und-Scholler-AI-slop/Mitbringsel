@@ -73,6 +73,7 @@
   },
   "invite": {
     "title": "You are invited!",
+    "tagline": "Shopping together, live in sync.",
     "loadingText": "Loading invite …",
     "card": "Invite",
     "invitedBy": "{name} invites you to",
