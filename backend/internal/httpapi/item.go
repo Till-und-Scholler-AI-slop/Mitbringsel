@@ -17,6 +17,7 @@ const (
 	listItemsPath     = listPath + "/items"
 	removeCheckedPath = listItemsPath + "/remove-checked"
 	itemPath          = "/api/v1/items/{itemId}"
+	groupItemsPath    = groupPath + "/items"
 
 	// maxRemoveCheckedBodyBytes leaves room for item.MaxRemoveItems IDs: one
 	// is 39 bytes in JSON (36 characters, the quotes and a comma), 500 of
@@ -29,6 +30,7 @@ const (
 type ItemService interface {
 	Create(ctx context.Context, actor, listID uuid.UUID, n item.NewItem, clock item.HLC) (item.Item, error)
 	ListForList(ctx context.Context, actor, listID uuid.UUID) ([]item.Item, error)
+	ListForGroup(ctx context.Context, actor, groupID uuid.UUID) ([]item.Item, error)
 	Get(ctx context.Context, actor, itemID uuid.UUID) (item.Item, error)
 	Update(ctx context.Context, actor, itemID uuid.UUID, change item.Change, clock item.HLC) (item.Item, error)
 	Delete(ctx context.Context, actor, itemID uuid.UUID) (item.Item, error)
@@ -102,6 +104,27 @@ func listItemsHandler(items ItemService) http.HandlerFunc {
 		}
 
 		// make instead of a nil slice, so "no items" is [] and not null.
+		resp := apigen.ItemList{Items: make([]apigen.Item, len(found))}
+		for i, it := range found {
+			resp.Items[i] = newItemResponse(it)
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func groupItemsHandler(items ItemService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actor, groupID, ok := actorAndGroupFrom(w, r)
+		if !ok {
+			return
+		}
+
+		found, err := items.ListForGroup(r.Context(), actor, groupID)
+		if err != nil {
+			writeItemError(w, "list group items", err)
+			return
+		}
+
 		resp := apigen.ItemList{Items: make([]apigen.Item, len(found))}
 		for i, it := range found {
 			resp.Items[i] = newItemResponse(it)
@@ -353,6 +376,8 @@ func writeItemError(w http.ResponseWriter, op string, err error) {
 	switch {
 	case errors.Is(err, item.ErrNotFound):
 		writeError(w, http.StatusNotFound, apigen.ErrorCodeItemNotFound)
+	case errors.Is(err, item.ErrGroupNotFound):
+		writeError(w, http.StatusNotFound, apigen.ErrorCodeGroupNotFound)
 	case errors.Is(err, item.ErrIDTaken):
 		writeError(w, http.StatusConflict, apigen.ErrorCodeItemIDTaken)
 	case errors.Is(err, item.ErrInvalidName):

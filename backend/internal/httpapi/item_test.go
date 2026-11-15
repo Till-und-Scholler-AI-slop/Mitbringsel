@@ -65,6 +65,11 @@ func (f *fakeItems) ListForList(_ context.Context, actor, listID uuid.UUID) ([]i
 	return f.items, f.err
 }
 
+func (f *fakeItems) ListForGroup(_ context.Context, actor, groupID uuid.UUID) ([]item.Item, error) {
+	f.record("ListForGroup %s %s", actor, groupID)
+	return f.items, f.err
+}
+
 func (f *fakeItems) Get(_ context.Context, actor, itemID uuid.UUID) (item.Item, error) {
 	f.record("Get %s %s", actor, itemID)
 	return f.first()
@@ -165,6 +170,8 @@ func itemRequest(t *testing.T, items ItemService, method, path, body string) *ht
 }
 
 func listItemsPathFor() string { return listPathFor("/items") }
+
+func groupItemsPathFor() string { return groupPathFor("/items") }
 
 func itemPathFor() string { return "/api/v1/items/" + testItemID.String() }
 
@@ -312,6 +319,44 @@ func TestListItems(t *testing.T) {
 		requireUTCTimestamps(t, rec.Body.Bytes())
 		if want := fmt.Sprintf("ListForList %s %s", testUserID, testListID); len(items.calls) != 1 || items.calls[0] != want {
 			t.Errorf("calls = %q, want [%q]", items.calls, want)
+		}
+	})
+}
+
+func TestListGroupItems(t *testing.T) {
+	t.Run("no items is an empty array, not null", func(t *testing.T) {
+		rec := itemRequest(t, &fakeItems{}, http.MethodGet, groupItemsPathFor(), "")
+
+		if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != `{"items":[]}` {
+			t.Errorf("status = %d, body = %s", rec.Code, got)
+		}
+	})
+
+	t.Run("items of the group", func(t *testing.T) {
+		items := &fakeItems{items: []item.Item{testItem()}}
+
+		rec := itemRequest(t, items, http.MethodGet, groupItemsPathFor(), "")
+
+		var got apigen.ItemList
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode body %s: %v", rec.Body, err)
+		}
+		if len(got.Items) != 1 || got.Items[0].Name != "Mehl" {
+			t.Errorf("items = %+v", got.Items)
+		}
+		requireUTCTimestamps(t, rec.Body.Bytes())
+		if want := fmt.Sprintf("ListForGroup %s %s", testUserID, testGroupID); len(items.calls) != 1 || items.calls[0] != want {
+			t.Errorf("calls = %q, want [%q]", items.calls, want)
+		}
+	})
+
+	t.Run("a malformed group ID is a bad request", func(t *testing.T) {
+		items := &fakeItems{}
+
+		rec := itemRequest(t, items, http.MethodGet, "/api/v1/groups/not-a-uuid/items", "")
+
+		if rec.Code != http.StatusBadRequest || len(items.calls) != 0 {
+			t.Errorf("status = %d, calls = %q; want 400 and no call", rec.Code, items.calls)
 		}
 	})
 }
@@ -527,6 +572,7 @@ func TestItemErrors(t *testing.T) {
 		{"invalid id", item.ErrInvalidID, http.StatusBadRequest, "INVALID_REQUEST"},
 		{"empty change", item.ErrEmptyChange, http.StatusBadRequest, "INVALID_REQUEST"},
 		{"too many items", item.ErrTooManyItems, http.StatusBadRequest, "INVALID_REQUEST"},
+		{"group not found", item.ErrGroupNotFound, http.StatusNotFound, "GROUP_NOT_FOUND"},
 		{"database failure", errors.New("connection refused"), http.StatusInternalServerError, "INTERNAL_ERROR"},
 	}
 	routes := []struct {
@@ -536,6 +582,7 @@ func TestItemErrors(t *testing.T) {
 		body   string
 	}{
 		{"list", http.MethodGet, listItemsPathFor(), ""},
+		{"list group", http.MethodGet, groupItemsPathFor(), ""},
 		{"create", http.MethodPost, listItemsPathFor(), `{"name":"x"}`},
 		{"get", http.MethodGet, itemPathFor(), ""},
 		{"update", http.MethodPatch, itemPathFor(), `{"name":"x"}`},

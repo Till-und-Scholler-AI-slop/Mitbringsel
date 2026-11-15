@@ -540,6 +540,37 @@ paths:
         "500":
           $ref: "#/components/responses/Error"
 
+  /groups/{groupId}/items:
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+    get:
+      operationId: listGroupItems
+      summary: List the items of all active lists of a group
+      description: |
+        The items of every list of the group that is not archived, in one
+        response, so a client can have them offline (docs/sync.md). Oldest
+        first; deleted items are left out. Items of archived lists load with
+        `listItems`. A group the user is not a member of looks like a group
+        that does not exist (`GROUP_NOT_FOUND`).
+      tags: [items]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The items of the active lists of the group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemList"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
   /lists/{listId}:
     parameters:
       - $ref: "#/components/parameters/ListId"

@@ -402,6 +402,57 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("the items of a group are those of its active lists", func(t *testing.T) {
+		anna, first := newList(t, "group-anna")
+		l, err := lists.Get(ctx, anna, first)
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := lists.Create(ctx, anna, l.GroupID, "Baumarkt", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		archived, err := lists.Create(ctx, anna, l.GroupID, "Weihnachten", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		create := func(listID uuid.UUID, name string) Item {
+			t.Helper()
+			it, err := svc.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: name}, clock(t, 0, "anna"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return it
+		}
+		milk := create(first, "Milch")
+		nails := create(second.ID, "Nägel")
+		create(archived.ID, "Kerzen")
+		gone := create(first, "Mehl")
+		if _, err := svc.Delete(ctx, anna, gone.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lists.Archive(ctx, anna, archived.ID); err != nil {
+			t.Fatal(err)
+		}
+		// Another household's items stay out.
+		ben, foreign := newList(t, "group-ben")
+		if _, err := svc.Create(ctx, ben, foreign, NewItem{ID: newItemID(t), Name: "Käse"}, clock(t, 0, "ben")); err != nil {
+			t.Fatal(err)
+		}
+
+		items, err := svc.ListForGroup(ctx, anna, l.GroupID)
+
+		if err != nil {
+			t.Fatalf("ListForGroup() error = %v", err)
+		}
+		if len(items) != 2 || items[0].ID != milk.ID || items[1].ID != nails.ID {
+			t.Errorf("ListForGroup() = %+v, want Milch and Nägel, oldest first", items)
+		}
+		if _, err := svc.ListForGroup(ctx, ben, l.GroupID); !errors.Is(err, ErrGroupNotFound) {
+			t.Errorf("ListForGroup() for an outsider error = %v, want %v", err, ErrGroupNotFound)
+		}
+	})
+
 	t.Run("deleting the list takes the items along", func(t *testing.T) {
 		anna, listID := newList(t, "cascade-anna")
 		it, err := svc.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: "Milch"}, clock(t, 0, "anna"))

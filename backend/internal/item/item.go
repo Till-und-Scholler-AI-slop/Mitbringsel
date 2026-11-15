@@ -28,6 +28,9 @@ var (
 	// another list. The same ID in the same list is a repeated request and
 	// no error.
 	ErrIDTaken = errors.New("item id already used elsewhere")
+	// ErrGroupNotFound means the group does not exist or the user is not a
+	// member of it.
+	ErrGroupNotFound = errors.New("group not found")
 	// ErrInvalidID means the ID is the zero UUID.
 	ErrInvalidID = errors.New("invalid item id")
 	// ErrInvalidName means the name is empty or too long after trimming.
@@ -201,6 +204,8 @@ type Repository interface {
 	// ListForList returns the items of a list that are not deleted, oldest
 	// first.
 	ListForList(ctx context.Context, listID uuid.UUID) ([]Item, error)
+	// ListForLists does the same for several lists at once.
+	ListForLists(ctx context.Context, listIDs []uuid.UUID) ([]Item, error)
 	// Apply writes the update and draws a new server_seq.
 	Apply(ctx context.Context, itemID uuid.UUID, update Update) (Item, error)
 	// MarkDeleted turns the item into a tombstone. For a tombstone already,
