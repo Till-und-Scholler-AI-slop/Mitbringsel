@@ -147,6 +147,7 @@ func run() error {
 		cleanup.Run(ctx, cleanup.DefaultInterval, []cleanup.Task{
 			{Name: "expired sessions", Run: sessions.DeleteExpired},
 			{Name: "stale invites", Run: invites.DeleteStale},
+			{Name: "item tombstones", Run: items.DeleteOldTombstones},
 		})
 	}()
 

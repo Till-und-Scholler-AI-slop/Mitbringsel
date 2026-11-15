@@ -136,6 +136,21 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 	return i, err
 }
 
+const deleteItemTombstones = `-- name: DeleteItemTombstones :execrows
+DELETE FROM items
+WHERE deleted_at < $1::timestamptz
+`
+
+// The cleanup job. Removes tombstones deleted before the cutoff for good;
+// items that are not deleted are never touched.
+func (q *Queries) DeleteItemTombstones(ctx context.Context, cutoff time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteItemTombstones, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getItem = `-- name: GetItem :one
 SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq FROM items
 WHERE id = $1
