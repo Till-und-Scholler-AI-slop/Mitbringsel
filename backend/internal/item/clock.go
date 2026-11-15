@@ -7,13 +7,14 @@ import (
 	"time"
 )
 
-// Clock issues the clocks (HLCs) for changes that the server makes itself,
-// like those that arrive over REST. Every clock it returns is greater than
-// the one before, so the latest request wins (see Merge), even if two
-// requests arrive in the same millisecond or the server clock jumps back.
+// Clock issues the clocks (HLCs) for changes that arrive over REST without
+// a clock of their own (older clients). Every clock it returns is greater
+// than the one before, so the latest such request wins (see Merge), even if
+// two requests arrive in the same millisecond or the server clock jumps
+// back.
 //
-// Changes that arrive over the WebSocket carry the clock of their device and
-// do not use this.
+// Changes that bring the clock of their device (field clock) do not use
+// this.
 type Clock struct {
 	node string
 	now  func() time.Time

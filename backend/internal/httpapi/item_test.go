@@ -411,6 +411,66 @@ func TestUpdateItemChange(t *testing.T) {
 	}
 }
 
+// TestItemClockFromClient checks which clock a change reaches the service
+// with: the one the client sent, or the server's if it sent none.
+func TestItemClockFromClient(t *testing.T) {
+	const sent = "0000019a2b3c4d5f-0003-phone_1"
+
+	routes := []struct {
+		name   string
+		method string
+		path   string
+		// body is the request without a clock; the cases add one.
+		body string
+		// call is the expected service call with %s for the clock.
+		call string
+	}{
+		{"create", http.MethodPost, listItemsPathFor(), `"name":"Mehl"`, "Create " + testUserID.String() + " " + testListID.String() + " %s"},
+		{"update", http.MethodPatch, itemPathFor(), `"checked":true`, "Update " + testUserID.String() + " " + testItemID.String() + " %s [checked=true]"},
+	}
+	cases := []struct {
+		name  string
+		clock string
+		want  item.HLC
+	}{
+		{"the clock of the client", `,"clock":"` + sent + `"`, sent},
+		{"without a clock the server stamps it", "", testItemClock},
+		{"null counts as no clock", `,"clock":null`, testItemClock},
+	}
+
+	for _, route := range routes {
+		for _, tc := range cases {
+			t.Run(route.name+": "+tc.name, func(t *testing.T) {
+				items := &fakeItems{items: []item.Item{testItem()}}
+
+				rec := itemRequest(t, items, route.method, route.path, "{"+route.body+tc.clock+"}")
+
+				if rec.Code >= 300 {
+					t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
+				}
+				if want := fmt.Sprintf(route.call, tc.want); len(items.calls) != 1 || items.calls[0] != want {
+					t.Errorf("calls = %q, want [%q]", items.calls, want)
+				}
+			})
+		}
+
+		for _, bad := range []string{`""`, `"yesterday"`, `"0000019A2B3C4D5F-0003-phone"`, `42`} {
+			t.Run(route.name+": invalid clock "+bad, func(t *testing.T) {
+				items := &fakeItems{items: []item.Item{testItem()}}
+
+				rec := itemRequest(t, items, route.method, route.path, "{"+route.body+`,"clock":`+bad+"}")
+
+				if rec.Code != http.StatusBadRequest || strings.TrimSpace(rec.Body.String()) != errorBody("INVALID_REQUEST") {
+					t.Errorf("status = %d, body = %s, want 400 INVALID_REQUEST", rec.Code, rec.Body)
+				}
+				if len(items.calls) != 0 {
+					t.Errorf("calls = %q, want none", items.calls)
+				}
+			})
+		}
+	}
+}
+
 func TestDeletedItemsAreGone(t *testing.T) {
 	deleted := testItem()
 	deletedAt := itemTime

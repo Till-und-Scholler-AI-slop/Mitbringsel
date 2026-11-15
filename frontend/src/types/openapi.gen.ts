@@ -390,6 +390,9 @@ export interface paths {
          *     optional: without it the server picks one. Sending the same `id` for
          *     the same list again returns the stored item unchanged; an `id` that
          *     belongs to another list or to a deleted item is `ITEM_ID_TAKEN`.
+         *
+         *     All fields of the new item get the `clock` of the request, or one
+         *     from the server if it is left out.
          */
         post: operations["createItem"];
         delete?: never;
@@ -454,8 +457,11 @@ export interface paths {
          *     `null` to remove them; `name` and `checked` cannot be `null`. At
          *     least one field is required. Checking an item records who and when.
          *
-         *     Changes are merged per field (last write wins): the server gives
-         *     each REST change the newest clock, so the latest request wins.
+         *     Changes are merged per field (last write wins): a field only changes
+         *     if the `clock` of the request is newer than the one stored for it.
+         *     Without a `clock` the server gives the request the newest clock, so
+         *     the latest request wins. Sending the same change with the same
+         *     `clock` again changes nothing.
          */
         patch: operations["updateItem"];
         trace?: never;
@@ -725,6 +731,14 @@ export interface components {
              *     Otherwise `ITEM_NOTE_INVALID`.
              */
             note?: string | null;
+            /**
+             * @description Optional. The hybrid logical clock (HLC) of the change,
+             *     `<wall>-<counter>-<node>` (docs/sync.md), from the device that
+             *     made it. Without it the server stamps the change itself. A clock
+             *     more than 5 minutes ahead of the server is set to the server
+             *     time. Otherwise `INVALID_REQUEST`.
+             */
+            clock?: string;
         };
         RemoveCheckedItemsRequest: {
             /** @description At most 500 items, otherwise `INVALID_REQUEST`. An empty array deletes nothing. */
@@ -734,9 +748,9 @@ export interface components {
             items: components["schemas"]["DeletedItem"][];
         };
         /**
-         * @description At least one field. `quantity`, `unit` and `note` accept `null` to
-         *     remove the value; for `name` and `checked`, `null` is an invalid
-         *     request.
+         * @description At least one field besides `clock`. `quantity`, `unit` and `note`
+         *     accept `null` to remove the value; for `name` and `checked`, `null`
+         *     is an invalid request.
          */
         UpdateItemRequest: {
             name?: string;
@@ -745,6 +759,14 @@ export interface components {
             unit?: components["schemas"]["Unit"] | null;
             note?: string | null;
             checked?: boolean;
+            /**
+             * @description Optional. The hybrid logical clock (HLC) of the change,
+             *     `<wall>-<counter>-<node>` (docs/sync.md), from the device that
+             *     made it. Without it the server stamps the change itself. A clock
+             *     more than 5 minutes ahead of the server is set to the server
+             *     time. Otherwise `INVALID_REQUEST`.
+             */
+            clock?: string;
         };
         /**
          * @description How a quantity is measured; the frontend translates it.
