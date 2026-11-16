@@ -232,11 +232,8 @@ describe('localData', () => {
   })
 
   describe('without IndexedDB', () => {
-    beforeEach(() => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {})
-    })
-
-    it('reads null and never throws', async () => {
+    it('reads null, never throws and does not warn', async () => {
+      const warn = vi.spyOn(console, 'warn')
       vi.stubGlobal('indexedDB', undefined)
 
       await expect(data.claim(me(ANNA))).resolves.toBeUndefined()
@@ -245,7 +242,7 @@ describe('localData', () => {
       await expect(data.clear()).resolves.toBeUndefined()
       expect(await data.readMe()).toBeNull()
       expect(await data.readItems(ANNA, LIST)).toBeNull()
-      expect(console.warn).toHaveBeenCalled()
+      expect(warn).not.toHaveBeenCalled()
     })
 
     it('tries again on the next call', async () => {
@@ -256,6 +253,19 @@ describe('localData', () => {
       await data.claim(me(ANNA))
 
       expect(await data.readMe()).toEqual(me(ANNA))
+    })
+  })
+
+  describe('when IndexedDB fails', () => {
+    it('warns, reads null and never throws', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.spyOn(indexedDB, 'open').mockImplementation(() => {
+        throw new DOMException('blocked', 'SecurityError')
+      })
+
+      await expect(data.claim(me(ANNA))).resolves.toBeUndefined()
+      expect(await data.readMe()).toBeNull()
+      expect(warn).toHaveBeenCalledWith('local data: read me failed', expect.any(DOMException))
     })
   })
 })
