@@ -31,9 +31,16 @@ As a <role>, I want <goal>, so that <benefit>.
 | Bereich (genau eins oder zwei) | `area:auth`, `area:groups`, `area:items`, `area:sync`, `area:ui`, `area:ci` |
 | Art | `bug`, `enhancement`, `tech-debt`, `documentation` |
 | Schicht | `frontend`, `backend`, `api` (ändert `api/openapi.yaml`) |
+| Roadmap | `roadmap`, `priority:high` |
 | Sonstiges | `needs-decision`; `claude-review` nur für PRs |
 
-Issues einer Phase der [Roadmap](roadmap.md) bekommen deren Milestone, z.B. „Phase 6: Offline and PWA“.
+## Roadmap
+
+Die [Roadmap](roadmap.md) gibt den Überblick über die Phasen; jeder offene Schritt hat ein Issue, und die Roadmap verlinkt es.
+
+- **Geplanter Schritt einer Phase:** Labels `roadmap` und `priority:high`, Milestone der Phase (z.B. „Phase 6: Offline and PWA“), Status `Todo`. Kommt ein Schritt dazu oder wird einer geteilt, legt der Agent das Issue an und verlinkt es in der Roadmap.
+- **Idee ohne festen Zeitpunkt** (Abschnitt „Später“): Label `roadmap`, ohne `priority:high` und ohne Milestone, Status `Backlog`.
+- Erledigt ein Schritt ein Issue aus dem Backlog mit, verweist das Roadmap-Issue darauf („Related: #n“), und der PR schließt beide.
 
 ## Befehle
 
