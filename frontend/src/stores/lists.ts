@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { listsService, type ListsService } from '@/services/api/lists'
+import { localData, type LocalData } from '@/services/storage/localData'
+import { createPersistQueue } from '@/services/storage/persistQueue'
 import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
 import { useItemsStore } from '@/stores/items'
@@ -48,12 +50,23 @@ interface GroupLists {
  * one we hold, and a deleted list stays deleted. This store knows which
  * lists belong to a group, so it is the one that tells the items store when
  * a list is gone (deleted, or its group left). See docs/sync.md.
+ *
+ * The lists of each group are kept on the device (`storage`, ADR 0006), as in
+ * the groups store: the first load of a group reads them next to the
+ * request, they only fill what the store does not hold, the status stays
+ * `loading` until the server answers, and the store writes the lists of a
+ * group back whenever a state from the server changed them.
  */
+
+/** The part of the local storage the lists store uses. */
+export type ListsLocal = Pick<LocalData, 'readLists' | 'writeLists' | 'removeLists'>
+
 export function defineListsStore(
   service: ListsService,
   currentUserId: () => string | null,
   events: ServerEvents = liveSocket,
   forgetItems: (listId: string) => void = (listId) => useItemsStore().forgetList(listId),
+  storage: ListsLocal = localData,
 ) {
   return defineStore('lists', () => {
     const byGroup = ref<Record<string, GroupLists>>({})
@@ -84,6 +97,13 @@ export function defineListsStore(
     // listDeleted event before the REST answer still counts as 'self'.
     const selfDeleting = new Set<string>()
 
+    // Writes to the local storage, coalesced (see persistQueue).
+    const persistQueue = createPersistQueue()
+    // Groups whose lists the store holds as the device or the server knows
+    // them: the stored lists were read, or a load answer was applied. Before
+    // that, writing would replace the stored lists with a partial state.
+    const holdsState = new Set<string>()
+
     function reset() {
       generation++
       byGroup.value = {}
@@ -92,9 +112,56 @@ export function defineListsStore(
       appliedLoadStart.clear()
       deletions.clear()
       selfDeleting.clear()
+      holdsState.clear()
+      persistQueue.clear()
     }
 
     watch(currentUserId, reset)
+
+    // Writes the lists of the group to the device once the current code is
+    // done. The user is taken now: the storage ignores writes for another
+    // owner. A group dropped meanwhile is not written (forgetGroup removed it).
+    function persist(groupId: string) {
+      const userId = currentUserId()
+      if (!holdsState.has(groupId) || !userId) {
+        return
+      }
+      persistQueue.schedule(groupId, () => {
+        const entry = byGroup.value[groupId]
+        if (entry) {
+          return storage.writeLists(userId, groupId, entry.lists)
+        }
+      })
+    }
+
+    // Reads the stored lists of the group on its first load. Skipped if the
+    // user changed meanwhile, the group was dropped, or a load answer was
+    // applied already: that one is newer.
+    async function restore(groupId: string, started: number) {
+      const userId = currentUserId()
+      if (!userId) {
+        return
+      }
+      const stored = await storage.readLists(userId, groupId)
+      const entry = byGroup.value[groupId]
+      if (started !== generation || !entry || appliedLoadStart.has(groupId)) {
+        return
+      }
+      holdsState.add(groupId)
+      if (stored) {
+        mergeStored(entry, stored)
+      }
+    }
+
+    // Adds the stored lists the group does not hold. What it holds came from
+    // the server since the start and is newer; a deleted list stays deleted.
+    function mergeStored(entry: GroupLists, stored: List[]) {
+      const held = new Set(entry.lists.map((list) => list.id))
+      const missing = stored.filter((list) => !held.has(list.id) && !tombstones.has(list.id))
+      if (missing.length > 0) {
+        entry.lists = [...toRaw(entry.lists), ...missing].sort(compareLists)
+      }
+    }
 
     // The entry of a group, created on first use. Reading functions below do
     // not create one, so looking at a group does not change the state.
@@ -178,6 +245,7 @@ export function defineListsStore(
         }
       }
       touchedAt.set(list.id, ++clock)
+      persist(list.groupId)
 
       if (local) {
         entry.lists[index] = list
@@ -202,6 +270,7 @@ export function defineListsStore(
         if (target) {
           deletions.set(listId, { name: target.name, cause })
           entry.lists = entry.lists.filter((list) => list.id !== listId)
+          persist(target.groupId)
         }
       }
       forgetItems(listId)
@@ -214,6 +283,13 @@ export function defineListsStore(
      * group after a missed groupRemoved.
      */
     function forgetGroup(groupId: string) {
+      // Also when the group was never loaded: the device may still hold its
+      // lists from an earlier visit.
+      holdsState.delete(groupId)
+      const userId = currentUserId()
+      if (userId) {
+        persistQueue.schedule(groupId, () => storage.removeLists(userId, groupId))
+      }
       const entry = byGroup.value[groupId]
       if (!entry) {
         return
@@ -276,11 +352,15 @@ export function defineListsStore(
      * that is loaded already keeps its status `ready` meanwhile, so reloading
      * shows no spinner. If this fails, the lists loaded before stay: an
      * unreachable server should not empty the screen.
+     *
+     * The first load of a group also reads its lists stored on the device,
+     * at the same time as the request.
      */
     async function load(groupId: string) {
       const started = generation
       const startedAt = ++clock
       const entry = ensure(groupId)
+      const restoring = entry.status === 'idle' ? restore(groupId, started) : null
       if (entry.status !== 'ready') {
         entry.status = 'loading'
       }
@@ -291,8 +371,13 @@ export function defineListsStore(
           return
         }
         mergeLoaded(entry, loaded, startedAt)
+        holdsState.add(groupId)
+        persist(groupId)
         entry.status = 'ready'
       } catch (err) {
+        // Offline the request fails at once: wait for the stored lists, so
+        // the screen does not show the error before they are there.
+        await restoring
         if (!isCurrentLoad(started, groupId, startedAt)) {
           return
         }
