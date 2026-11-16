@@ -13,5 +13,5 @@
 | [deployment.md](deployment.md) | Container, lokale Entwicklung, CI/CD |
 | [design.md](design.md) | Vorgehen mit Claude Design, Screens, Anforderungen |
 | [roadmap.md](roadmap.md) | Offene Entscheidungen und Phasen |
-| [todo.md](todo.md) | Bewusst aufgeschobene Punkte |
+| [issues.md](issues.md) | Offene Punkte als GitHub-Issues: Regeln, Labels, Befehle ([Project](https://github.com/orgs/Till-und-Scholler-AI-slop/projects/6)) |
 | [adr/](adr/README.md) | Architecture Decision Records |
