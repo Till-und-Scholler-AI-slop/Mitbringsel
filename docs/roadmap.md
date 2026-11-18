@@ -9,11 +9,11 @@ Der Agent spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hi
 - [x] API-Vertrag: OpenAPI-Spezifikation (`api/openapi.yaml`), daraus generierte Typen für Go und TypeScript (siehe [ADR 0002](adr/0002-openapi-als-api-vertrag.md))
 - [ ] Bestätigung der vorgeschlagenen Libraries aus dem [Tech-Stack](tech-stack.md); WebSocket: entschieden, [ADR 0005](adr/0005-live-sync-phase-5.md)
 - [x] Domain und VPS: bestehender eigener VPS hinter Traefik, `mitbringsel.tinowolter.com` und `mitbringsel-dev.tinowolter.com` (siehe [ADR 0001](adr/0001-staging-und-production.md))
-- [ ] Datenschutzerklärung und Impressum, da die App öffentlich nutzbar ist und personenbezogene Daten (Google-Profil) verarbeitet
+- [ ] Datenschutzerklärung und Impressum, da die App öffentlich nutzbar ist und personenbezogene Daten (Google-Profil) verarbeitet ([#97](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/97))
 
 ## Roadmap
 
-Jede Phase endet mit einem lauffähigen, getesteten Stand.
+Jede Phase endet mit einem lauffähigen, getesteten Stand. Offene Schritte haben ein Issue mit den Labels `roadmap` und `priority:high` (siehe [Issues und Project](issues.md)); erledigte Schritte bleiben hier als Überblick stehen.
 
 1. **Fundament:** Monorepo, `Makefile`, lokales Postgres per Compose, Go-Server mit Health-Endpunkt, Vue-Projekt mit Router, Pinia, i18n und Platzhalter-Tokens, CI mit Lint und Tests.
 2. **Auth:** Google Login, Sessions, Dev-Login, `GET /api/v1/me`, Logout. Abgelaufene Sessions werden zunächst nur abgewiesen; ein periodischer Aufräum-Job (`internal/cleanup`) löscht seit Phase 5 Sessions und Einladungen, seit Phase 6 auch Tombstones von Artikeln nach 30 Tagen.
@@ -40,25 +40,25 @@ Jede Phase endet mit einem lauffähigen, getesteten Stand.
     6. Lokaler Speicher (`idb`), in vier PRs:
         1. Speicher-Service (`services/storage/localData.ts`), gehört immer einem Nutzer
         2. Start ohne Netz: letzter Nutzer aus dem Speicher, Logout löscht ihn
-        3. Stores starten aus IndexedDB und schreiben ihren Stand zurück
-        4. Vorladen der Listen und Artikel aller Haushalte
-    7. Outbox (Warteschlange, Senden, Wiederholen, Rollback, ein sendender Tab)
-    8. Artikel-Store über die Outbox
-    9. „Abgehakte entfernen“ über die Outbox
-    10. Wiederverbinden: Outbox senden und neu laden
-    11. UI: Sync-Chip „ausstehend“, Uhr-Symbol in der Artikelzeile, Offline-Texte, Hinweise bei Aktionen nur online
-    12. PWA (`vite-plugin-pwa`, Manifest, Icons)
-    13. Prüfung auf Staging mit echten Geräten
+        3. Stores starten aus IndexedDB und schreiben ihren Stand zurück ([#129](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/129))
+        4. Vorladen der Listen und Artikel aller Haushalte ([#130](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/130))
+    7. Outbox (Warteschlange, Senden, Wiederholen, Rollback, ein sendender Tab; [#131](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/131))
+    8. Artikel-Store über die Outbox ([#132](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/132))
+    9. „Abgehakte entfernen“ über die Outbox ([#133](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/133))
+    10. Wiederverbinden: Outbox senden und neu laden ([#134](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/134))
+    11. UI: Sync-Chip „ausstehend“, Uhr-Symbol in der Artikelzeile, Offline-Texte, Hinweise bei Aktionen nur online ([#135](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/135))
+    12. PWA (`vite-plugin-pwa`, Manifest, Icons; [#136](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/136))
+    13. Prüfung auf Staging mit echten Geräten ([#137](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/137))
 7. **Design-Umsetzung:** Tokens und Komponenten nach der gewählten Claude-Design-Richtung. Kann ab Phase 3 parallel laufen, sobald das Design steht.
 8. **Deployment:** Compose für Staging und Production hinter dem bestehenden Traefik, Authelia-Schutz für Staging, Backups, automatisches Deployment: `main` auf Staging, GitHub Release auf Production (siehe [ADR 0001](adr/0001-staging-und-production.md)). Vorgezogen und parallel zu Phase 2, damit jeder weitere Stand früh unter echten Bedingungen auf Staging läuft. Schritte: Container-Images, Compose mit Traefik-Labels, Images nach GHCR, Deploy auf Staging, Promote nach Production, Backups.
 
 ## Später
 
-Push-Benachrichtigungen, Kategorien, Sortieren per Drag & Drop, Autovervollständigung aus früheren Einkäufen, Offline-Bearbeitung auch für Listen und Gruppen, weitere Sprachen, [Anlass-Listen](#ausbaustufe-anlass-listen).
+Ideen ohne festen Zeitpunkt, je ein Issue mit dem Label `roadmap` im Status `Backlog`: Push-Benachrichtigungen ([#138](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/138)), Kategorien ([#139](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/139)), Sortieren per Drag & Drop ([#140](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/140)), Autovervollständigung aus früheren Einkäufen ([#141](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/141)), Offline-Bearbeitung auch für Listen und Gruppen ([#142](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/142)), weitere Sprachen ([#143](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/143)), [Anlass-Listen](#ausbaustufe-anlass-listen) ([#144](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/144)).
 
 ## Ausbaustufe: Anlass-Listen
 
-Nur geplant, nicht umgesetzt. Listen für Anlässe, die anders funktionieren als normale Einkaufslisten, zum Beispiel Grillabend, Geburtstag, Party, Silvester, Weihnachten, Brunch mit Gästen, Picknick, Camping, Urlaub oder Umzug. Der App-Name „Mitbringsel“ passt genau zu diesem Fall; das Feature ist daher ein guter Kandidat für eine spätere Ausbaustufe.
+Nur geplant, nicht umgesetzt ([#144](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/144)). Listen für Anlässe, die anders funktionieren als normale Einkaufslisten, zum Beispiel Grillabend, Geburtstag, Party, Silvester, Weihnachten, Brunch mit Gästen, Picknick, Camping, Urlaub oder Umzug. Der App-Name „Mitbringsel“ passt genau zu diesem Fall; das Feature ist daher ein guter Kandidat für eine spätere Ausbaustufe.
 
 **Unterschiede zur normalen Einkaufsliste**
 
