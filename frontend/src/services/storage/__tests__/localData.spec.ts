@@ -138,6 +138,39 @@ describe('localData', () => {
     expect(await data.readGroups(ANNA)).toEqual([group('Home')])
   })
 
+  it('removes the items of the lists of a household with them', async () => {
+    await fillForAnna()
+    const other = { ...list('Drugstore'), id: 'other-list' }
+    await data.writeLists(ANNA, GROUP, [list('Weekly'), other])
+    await data.writeItems(ANNA, 'other-list', [{ ...item('Soap'), listId: 'other-list' }])
+    // The items of a list of another household stay.
+    await data.writeLists(ANNA, 'other-group', [
+      { ...list('Work'), id: 'work', groupId: 'other-group' },
+    ])
+    await data.writeItems(ANNA, 'work', [{ ...item('Pens'), listId: 'work' }])
+
+    await data.removeLists(ANNA, GROUP)
+
+    expect(await data.readItems(ANNA, LIST)).toBeNull()
+    expect(await data.readItems(ANNA, 'other-list')).toBeNull()
+    expect((await data.readItems(ANNA, 'work'))?.map((i) => i.name)).toEqual(['Pens'])
+  })
+
+  it('removes the items of lists that are no longer among the written lists', async () => {
+    await fillForAnna()
+    const archived = { ...list('Barbecue'), id: 'archived', archivedAt: '2026-02-01T10:00:00Z' }
+    const gone = { ...list('Drugstore'), id: 'gone' }
+    await data.writeLists(ANNA, GROUP, [list('Weekly'), archived, gone])
+    await data.writeItems(ANNA, 'archived', [{ ...item('Sausage'), listId: 'archived' }])
+    await data.writeItems(ANNA, 'gone', [{ ...item('Soap'), listId: 'gone' }])
+
+    await data.writeLists(ANNA, GROUP, [list('Weekly renamed'), archived])
+
+    expect((await data.readItems(ANNA, LIST))?.map((i) => i.name)).toEqual(['Milk'])
+    expect((await data.readItems(ANNA, 'archived'))?.map((i) => i.name)).toEqual(['Sausage'])
+    expect(await data.readItems(ANNA, 'gone')).toBeNull()
+  })
+
   it('stores reactive state as plain data', async () => {
     await data.claim(me(ANNA))
     const state = reactive({ items: [item('Milk')] })
