@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { itemsService, MAX_REMOVE_CHECKED, type ItemsService } from '@/services/api/items'
+import { localData, type LocalData } from '@/services/storage/localData'
+import { createPersistQueue } from '@/services/storage/persistQueue'
 import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
 import type { CreateItemRequest, Item, UpdateItemRequest } from '@/types/api'
@@ -30,6 +32,9 @@ export interface PendingRemoval {
   /** Shows the items again without sending anything. */
   undo(): void
 }
+
+/** The part of the local storage the items store uses. */
+export type ItemsLocal = Pick<LocalData, 'readItems' | 'writeItems' | 'removeItems'>
 
 /** The items of one list and how loading them went. */
 interface ListItems {
@@ -73,11 +78,21 @@ interface ListItems {
  * Changes of other members arrive as events and go the same way as answers.
  * Events are best effort, so after every (re)connect of the socket the store
  * loads again what it has loaded; see docs/sync.md.
+ *
+ * The items of each list are kept on the device (`storage`, ADR 0006), as in
+ * the lists store: the first load of a list reads them next to the request,
+ * they only fill what the store does not hold, the status stays `loading`
+ * until the server answers, and the store writes the items of a list back
+ * whenever a state from the server changed them. Only what the server
+ * confirmed is stored: a tap that waits for its answer is not (the state
+ * behind it is), while items hidden by a pending removal are, as they still
+ * exist on the server.
  */
 export function defineItemsStore(
   service: ItemsService,
   currentUserId: () => string | null,
   events: ServerEvents = liveSocket,
+  storage: ItemsLocal = localData,
 ) {
   return defineStore('items', () => {
     const byList = ref<Record<string, ListItems>>({})
@@ -123,6 +138,14 @@ export function defineItemsStore(
     // happens to it meanwhile, as deleting wins.
     const hidden = ref(new Map<string, 'whileChecked' | 'always'>())
 
+    // Writes to the local storage, coalesced (see persistQueue).
+    const persistQueue = createPersistQueue()
+    // Lists whose items the store holds as the device or the server knows
+    // them: the stored items were read, or a load answer was applied. Before
+    // that, writing would replace the stored items with a partial state,
+    // e.g. only an item created before the stored ones were read.
+    const holdsState = new Set<string>()
+
     function reset() {
       generation++
       byList.value = {}
@@ -132,9 +155,69 @@ export function defineItemsStore(
       touchedAt.clear()
       appliedLoadStart.clear()
       hidden.value = new Map()
+      holdsState.clear()
+      persistQueue.clear()
     }
 
     watch(currentUserId, reset)
+
+    // The items of the list as the server has them: the state behind a tap
+    // that waits for its answer replaces the tap, which the server may
+    // still refuse. Hidden items stay, they are only gone once the server
+    // deleted them.
+    function serverState(entry: ListItems): Item[] {
+      return toRaw(entry.items).map((item) =>
+        latestCheck.has(item.id) ? (checkBase.get(item.id) ?? item) : item,
+      )
+    }
+
+    // Writes the items of the list to the device once the current code is
+    // done. The user is taken now: the storage ignores writes for another
+    // owner. The state is read when the write runs, so a list dropped
+    // meanwhile is not written (forgetList removed it) and a tap is judged
+    // by what is true then.
+    function persist(listId: string) {
+      const userId = currentUserId()
+      if (!holdsState.has(listId) || !userId) {
+        return
+      }
+      persistQueue.schedule(listId, () => {
+        const entry = byList.value[listId]
+        if (entry) {
+          return storage.writeItems(userId, listId, serverState(entry))
+        }
+      })
+    }
+
+    // Reads the stored items of the list on its first load. Skipped if the
+    // user changed meanwhile, the list was dropped, or a load answer was
+    // applied already: that one is newer.
+    async function restore(listId: string, started: number) {
+      const userId = currentUserId()
+      if (!userId) {
+        return
+      }
+      const stored = await storage.readItems(userId, listId)
+      const entry = byList.value[listId]
+      if (started !== generation || !entry || appliedLoadStart.has(listId)) {
+        return
+      }
+      holdsState.add(listId)
+      if (stored) {
+        mergeStored(entry, stored)
+      }
+    }
+
+    // Adds the stored items the list does not hold. What it holds came from
+    // the server since the start and is newer; a deleted item stays deleted.
+    // They are not touched(): the answer of the server may still drop them.
+    function mergeStored(entry: ListItems, stored: Item[]) {
+      const held = new Set(entry.items.map((item) => item.id))
+      const missing = stored.filter((item) => !held.has(item.id) && !tombstones.has(item.id))
+      if (missing.length > 0) {
+        entry.items = [...toRaw(entry.items), ...missing].sort(compareItems)
+      }
+    }
 
     // The entry of a list, created on first use. The reading functions below
     // do not create one, so looking at a list does not change the state.
@@ -262,15 +345,20 @@ export function defineItemsStore(
       } else {
         insertSorted(entry, shown)
       }
+      persist(item.listId)
     }
 
-    // Forgets an item for good, until reset(). `entry` is the list it was in,
-    // if we know one.
-    function forget(itemId: string, entry: ListItems | undefined) {
+    // Forgets an item for good, until reset(). `listId` is the list it was
+    // in, if we know one.
+    function forget(itemId: string, listId: string | undefined) {
       tombstones.add(itemId)
       checkBase.delete(itemId)
+      const entry = listId === undefined ? undefined : byList.value[listId]
       if (entry) {
         entry.items = entry.items.filter((item) => item.id !== itemId)
+      }
+      if (listId !== undefined) {
+        persist(listId)
       }
     }
 
@@ -289,7 +377,7 @@ export function defineItemsStore(
       if (local && serverSeq !== null && local.serverSeq >= serverSeq) {
         return
       }
-      forget(itemId, entry)
+      forget(itemId, listId)
     }
 
     // The request of the newest tap ended: `stored` is its answer, or null if
@@ -364,11 +452,15 @@ export function defineItemsStore(
      * already keeps its status `ready` meanwhile, so reloading shows no
      * spinner. If this fails, the items loaded before stay: an unreachable
      * server should not empty the screen.
+     *
+     * The first load of a list also reads its items stored on the device,
+     * at the same time as the request.
      */
     async function load(listId: string) {
       const started = generation
       const startedAt = ++clock
       const entry = ensure(listId)
+      const restoring = entry.status === 'idle' ? restore(listId, started) : null
       if (entry.status !== 'ready') {
         entry.status = 'loading'
       }
@@ -379,8 +471,17 @@ export function defineItemsStore(
           return
         }
         mergeLoaded(entry, loaded, startedAt)
+        // Not for a list forgotten meanwhile: forgetList removed its stored
+        // items, and this late answer must not bring them back.
+        if (byList.value[listId] === entry) {
+          holdsState.add(listId)
+          persist(listId)
+        }
         entry.status = 'ready'
       } catch (err) {
+        // Offline the request fails at once: wait for the stored items, so
+        // the screen does not show the error before they are there.
+        await restoring
         if (!isCurrentLoad(started, listId, startedAt)) {
           return
         }
@@ -465,7 +566,7 @@ export function defineItemsStore(
         }
         if (err instanceof ApiError && err.code === ITEM_NOT_FOUND) {
           // Someone else deleted the item; their event may not be here yet.
-          forget(itemId, byList.value[item.listId])
+          forget(itemId, item.listId)
         }
         if (latestCheck.get(itemId) === mine) {
           settleCheck(itemId, null)
@@ -486,7 +587,7 @@ export function defineItemsStore(
       const listId = byId(itemId)?.listId
       await service.remove(itemId)
       if (started === generation) {
-        forget(itemId, listId === undefined ? undefined : byList.value[listId])
+        forget(itemId, listId)
       }
     }
 
@@ -581,7 +682,7 @@ export function defineItemsStore(
           if (!(err instanceof ApiError && err.code === ITEM_NOT_FOUND)) throw err
         }
         if (current()) {
-          forget(itemId, byList.value[listId])
+          forget(itemId, listId)
         }
       })
     }
@@ -594,6 +695,13 @@ export function defineItemsStore(
      * which nobody sees.
      */
     function forgetList(listId: string) {
+      // Also when the list was never loaded: the device may still hold its
+      // items from an earlier visit.
+      holdsState.delete(listId)
+      const userId = currentUserId()
+      if (userId) {
+        persistQueue.schedule(listId, () => storage.removeItems(userId, listId))
+      }
       delete byList.value[listId]
       appliedLoadStart.delete(listId)
     }

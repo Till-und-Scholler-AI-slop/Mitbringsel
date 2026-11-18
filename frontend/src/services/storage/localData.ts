@@ -31,7 +31,10 @@ export interface LocalData {
   readGroups(userId: string): Promise<Group[] | null>
   writeGroups(userId: string, groups: Group[]): Promise<void>
 
-  // The lists of one household, archived ones included.
+  // The lists of one household, archived ones included. Writing them removes
+  // the stored items of lists that are no longer among them, and removing
+  // them removes the stored items of all their lists, so no items outlive
+  // their list.
   readLists(userId: string, groupId: string): Promise<List[] | null>
   writeLists(userId: string, groupId: string, lists: List[]): Promise<void>
   removeLists(userId: string, groupId: string): Promise<void>
@@ -164,6 +167,26 @@ export function createLocalData(name = LOCAL_DATA_DB_NAME): LocalData {
     })
   }
 
+  // Replaces the lists of a household (or removes them for undefined) if
+  // userId owns the storage. The items of every list that was stored before
+  // and is not in the new state go too, in the same transaction: nothing
+  // else would ever remove them, as the app no longer knows the list.
+  function writeListsOf(userId: string, groupId: string, lists: List[] | undefined): Promise<void> {
+    const copy = lists === undefined ? undefined : plain(lists)
+    return safely('write lists', undefined, async (d) => {
+      const tx = d.transaction(['meta', 'lists', 'items'], 'readwrite')
+      await inTx(tx, async () => {
+        const me = await tx.objectStore('meta').get(ME_KEY)
+        if (me?.id !== userId) return
+        const target = tx.objectStore('lists')
+        const kept = new Set((copy ?? []).map((list) => list.id))
+        const dropped = ((await target.get(groupId)) ?? []).filter((list) => !kept.has(list.id))
+        await Promise.all(dropped.map((list) => tx.objectStore('items').delete(list.id)))
+        await (copy === undefined ? target.delete(groupId) : target.put(copy, groupId))
+      })
+    })
+  }
+
   return {
     readMe: () => safely('read me', null, async (d) => (await d.get('meta', ME_KEY)) ?? null),
 
@@ -186,8 +209,8 @@ export function createLocalData(name = LOCAL_DATA_DB_NAME): LocalData {
     writeGroups: (userId, groups) => write('groups', userId, GROUPS_KEY, groups),
 
     readLists: (userId, groupId) => read('lists', userId, groupId),
-    writeLists: (userId, groupId, lists) => write('lists', userId, groupId, lists),
-    removeLists: (userId, groupId) => write('lists', userId, groupId, undefined),
+    writeLists: (userId, groupId, lists) => writeListsOf(userId, groupId, lists),
+    removeLists: (userId, groupId) => writeListsOf(userId, groupId, undefined),
 
     readItems: (userId, listId) => read('items', userId, listId),
     writeItems: (userId, listId, items) => write('items', userId, listId, items),
