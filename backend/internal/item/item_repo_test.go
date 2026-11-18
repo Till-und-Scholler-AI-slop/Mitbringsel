@@ -416,6 +416,10 @@ func TestPostgresRepository(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		empty, err := lists.Create(ctx, anna, l.GroupID, "Leer", "")
+		if err != nil {
+			t.Fatal(err)
+		}
 		create := func(listID uuid.UUID, name string) Item {
 			t.Helper()
 			it, err := svc.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: name}, clock(t, 0, "anna"))
@@ -440,13 +444,22 @@ func TestPostgresRepository(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		items, err := svc.ListForGroup(ctx, anna, l.GroupID)
+		got, err := svc.ListForGroup(ctx, anna, l.GroupID)
 
 		if err != nil {
 			t.Fatalf("ListForGroup() error = %v", err)
 		}
+		items := got.Items
 		if len(items) != 2 || items[0].ID != milk.ID || items[1].ID != nails.ID {
 			t.Errorf("ListForGroup() = %+v, want Milch and Nägel, oldest first", items)
+		}
+		// The active lists are covered, the empty one too; the archived one is not.
+		covered := map[uuid.UUID]bool{}
+		for _, id := range got.ListIDs {
+			covered[id] = true
+		}
+		if len(covered) != 3 || !covered[first] || !covered[second.ID] || !covered[empty.ID] || covered[archived.ID] {
+			t.Errorf("ListForGroup() listIDs = %v, want the first, second and empty list", got.ListIDs)
 		}
 		if _, err := svc.ListForGroup(ctx, ben, l.GroupID); !errors.Is(err, ErrGroupNotFound) {
 			t.Errorf("ListForGroup() for an outsider error = %v, want %v", err, ErrGroupNotFound)

@@ -106,6 +106,16 @@ func (i Item) Deleted() bool {
 	return i.DeletedAt != nil
 }
 
+// GroupItems is the answer to "all items of a group": the active lists it
+// covers and their items that are not deleted.
+type GroupItems struct {
+	// ListIDs names every active list of the group the answer covers, also
+	// the ones without items. Without it a client could not tell an empty
+	// list from one the answer does not know about.
+	ListIDs []uuid.UUID
+	Items   []Item
+}
+
 // NewItem is what a client sends to create an item.
 type NewItem struct {
 	// ID is chosen by the client (a UUIDv7), so it can create items offline.

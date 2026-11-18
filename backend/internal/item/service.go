@@ -141,20 +141,25 @@ func (s *Service) ListForList(ctx context.Context, actor, listID uuid.UUID) ([]I
 	return items, nil
 }
 
-// ListForGroup returns the items that are not deleted in the active lists
-// of a group, oldest first. Clients load them in one go to have them
+// ListForGroup returns the active lists of a group and their items that are
+// not deleted, oldest first. Clients load them in one go to have them
 // offline (ADR 0006). Archived lists are left out; their items load with
 // ListForList when someone opens one.
-func (s *Service) ListForGroup(ctx context.Context, actor, groupID uuid.UUID) ([]Item, error) {
+//
+// The answer covers exactly the lists in ListIDs, even those without items:
+// the lists and their items are two reads without a common transaction, so
+// a list archived in between stays in ListIDs and the client learns about
+// the archiving from the event, not from this answer.
+func (s *Service) ListForGroup(ctx context.Context, actor, groupID uuid.UUID) (GroupItems, error) {
 	lists, err := s.lists.ListForGroup(ctx, actor, groupID, false)
 	if errors.Is(err, list.ErrNotFound) {
-		return nil, ErrGroupNotFound
+		return GroupItems{}, ErrGroupNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("list lists: %w", err)
+		return GroupItems{}, fmt.Errorf("list lists: %w", err)
 	}
 	if len(lists) == 0 {
-		return nil, nil
+		return GroupItems{}, nil
 	}
 	ids := make([]uuid.UUID, len(lists))
 	for i, l := range lists {
@@ -162,9 +167,9 @@ func (s *Service) ListForGroup(ctx context.Context, actor, groupID uuid.UUID) ([
 	}
 	items, err := s.repo.ListForLists(ctx, ids)
 	if err != nil {
-		return nil, fmt.Errorf("list items: %w", err)
+		return GroupItems{}, fmt.Errorf("list items: %w", err)
 	}
-	return items, nil
+	return GroupItems{ListIDs: ids, Items: items}, nil
 }
 
 // DeleteOldTombstones removes the items deleted more than

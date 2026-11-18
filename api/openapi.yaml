@@ -549,19 +549,21 @@ paths:
       description: |
         The items of every list of the group that is not archived, in one
         response, so a client can have them offline (docs/sync.md). Oldest
-        first; deleted items are left out. Items of archived lists load with
-        `listItems`. A group the user is not a member of looks like a group
-        that does not exist (`GROUP_NOT_FOUND`).
+        first; deleted items are left out. `listIds` names the active lists
+        the answer covers, also those without items, so a client can tell an
+        empty list from one the answer does not know about. Items of archived
+        lists load with `listItems`. A group the user is not a member of looks
+        like a group that does not exist (`GROUP_NOT_FOUND`).
       tags: [items]
       security:
         - sessionCookie: []
       responses:
         "200":
-          description: The items of the active lists of the group.
+          description: The active lists of the group and their items.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ItemList"
+                $ref: "#/components/schemas/GroupItemList"
         "400":
           $ref: "#/components/responses/Error"
         "401":
@@ -1365,6 +1367,24 @@ components:
       type: object
       required: [items]
       properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Item"
+
+    GroupItemList:
+      type: object
+      required: [listIds, items]
+      properties:
+        listIds:
+          type: array
+          description: The active lists of the group this answer covers, also those without items.
+          items:
+            type: string
+            format: uuid
+            x-go-type: uuid.UUID
+            x-go-type-import:
+              path: github.com/google/uuid
         items:
           type: array
           items:

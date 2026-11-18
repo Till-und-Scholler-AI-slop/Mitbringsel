@@ -227,6 +227,9 @@ func (p *fakePublisher) ItemsDeleted(_ context.Context, groupID, listID, actor u
 type fakeLists struct {
 	access   map[uuid.UUID]map[uuid.UUID]bool
 	archived map[uuid.UUID]bool
+	// members are users in the group who see no list at all, so the group is
+	// not "not found" for them; it just has no lists.
+	members map[uuid.UUID]bool
 }
 
 func (l fakeLists) Get(_ context.Context, actor, listID uuid.UUID) (list.List, error) {
@@ -247,7 +250,7 @@ func (l fakeLists) ListForGroup(_ context.Context, actor, groupID uuid.UUID, inc
 			out = append(out, list.List{ID: id, GroupID: fakeGroupID})
 		}
 	}
-	if len(seen) == 0 {
+	if len(seen) == 0 && (!l.members[actor] || groupID != fakeGroupID) {
 		return nil, list.ErrNotFound
 	}
 	return out, nil
@@ -284,6 +287,7 @@ func newFixture() fixture {
 			f.otherID: {f.outsider: true},
 		},
 		archived: map[uuid.UUID]bool{},
+		members:  map[uuid.UUID]bool{},
 	}
 	f.svc = NewService(f.repo, f.lists, f.pub)
 	f.svc.now = func() time.Time { return serverNow }
@@ -1121,10 +1125,17 @@ func TestService_ListForGroup(t *testing.T) {
 		}
 		return it
 	}
-	ids := func(items []Item) map[uuid.UUID]bool {
+	itemIDs := func(items []Item) map[uuid.UUID]bool {
 		out := map[uuid.UUID]bool{}
 		for _, it := range items {
 			out[it.ID] = true
+		}
+		return out
+	}
+	listIDs := func(g GroupItems) map[uuid.UUID]bool {
+		out := map[uuid.UUID]bool{}
+		for _, id := range g.ListIDs {
+			out[id] = true
 		}
 		return out
 	}
@@ -1143,25 +1154,79 @@ func TestService_ListForGroup(t *testing.T) {
 		}
 		f.lists.archived[archived] = true
 
-		items, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID)
+		got, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID)
 
 		if err != nil {
 			t.Fatalf("ListForGroup() error = %v", err)
 		}
-		if got := ids(items); len(got) != 2 || !got[milk.ID] || !got[nails.ID] {
-			t.Errorf("ListForGroup() = %+v, want Milch and Nägel", items)
+		if items := itemIDs(got.Items); len(items) != 2 || !items[milk.ID] || !items[nails.ID] {
+			t.Errorf("ListForGroup() items = %+v, want Milch and Nägel", got.Items)
+		}
+		if lists := listIDs(got); len(got.ListIDs) != 2 || !lists[f.listID] || !lists[second] {
+			t.Errorf("ListForGroup() listIDs = %v, want the two active lists", got.ListIDs)
 		}
 	})
 
-	t.Run("a group without active lists has no items", func(t *testing.T) {
+	t.Run("an active list without items is covered", func(t *testing.T) {
+		f := newFixture()
+		empty := uuid.New()
+		f.lists.access[empty] = map[uuid.UUID]bool{f.member: true}
+		milk := createIn(t, f, f.listID, "Milch")
+
+		got, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID)
+
+		if err != nil {
+			t.Fatalf("ListForGroup() error = %v", err)
+		}
+		if lists := listIDs(got); len(got.ListIDs) != 2 || !lists[f.listID] || !lists[empty] {
+			t.Errorf("ListForGroup() listIDs = %v, want both lists", got.ListIDs)
+		}
+		if len(got.Items) != 1 || got.Items[0].ID != milk.ID {
+			t.Errorf("ListForGroup() items = %+v, want Milch only", got.Items)
+		}
+	})
+
+	t.Run("an archived list is not covered and its items are left out", func(t *testing.T) {
+		f := newFixture()
+		archived := uuid.New()
+		f.lists.access[archived] = map[uuid.UUID]bool{f.member: true}
+		createIn(t, f, archived, "Kerzen")
+		f.lists.archived[archived] = true
+
+		got, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID)
+
+		if err != nil {
+			t.Fatalf("ListForGroup() error = %v", err)
+		}
+		if lists := listIDs(got); len(got.ListIDs) != 1 || !lists[f.listID] || lists[archived] {
+			t.Errorf("ListForGroup() listIDs = %v, want only the active list", got.ListIDs)
+		}
+		if len(got.Items) != 0 {
+			t.Errorf("ListForGroup() items = %+v, want none", got.Items)
+		}
+	})
+
+	t.Run("a group without active lists covers nothing and has no items", func(t *testing.T) {
 		f := newFixture()
 		createIn(t, f, f.listID, "Milch")
 		f.lists.archived[f.listID] = true
 
-		items, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID)
+		got, err := f.svc.ListForGroup(ctx, f.member, fakeGroupID)
 
-		if err != nil || len(items) != 0 {
-			t.Errorf("ListForGroup() = %+v, %v, want no items", items, err)
+		if err != nil || len(got.ListIDs) != 0 || len(got.Items) != 0 {
+			t.Errorf("ListForGroup() = %+v, %v, want no lists and no items", got, err)
+		}
+	})
+
+	t.Run("a group without any list covers nothing and has no items", func(t *testing.T) {
+		f := newFixture()
+		newcomer := uuid.New()
+		f.lists.members[newcomer] = true
+
+		got, err := f.svc.ListForGroup(ctx, newcomer, fakeGroupID)
+
+		if err != nil || len(got.ListIDs) != 0 || len(got.Items) != 0 {
+			t.Errorf("ListForGroup() = %+v, %v, want no lists and no items", got, err)
 		}
 	})
 

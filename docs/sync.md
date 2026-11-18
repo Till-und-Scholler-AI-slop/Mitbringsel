@@ -65,7 +65,7 @@ Status: entschieden (siehe [ADR 0004](adr/0004-lww-pro-feld.md)).
 ## Wiederverbinden nach Offline-Phase (ab Phase 6)
 
 1. Der Client baut den WebSocket neu auf (exponentielles Backoff, maximal 30 Sekunden).
-2. Nach `ready` stößt der Client die Outbox an (sie sendet auch ohne Socket, sobald der Browser online ist) und lädt Gruppen, Listen und Artikel vollständig neu, die Artikel mit einer Anfrage pro Haushalt (`GET /groups/{groupId}/items`). Senden und Laden dürfen gleichzeitig laufen: Felder mit ausstehenden Änderungen liegen über dem geladenen Stand, bis die Antwort des Servers kommt.
+2. Nach `ready` stößt der Client die Outbox an (sie sendet auch ohne Socket, sobald der Browser online ist) und lädt Gruppen, Listen und Artikel vollständig neu, die Artikel mit einer Anfrage pro Haushalt (`GET /groups/{groupId}/items`). Die Antwort nennt außerdem in `listIds` die aktiven Listen, die sie vollständig abdeckt, auch leere; so unterscheidet der Client „leer“ von „nicht abgedeckt“. Senden und Laden dürfen gleichzeitig laufen: Felder mit ausstehenden Änderungen liegen über dem geladenen Stand, bis die Antwort des Servers kommt.
 
 Einen Abgleich ab einer `serverSeq` (Delta) gibt es bewusst nicht: `serverSeq` folgt nicht der Reihenfolge der Commits, ein Delta könnte Änderungen dauerhaft übersehen (siehe [ADR 0006](adr/0006-offline-phase-6.md)).
 
