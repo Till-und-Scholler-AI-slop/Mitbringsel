@@ -8,7 +8,7 @@ import type { GroupsService } from '@/services/api/groups'
 import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
 import type { Group, GroupMember, Role, ServerMessage } from '@/types/api'
 
-import { defineGroupsStore } from '../groups'
+import { defineGroupsStore, type GroupsLocal } from '../groups'
 
 const ANNA = '0190a8c4-0000-7000-8000-00000000000a'
 const BEN = '0190a8c4-0000-7000-8000-00000000000b'
@@ -49,14 +49,35 @@ function fakeService(
 }
 
 /**
- * The signed-in user as a ref, so tests can switch the user, the server
- * events, so tests can send them, and a spy in place of the lists store.
+ * The storage of the device with the groups it holds. writeGroups keeps a
+ * copy, as IndexedDB does, so tests see what was written at that moment.
  */
-function setup(service: GroupsService, userId: string | null = ANNA) {
+function fakeStorage(stored: Group[] | null = null) {
+  const storage = {
+    groups: stored,
+    readGroups: vi.fn((): Promise<Group[] | null> => Promise.resolve(storage.groups)),
+    writeGroups: vi.fn((_userId: string, groups: Group[]) => {
+      storage.groups = JSON.parse(JSON.stringify(groups)) as Group[]
+      return Promise.resolve()
+    }),
+  }
+  return storage
+}
+
+/**
+ * The signed-in user as a ref, so tests can switch the user, the server
+ * events, so tests can send them, a spy in place of the lists store, and
+ * the storage of the device.
+ */
+function setup(
+  service: GroupsService,
+  userId: string | null = ANNA,
+  storage: GroupsLocal = fakeStorage(),
+) {
   const user = ref(userId)
   const events = createFakeServerEvents()
   const forgetLists = vi.fn()
-  const store = defineGroupsStore(service, () => user.value, events, forgetLists)()
+  const store = defineGroupsStore(service, () => user.value, events, forgetLists, storage)()
   return { store, user, events, forgetLists }
 }
 
@@ -581,5 +602,183 @@ describe('groups store: why a group went', () => {
     await flushPromises()
 
     expect(store.departureOf('g1')).toBeUndefined()
+  })
+})
+
+describe('groups store: storage on the device', () => {
+  it('shows the stored groups while the server is asked', async () => {
+    const service = fakeService()
+    const request = pending<Group[]>()
+    service.list.mockReturnValueOnce(request.promise)
+    const storage = fakeStorage([group('g1', 'WG')])
+    const { store } = setup(service, ANNA, storage)
+
+    void store.load()
+    await flushPromises()
+
+    expect(storage.readGroups).toHaveBeenCalledWith(ANNA)
+    expect(store.groups.map((g) => g.name)).toEqual(['WG'])
+    // A stored state is not the server's: "no groups" must not show early.
+    expect(store.status).toBe('loading')
+
+    request.answer([group('g1', 'WG Kaiserstraße')])
+    await flushPromises()
+
+    expect(store.status).toBe('ready')
+    expect(store.groups.map((g) => g.name)).toEqual(['WG Kaiserstraße'])
+  })
+
+  it('keeps the stored groups when the server cannot be reached', async () => {
+    const service = fakeService()
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { store } = setup(service, ANNA, fakeStorage([group('g1', 'WG')]))
+
+    await store.load()
+
+    expect(store.status).toBe('error')
+    expect(store.errorCode).toBe('NETWORK')
+    expect(store.groups.map((g) => g.name)).toEqual(['WG'])
+  })
+
+  it('reads the stored groups only on the first load', async () => {
+    const storage = fakeStorage()
+    const { store } = setup(fakeService(), ANNA, storage)
+
+    await store.load()
+    await store.load()
+
+    expect(storage.readGroups).toHaveBeenCalledOnce()
+  })
+
+  it('drops a stored group the server no longer lists', async () => {
+    const storage = fakeStorage([group('g1', 'WG'), group('g2', 'Familie')])
+    const { store, forgetLists } = setup(fakeService([group('g1', 'WG')]), ANNA, storage)
+
+    await store.load()
+    await flushPromises()
+
+    expect(store.groups.map((g) => g.id)).toEqual(['g1'])
+    expect(store.departureOf('g2')).toEqual({ name: 'Familie', cause: 'unknown' })
+    expect(forgetLists).toHaveBeenCalledWith('g2')
+    expect(storage.groups?.map((g) => g.id)).toEqual(['g1'])
+  })
+
+  it('drops stored groups that arrive after the server answer', async () => {
+    const storage = fakeStorage()
+    const read = pending<Group[] | null>()
+    storage.readGroups.mockReturnValueOnce(read.promise)
+    const { store } = setup(fakeService([group('g1', 'WG Kaiserstraße')]), ANNA, storage)
+
+    await store.load()
+    read.answer([group('g1', 'WG'), group('g2', 'Familie')])
+    await flushPromises()
+
+    expect(store.groups.map((g) => g.name)).toEqual(['WG Kaiserstraße'])
+  })
+
+  it('keeps a newer group from an answer over the stored one', async () => {
+    const service = fakeService()
+    service.list.mockReturnValueOnce(pending<Group[]>().promise)
+    const storage = fakeStorage()
+    const read = pending<Group[] | null>()
+    storage.readGroups.mockReturnValueOnce(read.promise)
+    const { store } = setup(service, ANNA, storage)
+
+    void store.load()
+    await store.create('WG neu')
+    read.answer([group('g-new', 'WG alt'), group('g2', 'Familie')])
+    await flushPromises()
+
+    expect(store.groups.map((g) => g.name)).toEqual(['WG neu', 'Familie'])
+  })
+
+  it('writes the groups back after a load', async () => {
+    const storage = fakeStorage()
+    const { store } = setup(fakeService([group('g1', 'WG')]), ANNA, storage)
+
+    await store.load()
+    await flushPromises()
+
+    expect(storage.writeGroups).toHaveBeenCalledWith(ANNA, expect.anything())
+    expect(storage.groups?.map((g) => g.name)).toEqual(['WG'])
+  })
+
+  it('writes the groups back after own writes and events', async () => {
+    const storage = fakeStorage()
+    const service = fakeService([group('g1', 'WG'), group('g2', 'Familie')])
+    const { store, events } = setup(service, ANNA, storage)
+    await store.load()
+
+    await store.rename('g1', 'WG Kaiserstraße')
+    await flushPromises()
+    expect(storage.groups?.map((g) => g.name)).toEqual(['WG Kaiserstraße', 'Familie'])
+
+    await store.setMemberRole('g1', BEN, 'admin')
+    await flushPromises()
+    expect(storage.groups?.[0]?.members.find((m) => m.userId === BEN)?.role).toBe('admin')
+
+    events.emit(removedFrom('g2'))
+    await flushPromises()
+    expect(storage.groups?.map((g) => g.id)).toEqual(['g1'])
+  })
+
+  it('writes once for several changes in one go', async () => {
+    const storage = fakeStorage()
+    const service = fakeService([group('g1', 'WG'), group('g2', 'Familie')])
+    const { store, events } = setup(service, ANNA, storage)
+    await store.load()
+    await flushPromises()
+    storage.writeGroups.mockClear()
+
+    events.emit(removedFrom('g1'))
+    events.emit(removedFrom('g2'))
+    await flushPromises()
+
+    expect(storage.writeGroups).toHaveBeenCalledOnce()
+    expect(storage.groups).toEqual([])
+  })
+
+  it('writes nothing before the stored groups were read', async () => {
+    const service = fakeService()
+    service.list.mockReturnValueOnce(pending<Group[]>().promise)
+    const storage = fakeStorage()
+    storage.readGroups.mockReturnValueOnce(pending<Group[] | null>().promise)
+    const { store } = setup(service, ANNA, storage)
+
+    void store.load()
+    await store.create('WG')
+    await flushPromises()
+
+    // Writing now would replace the stored groups with only the new one.
+    expect(storage.writeGroups).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing from a load of the previous user', async () => {
+    const service = fakeService()
+    const request = pending<Group[]>()
+    service.list.mockReturnValueOnce(request.promise)
+    const storage = fakeStorage()
+    const { store, user } = setup(service, ANNA, storage)
+
+    void store.load()
+    await flushPromises()
+    user.value = BEN
+    await flushPromises()
+    request.answer([group('g1', 'WG')])
+    await flushPromises()
+
+    expect(storage.writeGroups).not.toHaveBeenCalled()
+  })
+
+  it('reads nothing without a signed-in user', async () => {
+    const storage = fakeStorage([group('g1', 'WG')])
+    const service = fakeService()
+    service.list.mockRejectedValueOnce(new ApiError('UNAUTHENTICATED', 401))
+    const { store } = setup(service, null, storage)
+
+    await store.load()
+
+    expect(storage.readGroups).not.toHaveBeenCalled()
+    expect(store.groups).toEqual([])
   })
 })

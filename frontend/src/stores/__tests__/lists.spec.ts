@@ -8,7 +8,7 @@ import type { ListsService } from '@/services/api/lists'
 import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
 import type { List, ListIcon, ServerMessage } from '@/types/api'
 
-import { defineListsStore } from '../lists'
+import { defineListsStore, type ListsLocal } from '../lists'
 
 const ANNA = '0190a8c4-0000-7000-8000-00000000000a'
 const BEN = '0190a8c4-0000-7000-8000-00000000000b'
@@ -60,14 +60,41 @@ function fakeService(
 }
 
 /**
- * The signed-in user as a ref, so tests can switch the user, the server
- * events, so tests can send them, and a spy in place of the items store.
+ * The storage of the device with the lists of each group. writeLists keeps a
+ * copy, as IndexedDB does, so tests see what was written at that moment.
  */
-function setup(service: ListsService, userId: string | null = ANNA) {
+function fakeStorage(stored: Record<string, List[]> = {}) {
+  const storage = {
+    lists: { ...stored } as Record<string, List[]>,
+    readLists: vi.fn((_userId: string, groupId: string): Promise<List[] | null> =>
+      Promise.resolve(storage.lists[groupId] ?? null),
+    ),
+    writeLists: vi.fn((_userId: string, groupId: string, lists: List[]) => {
+      storage.lists[groupId] = JSON.parse(JSON.stringify(lists)) as List[]
+      return Promise.resolve()
+    }),
+    removeLists: vi.fn((_userId: string, groupId: string) => {
+      delete storage.lists[groupId]
+      return Promise.resolve()
+    }),
+  }
+  return storage
+}
+
+/**
+ * The signed-in user as a ref, so tests can switch the user, the server
+ * events, so tests can send them, a spy in place of the items store, and
+ * the storage of the device.
+ */
+function setup(
+  service: ListsService,
+  userId: string | null = ANNA,
+  storage: ListsLocal = fakeStorage(),
+) {
   const user = ref(userId)
   const events = createFakeServerEvents()
   const forgetItems = vi.fn()
-  const store = defineListsStore(service, () => user.value, events, forgetItems)()
+  const store = defineListsStore(service, () => user.value, events, forgetItems, storage)()
   return { store, user, events, forgetItems }
 }
 
@@ -740,5 +767,196 @@ describe('lists store: deletions', () => {
     user.value = null
     await flushPromises()
     expect(store.deletionOf('l1')).toBeUndefined()
+  })
+})
+
+describe('lists store: storage on the device', () => {
+  it('shows the stored lists while the server is asked', async () => {
+    const service = fakeService()
+    const request = deferred<List[]>()
+    service.list.mockReturnValueOnce(request.promise)
+    const storage = fakeStorage({ g1: [list('l1', 'Wocheneinkauf')] })
+    const { store } = setup(service, ANNA, storage)
+
+    void store.load('g1')
+    await flushPromises()
+
+    expect(storage.readLists).toHaveBeenCalledWith(ANNA, 'g1')
+    expect(names(store.listsOf('g1'))).toEqual(['Wocheneinkauf'])
+    expect(store.statusOf('g1')).toBe('loading')
+
+    request.resolve([later(list('l1', 'Wocheneinkauf'), 2, { name: 'Großeinkauf' })])
+    await flushPromises()
+
+    expect(store.statusOf('g1')).toBe('ready')
+    expect(names(store.listsOf('g1'))).toEqual(['Großeinkauf'])
+  })
+
+  it('keeps the stored lists when the server cannot be reached', async () => {
+    const service = fakeService()
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const storage = fakeStorage({ g1: [list('l1', 'Wocheneinkauf')] })
+    const { store } = setup(service, ANNA, storage)
+
+    await store.load('g1')
+
+    expect(store.statusOf('g1')).toBe('error')
+    expect(store.errorCodeOf('g1')).toBe('NETWORK')
+    expect(names(store.listsOf('g1'))).toEqual(['Wocheneinkauf'])
+  })
+
+  it('keeps the groups apart', async () => {
+    const service = fakeService()
+    service.list.mockRejectedValue(new ApiError('NETWORK'))
+    const storage = fakeStorage({ g1: [list('l1', 'WG')], g2: [list('l2', 'Familie', 'g2')] })
+    const { store } = setup(service, ANNA, storage)
+
+    await store.load('g2')
+
+    expect(names(store.listsOf('g2'))).toEqual(['Familie'])
+    expect(store.listsOf('g1')).toEqual([])
+  })
+
+  it('drops a stored list the server no longer lists', async () => {
+    const storage = fakeStorage({ g1: [list('l1', 'Wocheneinkauf'), list('l2', 'Drogerie')] })
+    const { store, forgetItems } = setup(fakeService([list('l1', 'Wocheneinkauf')]), ANNA, storage)
+
+    await store.load('g1')
+    await flushPromises()
+
+    expect(names(store.listsOf('g1'))).toEqual(['Wocheneinkauf'])
+    expect(store.deletionOf('l2')).toEqual({ name: 'Drogerie', cause: 'unknown' })
+    expect(forgetItems).toHaveBeenCalledWith('l2')
+    expect(names(storage.lists.g1 ?? [])).toEqual(['Wocheneinkauf'])
+  })
+
+  it('drops stored lists that arrive after the server answer', async () => {
+    const storage = fakeStorage()
+    const read = deferred<List[] | null>()
+    storage.readLists.mockReturnValueOnce(read.promise)
+    const { store } = setup(fakeService([list('l1', 'Großeinkauf')]), ANNA, storage)
+
+    await store.load('g1')
+    read.resolve([list('l1', 'Wocheneinkauf'), list('l2', 'Drogerie')])
+    await flushPromises()
+
+    expect(names(store.listsOf('g1'))).toEqual(['Großeinkauf'])
+  })
+
+  it('keeps a newer list from an event over the stored one', async () => {
+    const service = fakeService()
+    service.list.mockReturnValueOnce(deferred<List[]>().promise)
+    const storage = fakeStorage()
+    const read = deferred<List[] | null>()
+    storage.readLists.mockReturnValueOnce(read.promise)
+    const { store, events } = setup(service, ANNA, storage)
+
+    void store.load('g1')
+    events.emit(changed(later(list('l1', 'x'), 2, { name: 'Großeinkauf' })))
+    read.resolve([list('l1', 'Wocheneinkauf'), list('l2', 'Drogerie')])
+    await flushPromises()
+
+    expect(names(store.listsOf('g1'))).toEqual(['Großeinkauf', 'Drogerie'])
+  })
+
+  it('does not bring back a list deleted before the stored lists were read', async () => {
+    const service = fakeService()
+    service.list.mockReturnValueOnce(deferred<List[]>().promise)
+    const storage = fakeStorage()
+    const read = deferred<List[] | null>()
+    storage.readLists.mockReturnValueOnce(read.promise)
+    const { store, events } = setup(service, ANNA, storage)
+
+    void store.load('g1')
+    events.emit(deleted('l1'))
+    read.resolve([list('l1', 'Wocheneinkauf')])
+    await flushPromises()
+
+    expect(store.listsOf('g1')).toEqual([])
+  })
+
+  it('writes the lists back after a load, own writes and events', async () => {
+    const storage = fakeStorage()
+    const { store, events } = setup(fakeService([list('l1', 'Wocheneinkauf')]), ANNA, storage)
+
+    await store.load('g1')
+    await flushPromises()
+    expect(storage.writeLists).toHaveBeenCalledWith(ANNA, 'g1', expect.anything())
+    expect(names(storage.lists.g1 ?? [])).toEqual(['Wocheneinkauf'])
+
+    await store.create('g1', 'Drogerie', 'drugstore')
+    await flushPromises()
+    expect(names(storage.lists.g1 ?? [])).toEqual(['Wocheneinkauf', 'Drogerie'])
+
+    events.emit(changed(later(list('l1', 'x'), 2, { name: 'Großeinkauf' })))
+    await flushPromises()
+    expect(names(storage.lists.g1 ?? [])).toEqual(['Großeinkauf', 'Drogerie'])
+
+    events.emit(deleted('l1'))
+    await flushPromises()
+    expect(names(storage.lists.g1 ?? [])).toEqual(['Drogerie'])
+  })
+
+  it('writes once for several changes in one go', async () => {
+    const storage = fakeStorage()
+    const service = fakeService([list('l1', 'A'), list('l2', 'B')])
+    const { store, events } = setup(service, ANNA, storage)
+    await store.load('g1')
+    await flushPromises()
+    storage.writeLists.mockClear()
+
+    events.emit(deleted('l1'))
+    events.emit(deleted('l2'))
+    await flushPromises()
+
+    expect(storage.writeLists).toHaveBeenCalledOnce()
+    expect(storage.lists.g1).toEqual([])
+  })
+
+  it('removes the stored lists of a group the user left', async () => {
+    const storage = fakeStorage({ g2: [list('l2', 'Familie', 'g2')] })
+    const { store, events } = setup(fakeService([list('l1', 'A')]), ANNA, storage)
+    await store.load('g1')
+    await flushPromises()
+
+    events.emit(removedFrom('g1'))
+    // Never loaded in this session, but stored from an earlier one.
+    store.forgetGroup('g2')
+    await flushPromises()
+
+    expect(storage.removeLists).toHaveBeenCalledWith(ANNA, 'g1')
+    expect(storage.removeLists).toHaveBeenCalledWith(ANNA, 'g2')
+    expect(storage.lists).toEqual({})
+  })
+
+  it('writes nothing before the stored lists were read', async () => {
+    const service = fakeService()
+    service.list.mockReturnValueOnce(deferred<List[]>().promise)
+    const storage = fakeStorage()
+    storage.readLists.mockReturnValueOnce(deferred<List[] | null>().promise)
+    const { store } = setup(service, ANNA, storage)
+
+    void store.load('g1')
+    await store.create('g1', 'Drogerie', 'drugstore')
+    await flushPromises()
+
+    expect(storage.writeLists).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing from a load of the previous user', async () => {
+    const service = fakeService()
+    const request = deferred<List[]>()
+    service.list.mockReturnValueOnce(request.promise)
+    const storage = fakeStorage()
+    const { store, user } = setup(service, ANNA, storage)
+
+    void store.load('g1')
+    await flushPromises()
+    user.value = BEN
+    await flushPromises()
+    request.resolve([list('l1', 'A')])
+    await flushPromises()
+
+    expect(storage.writeLists).not.toHaveBeenCalled()
   })
 })

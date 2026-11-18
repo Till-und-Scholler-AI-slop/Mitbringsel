@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 
 import { ApiError, ERROR_CODE_UNKNOWN, HTTP_STATUS_UNAUTHORIZED } from '@/services/api/client'
 import { groupsService, type GroupsService } from '@/services/api/groups'
+import { localData, type LocalData } from '@/services/storage/localData'
+import { createPersistQueue } from '@/services/storage/persistQueue'
 import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
 import { useListsStore } from '@/stores/lists'
@@ -30,7 +32,18 @@ export type GroupsStatus = 'idle' | 'loading' | 'ready' | 'error'
  * carry), `groupRemoved` drops the group at once. Groups have no serverSeq,
  * so a logical clock decides which state is newer, as in the lists store.
  * See docs/sync.md.
+ *
+ * The groups are kept on the device (`storage`, ADR 0006), so the app can show
+ * them right after a start without a network. The first load reads the
+ * stored groups next to the request; they only fill what the store does not
+ * hold, and the server answer stays the truth (it drops a stored group the
+ * user is no longer in). The status stays `loading` until the server
+ * answers, so a stored state never counts as the server's. The store writes
+ * its groups back whenever a state from the server changed them.
  */
+
+/** The part of the local storage the groups store uses. */
+export type GroupsLocal = Pick<LocalData, 'readGroups' | 'writeGroups'>
 /**
  * Why the user is no longer in a group: another member removed them or
  * deleted it, they left or deleted it themselves (also in another tab), or
@@ -49,6 +62,7 @@ export function defineGroupsStore(
   currentUserId: () => string | null,
   events: ServerEvents = liveSocket,
   forgetLists: (groupId: string) => void = (groupId) => useListsStore().forgetGroup(groupId),
+  storage: GroupsLocal = localData,
 ) {
   return defineStore('groups', () => {
     const groups = ref<Group[]>([])
@@ -58,6 +72,14 @@ export function defineGroupsStore(
     // Bumped by reset(). A load or write that started before it is outdated
     // when it answers and must not put the old user's groups back.
     let generation = 0
+
+    // Writes to the local storage, coalesced (see persistQueue).
+    const persistQueue = createPersistQueue()
+    // True once the store holds what the device or the server knows: the
+    // stored groups were read, or a load answer was applied. Before that,
+    // writing would replace the stored groups with a partial state, e.g.
+    // only a group created before the stored ones were read.
+    let holdsState = false
 
     // A logical clock (a counter, not a time): touchedAt says when a group
     // last got a state from an answer to a write, removedAt when the user
@@ -81,9 +103,49 @@ export function defineGroupsStore(
       removedAt.clear()
       departures.clear()
       appliedLoadStart = 0
+      holdsState = false
+      persistQueue.clear()
     }
 
     watch(currentUserId, reset)
+
+    // Writes the groups to the device once the current code is done. The
+    // user is taken now: the storage ignores writes for another owner.
+    function persist() {
+      const userId = currentUserId()
+      if (!holdsState || !userId) {
+        return
+      }
+      persistQueue.schedule('groups', () => storage.writeGroups(userId, groups.value))
+    }
+
+    // Reads the stored groups on the first load. Skipped if the user changed
+    // meanwhile or a load answer was applied already: that one is newer.
+    async function restore(started: number) {
+      const userId = currentUserId()
+      if (!userId) {
+        return
+      }
+      const stored = await storage.readGroups(userId)
+      if (started !== generation || appliedLoadStart > 0) {
+        return
+      }
+      holdsState = true
+      if (stored) {
+        mergeStored(stored)
+      }
+    }
+
+    // Adds the stored groups the store does not hold. What it holds came
+    // from the server since the start (an answer or an event) and is newer;
+    // a group the user left since then stays gone.
+    function mergeStored(stored: Group[]) {
+      for (const group of stored) {
+        if (!byId(group.id) && !removedAt.has(group.id)) {
+          groups.value.push(group)
+        }
+      }
+    }
 
     function byId(groupId: string): Group | undefined {
       return groups.value.find((group) => group.id === groupId)
@@ -150,10 +212,14 @@ export function defineGroupsStore(
      * Loaded groups keep the status `ready` meanwhile, so reloading shows no
      * spinner. If this fails, the groups loaded before stay: an unreachable
      * server should not empty the screen.
+     *
+     * The first load also reads the groups stored on the device, at the
+     * same time as the request.
      */
     async function load() {
       const started = generation
       const startedAt = ++clock
+      const restoring = status.value === 'idle' ? restore(started) : null
       if (status.value !== 'ready') {
         status.value = 'loading'
       }
@@ -164,8 +230,13 @@ export function defineGroupsStore(
           return
         }
         mergeLoaded(loaded, startedAt)
+        holdsState = true
+        persist()
         status.value = 'ready'
       } catch (err) {
+        // Offline the request fails at once: wait for the stored groups, so
+        // the screen does not show the error before they are there.
+        await restoring
         if (!isCurrentLoad(started, startedAt)) {
           return
         }
@@ -187,6 +258,7 @@ export function defineGroupsStore(
       } else {
         groups.value[index] = group
       }
+      persist()
     }
 
     // The user is no longer in the group: left, removed, or it was deleted.
@@ -197,6 +269,7 @@ export function defineGroupsStore(
       touchedAt.delete(groupId)
       groups.value = groups.value.filter((group) => group.id !== groupId)
       forgetLists(groupId)
+      persist()
     }
 
     /** Creates a group and returns it, so the caller can open it. */
@@ -246,6 +319,7 @@ export function defineGroupsStore(
       const group = byId(groupId)
       if (group) {
         group.members = group.members.filter((member) => member.userId !== userId)
+        persist()
       }
     }
 
@@ -254,6 +328,7 @@ export function defineGroupsStore(
       const member = byId(groupId)?.members.find((m) => m.userId === userId)
       if (member) {
         member.role = role
+        persist()
       }
     }
 
