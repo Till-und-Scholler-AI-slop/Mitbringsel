@@ -9,7 +9,7 @@ import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEven
 import { MAX_REMOVE_CHECKED } from '@/services/api/items'
 import type { Item, ServerMessage } from '@/types/api'
 
-import { defineItemsStore } from '../items'
+import { defineItemsStore, type ItemsLocal } from '../items'
 
 const ANNA = '0190a8c4-0000-7000-8000-00000000000a'
 const BEN = '0190a8c4-0000-7000-8000-00000000000b'
@@ -72,13 +72,45 @@ function fakeService(
 }
 
 /**
- * The signed-in user as a ref, so tests can switch the user, and the server
- * events, so tests can send them.
+ * The storage of the device with the items of each list. Like IndexedDB,
+ * readItems gives a copy and writeItems keeps one, so tests see what was
+ * written at that moment and the store cannot change what is stored.
  */
-function setup(service: ItemsService, userId: string | null = ANNA) {
+function fakeStorage(stored: Record<string, Item[]> = {}) {
+  const copy = <T>(value: T) => JSON.parse(JSON.stringify(value)) as T
+  const storage = {
+    items: copy(stored),
+    // Every state that was written, as it was at that moment.
+    writes: [] as Item[][],
+    readItems: vi.fn((_userId: string, listId: string): Promise<Item[] | null> => {
+      const found = storage.items[listId]
+      return Promise.resolve(found ? copy(found) : null)
+    }),
+    writeItems: vi.fn((_userId: string, listId: string, items: Item[]) => {
+      storage.items[listId] = copy(items)
+      storage.writes.push(copy(items))
+      return Promise.resolve()
+    }),
+    removeItems: vi.fn((_userId: string, listId: string) => {
+      delete storage.items[listId]
+      return Promise.resolve()
+    }),
+  }
+  return storage
+}
+
+/**
+ * The signed-in user as a ref, so tests can switch the user, the server
+ * events, so tests can send them, and the storage of the device.
+ */
+function setup(
+  service: ItemsService,
+  userId: string | null = ANNA,
+  storage: ItemsLocal = fakeStorage(),
+) {
   const user = ref(userId)
   const events = createFakeServerEvents()
-  const store = defineItemsStore(service, () => user.value, events)()
+  const store = defineItemsStore(service, () => user.value, events, storage)()
   return { store, user, events }
 }
 
@@ -1454,5 +1486,419 @@ describe('items store: removing one item', () => {
     await expect(store.startRemovingItem('i1')?.commit()).rejects.toThrow(ApiError)
 
     expect(names(store.openItems('l1'))).toEqual(['Milch'])
+  })
+})
+
+describe('items store: storage on the device', () => {
+  // The stored items of a list as [name, checked] pairs.
+  const storedOf = (storage: ReturnType<typeof fakeStorage>, listId = 'l1') =>
+    (storage.items[listId] ?? []).map((i): [string, boolean] => [i.name, i.checked])
+
+  it('shows the stored items while the server is asked', async () => {
+    const service = fakeService()
+    const request = deferred<Item[]>()
+    service.list.mockReturnValueOnce(request.promise)
+    const storage = fakeStorage({ l1: [item('i1', 'Milch')] })
+    const { store } = setup(service, ANNA, storage)
+
+    void store.load('l1')
+    await flushPromises()
+
+    expect(storage.readItems).toHaveBeenCalledWith(ANNA, 'l1')
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+    expect(store.statusOf('l1')).toBe('loading')
+
+    request.resolve([later(item('i1', 'Milch'), 2, { name: 'Hafermilch' })])
+    await flushPromises()
+
+    expect(store.statusOf('l1')).toBe('ready')
+    expect(names(store.itemsOf('l1'))).toEqual(['Hafermilch'])
+  })
+
+  it('keeps the stored items when the server cannot be reached', async () => {
+    const service = fakeService()
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const storage = fakeStorage({ l1: [item('i1', 'Milch'), item('i2', 'Brot', 'l1', true)] })
+    const { store } = setup(service, ANNA, storage)
+
+    await store.load('l1')
+
+    expect(store.statusOf('l1')).toBe('error')
+    expect(store.errorCodeOf('l1')).toBe('NETWORK')
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+    expect(names(store.openItems('l1'))).toEqual(['Milch'])
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot'])
+  })
+
+  it('keeps the lists apart', async () => {
+    const service = fakeService()
+    service.list.mockRejectedValue(new ApiError('NETWORK'))
+    const storage = fakeStorage({
+      l1: [item('i1', 'Milch')],
+      l2: [item('i2', 'Nägel', 'l2')],
+    })
+    const { store } = setup(service, ANNA, storage)
+
+    await store.load('l2')
+
+    expect(names(store.itemsOf('l2'))).toEqual(['Nägel'])
+    expect(store.itemsOf('l1')).toEqual([])
+  })
+
+  it('drops a stored item the server no longer has', async () => {
+    const storage = fakeStorage({ l1: [item('i1', 'Milch'), item('i2', 'Brot')] })
+    const { store, events } = setup(fakeService([item('i1', 'Milch')]), ANNA, storage)
+
+    await store.load('l1')
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+    expect(storedOf(storage)).toEqual([['Milch', false]])
+
+    // It does not come back with a late event either.
+    events.emit(changed(later(item('i2', 'Brot'), 0)))
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('drops stored items that arrive after the server answer', async () => {
+    const storage = fakeStorage()
+    const read = deferred<Item[] | null>()
+    storage.readItems.mockReturnValueOnce(read.promise)
+    const { store } = setup(fakeService([item('i1', 'Hafermilch')]), ANNA, storage)
+
+    await store.load('l1')
+    read.resolve([item('i1', 'Milch'), item('i2', 'Brot')])
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Hafermilch'])
+  })
+
+  it('keeps a newer item from an event over the stored one', async () => {
+    const service = fakeService()
+    service.list.mockReturnValueOnce(deferred<Item[]>().promise)
+    const storage = fakeStorage()
+    const read = deferred<Item[] | null>()
+    storage.readItems.mockReturnValueOnce(read.promise)
+    const { store, events } = setup(service, ANNA, storage)
+
+    void store.load('l1')
+    events.emit(changed(later(item('i1', 'x'), 2, { name: 'Hafermilch' })))
+    read.resolve([item('i1', 'Milch'), item('i2', 'Brot')])
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Hafermilch', 'Brot'])
+  })
+
+  it('does not bring back an item deleted before the stored items were read', async () => {
+    const service = fakeService()
+    service.list.mockReturnValueOnce(deferred<Item[]>().promise)
+    const storage = fakeStorage()
+    const read = deferred<Item[] | null>()
+    storage.readItems.mockReturnValueOnce(read.promise)
+    const { store, events } = setup(service, ANNA, storage)
+
+    void store.load('l1')
+    events.emit(deleted('l1', 'i1', 2))
+    read.resolve([item('i1', 'Milch')])
+    await flushPromises()
+
+    expect(store.itemsOf('l1')).toEqual([])
+  })
+
+  it('writes the items back after a load, own writes and events', async () => {
+    const storage = fakeStorage()
+    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot'), item('i3', 'Eier')])
+    const { store, events } = setup(service, ANNA, storage)
+
+    await store.load('l1')
+    await flushPromises()
+    expect(storage.writeItems).toHaveBeenCalledWith(ANNA, 'l1', expect.anything())
+    expect(names(storage.items.l1 ?? [])).toEqual(['Milch', 'Brot', 'Eier'])
+
+    await store.create('l1', { name: 'Käse' })
+    await flushPromises()
+    expect(names(storage.items.l1 ?? [])).toEqual(['Milch', 'Brot', 'Eier', 'Käse'])
+
+    await store.update('i1', { name: 'Hafermilch' })
+    await flushPromises()
+    expect(names(storage.items.l1 ?? [])).toEqual(['Hafermilch', 'Brot', 'Eier', 'Käse'])
+
+    events.emit(changed(later(item('i2', 'Brot'), 2, { name: 'Roggenbrot' })))
+    await flushPromises()
+    expect(names(storage.items.l1 ?? [])).toEqual(['Hafermilch', 'Roggenbrot', 'Eier', 'Käse'])
+
+    events.emit(deleted('l1', 'i3', 3))
+    await flushPromises()
+    expect(names(storage.items.l1 ?? [])).toEqual(['Hafermilch', 'Roggenbrot', 'Käse'])
+
+    events.emit(bulkDeleted('l1', ['i1', 4], ['i2', 4]))
+    await flushPromises()
+    expect(names(storage.items.l1 ?? [])).toEqual(['Käse'])
+  })
+
+  it('writes once for several changes in one go', async () => {
+    const storage = fakeStorage()
+    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot'), item('i3', 'Eier')])
+    const { store, events } = setup(service, ANNA, storage)
+    await store.load('l1')
+    await flushPromises()
+    storage.writeItems.mockClear()
+
+    events.emit(bulkDeleted('l1', ['i1', 2], ['i2', 2]))
+    await flushPromises()
+
+    expect(storage.writeItems).toHaveBeenCalledOnce()
+    expect(names(storage.items.l1 ?? [])).toEqual(['Eier'])
+  })
+
+  it('removes the stored items of a forgotten list', async () => {
+    const storage = fakeStorage({ l2: [item('i2', 'Nägel', 'l2')] })
+    const { store } = setup(fakeService([item('i1', 'Milch')]), ANNA, storage)
+    await store.load('l1')
+    await flushPromises()
+
+    store.forgetList('l1')
+    // Never loaded in this session, but stored from an earlier one.
+    store.forgetList('l2')
+    await flushPromises()
+
+    expect(storage.removeItems).toHaveBeenCalledWith(ANNA, 'l1')
+    expect(storage.removeItems).toHaveBeenCalledWith(ANNA, 'l2')
+    expect(storage.items).toEqual({})
+  })
+
+  it('does not treat a list as read that was forgotten while it loaded', async () => {
+    const service = fakeService()
+    const request = deferred<Item[]>()
+    service.list.mockReturnValueOnce(request.promise)
+    const storage = fakeStorage()
+    const { store } = setup(service, ANNA, storage)
+
+    void store.load('l1')
+    await flushPromises()
+    store.forgetList('l1')
+    request.resolve([item('i1', 'Milch')])
+    await flushPromises()
+    expect(storage.items).toEqual({})
+
+    // The list is opened again; until its stored items are read, nothing is
+    // written, as for any list that was not loaded yet.
+    service.list.mockReturnValueOnce(deferred<Item[]>().promise)
+    storage.readItems.mockReturnValueOnce(deferred<Item[] | null>().promise)
+    void store.load('l1')
+    await store.create('l1', { name: 'Käse' })
+    await flushPromises()
+
+    expect(storage.writeItems).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing before the stored items were read', async () => {
+    const service = fakeService()
+    service.list.mockReturnValueOnce(deferred<Item[]>().promise)
+    const storage = fakeStorage()
+    storage.readItems.mockReturnValueOnce(deferred<Item[] | null>().promise)
+    const { store } = setup(service, ANNA, storage)
+
+    void store.load('l1')
+    await store.create('l1', { name: 'Käse' })
+    await flushPromises()
+
+    expect(storage.writeItems).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing from a load of the previous user', async () => {
+    const service = fakeService()
+    const request = deferred<Item[]>()
+    service.list.mockReturnValueOnce(request.promise)
+    const storage = fakeStorage()
+    const { store, user } = setup(service, ANNA, storage)
+
+    void store.load('l1')
+    await flushPromises()
+    user.value = BEN
+    await flushPromises()
+    request.resolve([item('i1', 'Milch')])
+    await flushPromises()
+
+    expect(storage.writeItems).not.toHaveBeenCalled()
+  })
+
+  describe('a tap that waits for the server', () => {
+    // A loaded and stored list with two items; the next update() waits for
+    // the test to answer.
+    async function loadedWithPendingTap() {
+      const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
+      const storage = fakeStorage()
+      const { store, events } = setup(service, ANNA, storage)
+      await store.load('l1')
+      await flushPromises()
+      const answer = deferred<Item>()
+      service.update.mockReturnValueOnce(answer.promise)
+      const checking = store.setChecked('i1', true)
+      return { store, events, storage, answer, checking }
+    }
+
+    it('is not stored until the server confirmed it', async () => {
+      const { store, events, storage, answer, checking } = await loadedWithPendingTap()
+
+      // Another change makes the store write while the tap is waiting.
+      events.emit(changed(later(item('i2', 'Brot'), 2, { name: 'Roggenbrot' })))
+      await flushPromises()
+
+      expect(store.byId('i1')?.checked).toBe(true)
+      expect(storedOf(storage)).toEqual([
+        ['Milch', false],
+        ['Roggenbrot', false],
+      ])
+
+      answer.resolve(later(item('i1', 'Milch', 'l1', true), 2))
+      await checking
+      await flushPromises()
+
+      expect(storedOf(storage)).toEqual([
+        ['Milch', true],
+        ['Roggenbrot', false],
+      ])
+    })
+
+    it('is never stored when the server refuses it', async () => {
+      const { events, storage, answer, checking } = await loadedWithPendingTap()
+      events.emit(changed(later(item('i2', 'Brot'), 2, { name: 'Roggenbrot' })))
+      await flushPromises()
+      expect(storage.writes.length).toBeGreaterThan(0)
+
+      answer.reject(new ApiError('NETWORK'))
+      await expect(checking).rejects.toBeInstanceOf(ApiError)
+      await flushPromises()
+
+      expect(storedOf(storage)).toEqual([
+        ['Milch', false],
+        ['Roggenbrot', false],
+      ])
+      for (const written of storage.writes) {
+        expect(written.every((stored) => !stored.checked)).toBe(true)
+      }
+    })
+
+    it('stores the new fields of an event but not the tap', async () => {
+      const { store, events, storage, answer, checking } = await loadedWithPendingTap()
+
+      events.emit(changed(later(item('i1', 'Milch'), 2, { name: 'Hafermilch' })))
+      await flushPromises()
+
+      // On screen the new name and the tap, on the device the new name only.
+      expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: true })
+      expect(storedOf(storage)).toEqual([
+        ['Hafermilch', false],
+        ['Brot', false],
+      ])
+
+      answer.resolve(later(item('i1', 'Hafermilch', 'l1', true), 3))
+      await checking
+    })
+
+    it('stays visible when the answer of a load arrives after a tap on a stored item', async () => {
+      const service = fakeService()
+      const request = deferred<Item[]>()
+      service.list.mockReturnValueOnce(request.promise)
+      const tapAnswer = deferred<Item>()
+      service.update.mockReturnValueOnce(tapAnswer.promise)
+      const storage = fakeStorage({ l1: [item('i1', 'Milch')] })
+      const { store } = setup(service, ANNA, storage)
+
+      void store.load('l1')
+      await flushPromises()
+      const checking = store.setChecked('i1', true)
+      request.resolve([item('i1', 'Milch')])
+      await flushPromises()
+
+      expect(store.statusOf('l1')).toBe('ready')
+      expect(store.byId('i1')?.checked).toBe(true)
+      expect(storedOf(storage)).toEqual([['Milch', false]])
+
+      tapAnswer.resolve(later(item('i1', 'Milch', 'l1', true), 2))
+      await checking
+      await flushPromises()
+
+      expect(store.byId('i1')?.checked).toBe(true)
+      expect(storedOf(storage)).toEqual([['Milch', true]])
+    })
+  })
+
+  describe('removals', () => {
+    // A loaded and stored list: Milch (checked), Brot (open), Eier (checked).
+    async function loadedWithChecked() {
+      const service = fakeService([
+        item('i1', 'Milch', 'l1', true),
+        item('i2', 'Brot'),
+        item('i3', 'Eier', 'l1', true),
+      ])
+      const storage = fakeStorage()
+      const { store, events } = setup(service, ANNA, storage)
+      await store.load('l1')
+      await flushPromises()
+      return { service, store, events, storage }
+    }
+
+    it('keeps the items of a pending removal until it is committed', async () => {
+      const { store, events, storage } = await loadedWithChecked()
+
+      const removal = store.startRemovingChecked('l1')
+      // Another change makes the store write while the items are hidden.
+      events.emit(changed(later(item('i2', 'Brot'), 2, { name: 'Roggenbrot' })))
+      await flushPromises()
+
+      expect(names(store.itemsOf('l1'))).toEqual(['Roggenbrot'])
+      expect(storedOf(storage)).toEqual([
+        ['Milch', true],
+        ['Roggenbrot', false],
+        ['Eier', true],
+      ])
+
+      await removal?.commit()
+      await flushPromises()
+
+      expect(storedOf(storage)).toEqual([['Roggenbrot', false]])
+    })
+
+    it('keeps the items stored when the removal is undone', async () => {
+      const { store, events, storage } = await loadedWithChecked()
+
+      const removal = store.startRemovingChecked('l1')
+      removal?.undo()
+      events.emit(changed(later(item('i2', 'Brot'), 2, { name: 'Roggenbrot' })))
+      await flushPromises()
+
+      expect(storedOf(storage)).toEqual([
+        ['Milch', true],
+        ['Roggenbrot', false],
+        ['Eier', true],
+      ])
+    })
+
+    it('removes a single item from the storage when it is committed', async () => {
+      const { store, storage } = await loadedWithChecked()
+
+      await store.startRemovingItem('i2')?.commit()
+      await flushPromises()
+
+      expect(storedOf(storage)).toEqual([
+        ['Milch', true],
+        ['Eier', true],
+      ])
+    })
+
+    it('removes an item from the storage that is gone when it is checked', async () => {
+      const { service, store, storage } = await loadedWithChecked()
+      service.update.mockRejectedValueOnce(new ApiError('ITEM_NOT_FOUND', 404))
+
+      await store.setChecked('i2', true)
+      await flushPromises()
+
+      expect(storedOf(storage)).toEqual([
+        ['Milch', true],
+        ['Eier', true],
+      ])
+    })
   })
 })
