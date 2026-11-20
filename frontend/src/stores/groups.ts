@@ -31,7 +31,8 @@ export type GroupsStatus = 'idle' | 'loading' | 'ready' | 'error'
  * reload (a Group contains the role of the user, which the event cannot
  * carry), `groupRemoved` drops the group at once. Groups have no serverSeq,
  * so a logical clock decides which state is newer, as in the lists store.
- * See docs/sync.md.
+ * After every (re)connect of the socket the preload
+ * (services/sync/preload.ts) loads the groups again. See docs/sync.md.
  *
  * The groups are kept on the device (`storage`, ADR 0006), so the app can show
  * them right after a start without a network. The first load reads the
@@ -348,8 +349,6 @@ export function defineGroupsStore(
       events.on('groupRemoved', ({ payload }) =>
         takeRemoval(payload.groupId, payload.actorId === currentUserId() ? 'self' : payload.reason),
       ),
-      // Events are best effort and the connection may have been down.
-      events.on('ready', reloadIfLoaded),
     ]
     onScopeDispose(() => {
       for (const unsubscribe of unsubscribes) {

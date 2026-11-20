@@ -71,6 +71,9 @@ export type Item = Schemas['Item']
 /** Response of GET /api/v1/lists/{listId}/items. */
 export type ItemListResponse = Schemas['ItemList']
 
+/** Response of GET /api/v1/groups/{groupId}/items: the active lists it covers and their items. */
+export type GroupItemList = Schemas['GroupItemList']
+
 /** Body of POST /api/v1/lists/{listId}/items. */
 export type CreateItemRequest = Schemas['CreateItemRequest']
 

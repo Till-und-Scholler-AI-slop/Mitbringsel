@@ -12,6 +12,7 @@ import QuickAddBar from '../QuickAddBar.vue'
 
 const itemsService = vi.hoisted(() => ({
   list: vi.fn<ItemsService['list']>(),
+  listGroup: vi.fn<ItemsService['listGroup']>(),
   create: vi.fn<ItemsService['create']>(),
   update: vi.fn<ItemsService['update']>(),
   remove: vi.fn<ItemsService['remove']>(),

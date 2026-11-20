@@ -42,6 +42,14 @@ describe('itemsService', () => {
     expect(fetch).toHaveBeenCalledWith('/api/v1/lists/l1/items', undefined)
   })
 
+  it('lists the items of all active lists of a group', async () => {
+    const answer = { listIds: ['l1', 'l2'], items: [item('i1', 'Milch')] }
+    stubFetch(() => Response.json(answer))
+
+    await expect(itemsService.listGroup('g1')).resolves.toEqual(answer)
+    expect(fetch).toHaveBeenCalledWith('/api/v1/groups/g1/items', undefined)
+  })
+
   it('creates an item in a list', async () => {
     stubFetch(() => Response.json(item('i1', 'Milch'), { status: 201 }))
 
