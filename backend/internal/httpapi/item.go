@@ -30,7 +30,7 @@ const (
 type ItemService interface {
 	Create(ctx context.Context, actor, listID uuid.UUID, n item.NewItem, clock item.HLC) (item.Item, error)
 	ListForList(ctx context.Context, actor, listID uuid.UUID) ([]item.Item, error)
-	ListForGroup(ctx context.Context, actor, groupID uuid.UUID) ([]item.Item, error)
+	ListForGroup(ctx context.Context, actor, groupID uuid.UUID) (item.GroupItems, error)
 	Get(ctx context.Context, actor, itemID uuid.UUID) (item.Item, error)
 	Update(ctx context.Context, actor, itemID uuid.UUID, change item.Change, clock item.HLC) (item.Item, error)
 	Delete(ctx context.Context, actor, itemID uuid.UUID) (item.Item, error)
@@ -125,8 +125,13 @@ func groupItemsHandler(items ItemService) http.HandlerFunc {
 			return
 		}
 
-		resp := apigen.ItemList{Items: make([]apigen.Item, len(found))}
-		for i, it := range found {
+		// make, not a nil slice: a nil slice encodes as null, an empty one as [].
+		resp := apigen.GroupItemList{
+			ListIds: make([]uuid.UUID, len(found.ListIDs)),
+			Items:   make([]apigen.Item, len(found.Items)),
+		}
+		copy(resp.ListIds, found.ListIDs)
+		for i, it := range found.Items {
 			resp.Items[i] = newItemResponse(it)
 		}
 		writeJSON(w, http.StatusOK, resp)

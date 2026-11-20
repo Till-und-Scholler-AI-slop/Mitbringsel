@@ -332,9 +332,11 @@ export interface paths {
          * List the items of all active lists of a group
          * @description The items of every list of the group that is not archived, in one
          *     response, so a client can have them offline (docs/sync.md). Oldest
-         *     first; deleted items are left out. Items of archived lists load with
-         *     `listItems`. A group the user is not a member of looks like a group
-         *     that does not exist (`GROUP_NOT_FOUND`).
+         *     first; deleted items are left out. `listIds` names the active lists
+         *     the answer covers, also those without items, so a client can tell an
+         *     empty list from one the answer does not know about. Items of archived
+         *     lists load with `listItems`. A group the user is not a member of looks
+         *     like a group that does not exist (`GROUP_NOT_FOUND`).
          */
         get: operations["listGroupItems"];
         put?: never;
@@ -731,6 +733,11 @@ export interface components {
             checked: string;
         };
         ItemList: {
+            items: components["schemas"]["Item"][];
+        };
+        GroupItemList: {
+            /** @description The active lists of the group this answer covers, also those without items. */
+            listIds: string[];
             items: components["schemas"]["Item"][];
         };
         CreateItemRequest: {
@@ -1603,13 +1610,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The items of the active lists of the group. */
+            /** @description The active lists of the group and their items. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ItemList"];
+                    "application/json": components["schemas"]["GroupItemList"];
                 };
             };
             400: components["responses"]["Error"];

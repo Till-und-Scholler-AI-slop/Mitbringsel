@@ -90,7 +90,6 @@ const removedFrom = (groupId: string): ServerMessage => ({
   type: 'groupRemoved',
   payload: { groupId, reason: 'removed', actorId: BEN },
 })
-const READY: ServerMessage = { type: 'ready' }
 
 /** A request that answers only when the test says so. */
 function pending<T>() {
@@ -367,13 +366,11 @@ describe('groups store: live events', () => {
 
     expect(events.count('groupChanged')).toBe(1)
     expect(events.count('groupRemoved')).toBe(1)
-    expect(events.count('ready')).toBe(1)
 
     store.$dispose()
 
     expect(events.count('groupChanged')).toBe(0)
     expect(events.count('groupRemoved')).toBe(0)
-    expect(events.count('ready')).toBe(0)
   })
 
   it('reloads on groupChanged and takes the new name and role', async () => {
@@ -401,26 +398,25 @@ describe('groups store: live events', () => {
     expect(store.groups.map((g) => g.id)).toEqual(['g1', 'g2'])
   })
 
-  it('does not load on groupChanged or ready before anything was loaded', async () => {
+  it('does not load on groupChanged before anything was loaded', async () => {
     const service = fakeService([group('g1', 'WG')])
     const { store, events } = setup(service)
 
     events.emit(changed('g1'))
-    events.emit(READY)
     await flushPromises()
 
     expect(service.list).not.toHaveBeenCalled()
     expect(store.status).toBe('idle')
   })
 
-  it('reloads after ready without a spinner', async () => {
+  it('reloads on groupChanged without a spinner', async () => {
     const service = fakeService([group('g1', 'WG')])
     const { store, events } = setup(service)
     await store.load()
     const reloading = pending<Group[]>()
     service.list.mockReturnValueOnce(reloading.promise)
 
-    events.emit(READY)
+    events.emit(changed('g1'))
 
     expect(store.status).toBe('ready')
     reloading.answer([group('g1', 'Neu')])

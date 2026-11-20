@@ -111,7 +111,6 @@ const removedFrom = (groupId: string): ServerMessage => ({
   type: 'groupRemoved',
   payload: { groupId, reason: 'removed', actorId: BEN },
 })
-const READY: ServerMessage = { type: 'ready' }
 
 /** The same list as a later state of the server: a higher serverSeq and some changed fields. */
 const later = (base: List, serverSeq: number, change: Partial<List> = {}): List => ({
@@ -229,6 +228,17 @@ describe('lists store: load', () => {
 
     expect(store.statusOf('g1')).toBe('ready')
     expect(store.errorCodeOf('g1')).toBeNull()
+  })
+
+  it('stays ready while a loaded group reloads', async () => {
+    const service = fakeService([list('l1', 'Eins')])
+    const { store } = setup(service)
+    await store.load('g1')
+    service.list.mockReturnValueOnce(new Promise(() => undefined))
+
+    void store.load('g1')
+
+    expect(store.statusOf('g1')).toBe('ready')
   })
 })
 
@@ -574,7 +584,6 @@ describe('lists store: live events', () => {
     expect(events.count('listChanged')).toBe(0)
     expect(events.count('listDeleted')).toBe(0)
     expect(events.count('groupRemoved')).toBe(0)
-    expect(events.count('ready')).toBe(0)
   })
 })
 
@@ -649,67 +658,6 @@ describe('lists store: load merge', () => {
     first.resolve([])
     await firstLoad
 
-    expect(names(store.listsOf('g1'))).toEqual(['Eins'])
-  })
-})
-
-describe('lists store: ready', () => {
-  it('reloads every loaded group after ready', async () => {
-    const service = fakeService([list('l1', 'Eins'), list('l2', 'Zwei', 'g2')])
-    const { store, events } = setup(service)
-    await store.load('g1')
-    await store.load('g2')
-    service.list.mockClear()
-    service.list.mockResolvedValueOnce([list('l1', 'Eins'), list('l3', 'Drei')])
-
-    events.emit(READY)
-    await flushPromises()
-
-    expect(service.list.mock.calls.map(([groupId]) => groupId).sort()).toEqual(['g1', 'g2'])
-    expect(names(store.listsOf('g1'))).toEqual(['Eins', 'Drei'])
-  })
-
-  it('does nothing on ready before any group was loaded', () => {
-    const service = fakeService()
-    const { events } = setup(service)
-
-    events.emit(READY)
-
-    expect(service.list).not.toHaveBeenCalled()
-  })
-
-  it('does not load a group that only got a list from a create', async () => {
-    const service = fakeService()
-    const { store, events } = setup(service)
-    await store.create('g1', 'Baumarkt', 'general')
-
-    events.emit(READY)
-
-    expect(service.list).not.toHaveBeenCalled()
-    expect(store.statusOf('g1')).toBe('idle')
-  })
-
-  it('shows no spinner while it reloads', async () => {
-    const service = fakeService([list('l1', 'Eins')])
-    const { store, events } = setup(service)
-    await store.load('g1')
-    service.list.mockReturnValueOnce(new Promise(() => undefined))
-
-    events.emit(READY)
-
-    expect(store.statusOf('g1')).toBe('ready')
-  })
-
-  it('keeps the lists and reports the error when the reload fails', async () => {
-    const service = fakeService([list('l1', 'Eins')])
-    const { store, events } = setup(service)
-    await store.load('g1')
-    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
-
-    events.emit(READY)
-    await flushPromises()
-
-    expect(store.statusOf('g1')).toBe('error')
     expect(names(store.listsOf('g1'))).toEqual(['Eins'])
   })
 })

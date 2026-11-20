@@ -1,6 +1,7 @@
 import type {
   CreateItemRequest,
   DeletedItem,
+  GroupItemList,
   Item,
   ItemListResponse,
   RemoveCheckedItemsRequest,
@@ -14,6 +15,11 @@ import { apiDelete, apiGet, apiPatchJson, apiPostJson } from './client'
 export interface ItemsService {
   /** The items of a list, oldest first. Deleted items are not sent. */
   list(listId: string): Promise<Item[]>
+  /**
+   * The items of every active list of a group in one answer, oldest first.
+   * `listIds` names the lists it covers, also those without items.
+   */
+  listGroup(groupId: string): Promise<GroupItemList>
   /** Every member may do this, also in an archived list. */
   create(listId: string, item: CreateItemRequest): Promise<Item>
   /**
@@ -35,11 +41,13 @@ export interface ItemsService {
 export const MAX_REMOVE_CHECKED = 500
 
 const listItemsPath = (listId: string) => `/lists/${listId}/items`
+const groupItemsPath = (groupId: string) => `/groups/${groupId}/items`
 const itemPath = (itemId: string) => `/items/${itemId}`
 const removeCheckedPath = (listId: string) => `/lists/${listId}/items/remove-checked`
 
 export const itemsService: ItemsService = {
   list: async (listId) => (await apiGet<ItemListResponse>(listItemsPath(listId))).items,
+  listGroup: (groupId) => apiGet<GroupItemList>(groupItemsPath(groupId)),
   create: (listId, item) => apiPostJson<Item>(listItemsPath(listId), item),
   update: (itemId, change) => apiPatchJson<Item>(itemPath(itemId), change),
   remove: (itemId) => apiDelete(itemPath(itemId)),

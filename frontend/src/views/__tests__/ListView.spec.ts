@@ -10,6 +10,8 @@ import type { GroupsService } from '@/services/api/groups'
 import type { ItemsService } from '@/services/api/items'
 import type { ListsService } from '@/services/api/lists'
 import { rememberLastList } from '@/services/lastList'
+import { useGroupsStore } from '@/stores/groups'
+import { useListsStore } from '@/stores/lists'
 import type { Group, Item, List, ServerMessage } from '@/types/api'
 
 import ListView from '../ListView.vue'
@@ -33,6 +35,7 @@ const listsService = vi.hoisted(() => ({
 
 const itemsService = vi.hoisted(() => ({
   list: vi.fn<ItemsService['list']>(),
+  listGroup: vi.fn<ItemsService['listGroup']>(),
   create: vi.fn<ItemsService['create']>(),
   update: vi.fn<ItemsService['update']>(),
   remove: vi.fn<ItemsService['remove']>(),
@@ -505,7 +508,7 @@ describe('ListView: list actions', () => {
     const { wrapper, router } = await mountView()
     listsService.list.mockResolvedValue([list('l2', 'Baumarkt')])
 
-    serverEvents.emit({ type: 'ready' })
+    await useListsStore().load('g1')
     await flushPromises()
 
     expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l2' })
@@ -747,7 +750,7 @@ describe('ListView: live changes', () => {
     const { wrapper, router } = await mountView()
     groupsService.list.mockResolvedValue([])
 
-    serverEvents.emit({ type: 'ready' })
+    await useGroupsStore().load()
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe('home')

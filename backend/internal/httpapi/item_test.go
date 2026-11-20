@@ -35,6 +35,8 @@ func (fakeItemClock) Next() item.HLC { return testItemClock }
 // records the calls, so tests can check what the handler passed on.
 type fakeItems struct {
 	items []item.Item
+	// group is what ListForGroup returns.
+	group item.GroupItems
 	err   error
 
 	// calls lists the methods that were called, with their arguments.
@@ -65,9 +67,9 @@ func (f *fakeItems) ListForList(_ context.Context, actor, listID uuid.UUID) ([]i
 	return f.items, f.err
 }
 
-func (f *fakeItems) ListForGroup(_ context.Context, actor, groupID uuid.UUID) ([]item.Item, error) {
+func (f *fakeItems) ListForGroup(_ context.Context, actor, groupID uuid.UUID) (item.GroupItems, error) {
 	f.record("ListForGroup %s %s", actor, groupID)
-	return f.items, f.err
+	return f.group, f.err
 }
 
 func (f *fakeItems) Get(_ context.Context, actor, itemID uuid.UUID) (item.Item, error) {
@@ -324,22 +326,40 @@ func TestListItems(t *testing.T) {
 }
 
 func TestListGroupItems(t *testing.T) {
-	t.Run("no items is an empty array, not null", func(t *testing.T) {
+	t.Run("no lists and no items are empty arrays, not null", func(t *testing.T) {
 		rec := itemRequest(t, &fakeItems{}, http.MethodGet, groupItemsPathFor(), "")
 
-		if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != `{"items":[]}` {
+		if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != `{"items":[],"listIds":[]}` {
 			t.Errorf("status = %d, body = %s", rec.Code, got)
 		}
 	})
 
-	t.Run("items of the group", func(t *testing.T) {
-		items := &fakeItems{items: []item.Item{testItem()}}
+	t.Run("a list without items is named, with empty items", func(t *testing.T) {
+		items := &fakeItems{group: item.GroupItems{ListIDs: []uuid.UUID{testListID}}}
 
 		rec := itemRequest(t, items, http.MethodGet, groupItemsPathFor(), "")
 
-		var got apigen.ItemList
+		want := fmt.Sprintf(`{"items":[],"listIds":[%q]}`, testListID)
+		if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != want {
+			t.Errorf("status = %d, body = %s, want %s", rec.Code, got, want)
+		}
+	})
+
+	t.Run("lists and items of the group", func(t *testing.T) {
+		otherListID := uuid.New()
+		items := &fakeItems{group: item.GroupItems{
+			ListIDs: []uuid.UUID{testListID, otherListID},
+			Items:   []item.Item{testItem()},
+		}}
+
+		rec := itemRequest(t, items, http.MethodGet, groupItemsPathFor(), "")
+
+		var got apigen.GroupItemList
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode body %s: %v", rec.Body, err)
+		}
+		if len(got.ListIds) != 2 || got.ListIds[0] != testListID || got.ListIds[1] != otherListID {
+			t.Errorf("listIds = %v, want [%s %s]", got.ListIds, testListID, otherListID)
 		}
 		if len(got.Items) != 1 || got.Items[0].Name != "Mehl" {
 			t.Errorf("items = %+v", got.Items)

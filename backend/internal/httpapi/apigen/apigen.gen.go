@@ -546,6 +546,14 @@ type GroupChangedPayload struct {
 	GroupID uuid.UUID `json:"groupId"`
 }
 
+// GroupItemList defines model for GroupItemList.
+type GroupItemList struct {
+	Items []Item `json:"items"`
+
+	// ListIds The active lists of the group this answer covers, also those without items.
+	ListIds []uuid.UUID `json:"listIds"`
+}
+
 // GroupList defines model for GroupList.
 type GroupList struct {
 	Groups []Group `json:"groups"`

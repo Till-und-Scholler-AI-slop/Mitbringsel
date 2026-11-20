@@ -49,7 +49,9 @@ interface GroupLists {
  * items store: a state applies only if its serverSeq is not older than the
  * one we hold, and a deleted list stays deleted. This store knows which
  * lists belong to a group, so it is the one that tells the items store when
- * a list is gone (deleted, or its group left). See docs/sync.md.
+ * a list is gone (deleted, or its group left). After every (re)connect of
+ * the socket the preload (services/sync/preload.ts) loads the lists of every
+ * household again. See docs/sync.md.
  *
  * The lists of each group are kept on the device (`storage`, ADR 0006), as in
  * the groups store: the first load of a group reads them next to the
@@ -454,15 +456,6 @@ export function defineListsStore(
         ),
       ),
       events.on('groupRemoved', ({ payload }) => forgetGroup(payload.groupId)),
-      // Events are best effort and the connection may have been down:
-      // every group we have loaded (or are loading) may be outdated.
-      events.on('ready', () => {
-        for (const [groupId, entry] of Object.entries(byGroup.value)) {
-          if (entry.status !== 'idle') {
-            void load(groupId)
-          }
-        }
-      }),
     ]
     onScopeDispose(() => {
       for (const unsubscribe of unsubscribes) {

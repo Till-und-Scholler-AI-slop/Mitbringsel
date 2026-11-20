@@ -7,7 +7,7 @@ import { localData, type LocalData } from '@/services/storage/localData'
 import { createPersistQueue } from '@/services/storage/persistQueue'
 import { liveSocket, type ServerEvents } from '@/services/sync/socket'
 import { useAuthStore } from '@/stores/auth'
-import type { CreateItemRequest, Item, UpdateItemRequest } from '@/types/api'
+import type { CreateItemRequest, GroupItemList, Item, UpdateItemRequest } from '@/types/api'
 
 // The error code of the API for an item that does not exist (anymore).
 const ITEM_NOT_FOUND = 'ITEM_NOT_FOUND'
@@ -76,8 +76,10 @@ interface ListItems {
  * in the store and are only hidden from the readers.
  *
  * Changes of other members arrive as events and go the same way as answers.
- * Events are best effort, so after every (re)connect of the socket the store
- * loads again what it has loaded; see docs/sync.md.
+ * Events are best effort, so after every (re)connect of the socket the
+ * preload (services/sync/preload.ts) loads the items of every household
+ * with loadGroup() and the rest of what the store has loaded with
+ * reloadLoaded(); see docs/sync.md.
  *
  * The items of each list are kept on the device (`storage`, ADR 0006), as in
  * the lists store: the first load of a list reads them next to the request,
@@ -130,6 +132,9 @@ export function defineItemsStore(
     // The start of the newest load whose answer was applied, per list. An
     // answer of a load that started before it is outdated.
     const appliedLoadStart = new Map<string, number>()
+    // When forgetList() dropped a list. The answer of a household that
+    // started before must not bring the list back: the list is gone.
+    const forgottenAt = new Map<string, number>()
 
     // Items of a pending removal and how they hide. Read by the readers, so
     // reactive. 'whileChecked' (removing the checked items): one that
@@ -154,6 +159,7 @@ export function defineItemsStore(
       tombstones.clear()
       touchedAt.clear()
       appliedLoadStart.clear()
+      forgottenAt.clear()
       hidden.value = new Map()
       holdsState.clear()
       persistQueue.clear()
@@ -491,6 +497,63 @@ export function defineItemsStore(
     }
 
     /**
+     * Loads the items of every active list of a household with one request
+     * and merges each list as load() does. A list the answer covers without
+     * items is empty: what the store or the device held of it goes. Returns
+     * the IDs of the lists the answer covers, or null if the request failed
+     * or the user changed meanwhile.
+     *
+     * It runs in the background (the preload), so a failure changes nothing:
+     * no list shows an error for a request no screen asked for.
+     */
+    async function loadGroup(groupId: string): Promise<string[] | null> {
+      const started = generation
+      const startedAt = ++clock
+      let answer: GroupItemList
+      try {
+        answer = await service.listGroup(groupId)
+      } catch {
+        return null
+      }
+      if (started !== generation) {
+        return null
+      }
+
+      const loaded = new Map<string, Item[]>(answer.listIds.map((listId) => [listId, []]))
+      for (const item of answer.items) {
+        loaded.get(item.listId)?.push(item)
+      }
+      for (const [listId, items] of loaded) {
+        if (
+          (forgottenAt.get(listId) ?? 0) > startedAt ||
+          !isCurrentLoad(started, listId, startedAt)
+        ) {
+          continue
+        }
+        const entry = ensure(listId)
+        mergeLoaded(entry, items, startedAt)
+        holdsState.add(listId)
+        persist(listId)
+        entry.status = 'ready'
+        entry.errorCode = null
+      }
+      return answer.listIds
+    }
+
+    /**
+     * Loads again every list that was loaded (or is loading), except those
+     * in `skip`, e.g. the lists a loadGroup() just covered. Lists never
+     * loaded stay untouched; ListView loads them when opened.
+     */
+    function reloadLoaded(skip: ReadonlySet<string> = new Set()) {
+      for (const [listId, entry] of Object.entries(byList.value)) {
+        if (entry.status !== 'idle' && !skip.has(listId)) {
+          void load(listId)
+        }
+      }
+    }
+
+    /**
      * Adds an item and returns it. The item comes from the answer of the
      * server; if it is in the store already, it is not added twice.
      */
@@ -690,9 +753,10 @@ export function defineItemsStore(
     /**
      * Drops a list that is gone for us: deleted, or its group was left. The
      * lists store calls this, as it knows which lists belong to a group.
-     * Without the entry, ready() does not load the list again and events for
-     * it are dropped. A load still on its way writes into the dropped entry,
-     * which nobody sees.
+     * Without the entry, reloadLoaded() does not load the list again and
+     * events for it are dropped. A load still on its way writes into the
+     * dropped entry, which nobody sees; the answer of a household that
+     * started before does not bring it back.
      */
     function forgetList(listId: string) {
       // Also when the list was never loaded: the device may still hold its
@@ -704,6 +768,7 @@ export function defineItemsStore(
       }
       delete byList.value[listId]
       appliedLoadStart.delete(listId)
+      forgottenAt.set(listId, ++clock)
     }
 
     // The setup function runs in the effect scope of the store, so
@@ -717,16 +782,6 @@ export function defineItemsStore(
       events.on('itemsDeleted', ({ payload }) => {
         for (const deleted of payload.items) {
           takeDeletion(payload.listId, deleted.itemId, deleted.serverSeq)
-        }
-      }),
-      // Events are best effort and the connection may have been down:
-      // everything we have loaded (or are loading) may be outdated. Lists
-      // never loaded stay untouched; ListView loads them when opened.
-      events.on('ready', () => {
-        for (const [listId, entry] of Object.entries(byList.value)) {
-          if (entry.status !== 'idle') {
-            void load(listId)
-          }
         }
       }),
     ]
@@ -744,6 +799,8 @@ export function defineItemsStore(
       errorCodeOf,
       byId,
       load,
+      loadGroup,
+      reloadLoaded,
       create,
       update,
       setChecked,

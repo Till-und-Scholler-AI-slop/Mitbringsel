@@ -7,7 +7,7 @@ import { ApiError } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
 import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
 import { MAX_REMOVE_CHECKED } from '@/services/api/items'
-import type { Item, ServerMessage } from '@/types/api'
+import type { GroupItemList, Item, ServerMessage } from '@/types/api'
 
 import { defineItemsStore, type ItemsLocal } from '../items'
 
@@ -44,6 +44,10 @@ function fakeService(
 ): ItemsService & { [K in keyof ItemsService]: ReturnType<typeof vi.fn> } {
   return {
     list: vi.fn((listId: string) => Promise.resolve(initial.filter((i) => i.listId === listId))),
+    // Every list of `initial` counts as an active list of g1.
+    listGroup: vi.fn(() =>
+      Promise.resolve({ listIds: [...new Set(initial.map((i) => i.listId))], items: initial }),
+    ),
     // Created later than the items above, so it sorts after them.
     create: vi.fn((listId: string, request: { name: string }) =>
       Promise.resolve({ ...item('i-new', request.name, listId), createdAt: CREATED_LATER }),
@@ -135,7 +139,6 @@ const bulkDeleted = (
     items: gone.map(([itemId, serverSeq]) => ({ itemId, serverSeq })),
   },
 })
-const READY: ServerMessage = { type: 'ready' }
 
 const names = (items: Item[]) => items.map((i) => i.name)
 
@@ -359,7 +362,7 @@ describe('items store: reset', () => {
 
     store.$dispose()
 
-    for (const type of ['itemChanged', 'itemDeleted', 'itemsDeleted', 'ready'] as const) {
+    for (const type of ['itemChanged', 'itemDeleted', 'itemsDeleted'] as const) {
       expect(events.count(type)).toBe(0)
     }
   })
@@ -1089,16 +1092,154 @@ describe('items store: live events', () => {
   })
 })
 
-describe('items store: ready', () => {
-  it('reloads every loaded list after ready', async () => {
+describe('items store: loadGroup', () => {
+  it('loads the items of every active list of the household at once', async () => {
+    const service = fakeService([
+      item('i1', 'Milch'),
+      item('i2', 'Brot', 'l1', true),
+      item('i3', 'Nägel', 'l2'),
+    ])
+    const { store } = setup(service)
+
+    await expect(store.loadGroup('g1')).resolves.toEqual(['l1', 'l2'])
+
+    expect(service.listGroup).toHaveBeenCalledWith('g1')
+    expect(service.list).not.toHaveBeenCalled()
+    expect(store.statusOf('l1')).toBe('ready')
+    expect(names(store.openItems('l1'))).toEqual(['Milch'])
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot'])
+    expect(store.statusOf('l2')).toBe('ready')
+    expect(names(store.itemsOf('l2'))).toEqual(['Nägel'])
+  })
+
+  it('empties a covered list without items, on the device too', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const storage = fakeStorage({ l1: [item('i1', 'Milch')] })
+    const { store } = setup(service, ANNA, storage)
+    await store.load('l1')
+    service.listGroup.mockResolvedValueOnce({ listIds: ['l1'], items: [] })
+
+    await store.loadGroup('g1')
+    await flushPromises()
+
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.statusOf('l1')).toBe('ready')
+    expect(storage.items.l1).toEqual([])
+  })
+
+  it('writes every covered list to the device', async () => {
+    const storage = fakeStorage()
+    const { store } = setup(
+      fakeService([item('i1', 'Milch'), item('i2', 'Nägel', 'l2')]),
+      ANNA,
+      storage,
+    )
+
+    await store.loadGroup('g1')
+    await flushPromises()
+
+    expect(names(storage.items.l1 ?? [])).toEqual(['Milch'])
+    expect(names(storage.items.l2 ?? [])).toEqual(['Nägel'])
+  })
+
+  it('leaves the lists alone that the answer does not cover', async () => {
+    // l9 stands for an archived list the user opened: the answer of the
+    // household does not cover it.
+    const service = fakeService([item('i9', 'Kerzen', 'l9')])
+    const { store } = setup(service)
+    await store.load('l9')
+    service.listGroup.mockResolvedValueOnce({ listIds: ['l1'], items: [item('i1', 'Milch')] })
+
+    await store.loadGroup('g1')
+
+    expect(names(store.itemsOf('l9'))).toEqual(['Kerzen'])
+    expect(store.statusOf('l9')).toBe('ready')
+  })
+
+  it('changes nothing when the request fails', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const { store } = setup(service)
+    await store.load('l1')
+    service.listGroup.mockRejectedValueOnce(new ApiError('NETWORK'))
+
+    await expect(store.loadGroup('g1')).resolves.toBeNull()
+
+    expect(store.statusOf('l1')).toBe('ready')
+    expect(store.errorCodeOf('l1')).toBeNull()
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+    expect(store.statusOf('l2')).toBe('idle')
+  })
+
+  it('ignores an answer that arrives after the user changed', async () => {
+    const service = fakeService()
+    const answer = deferred<GroupItemList>()
+    service.listGroup.mockReturnValueOnce(answer.promise)
+    const { store, user } = setup(service)
+
+    const loading = store.loadGroup('g1')
+    user.value = BEN
+    await Promise.resolve()
+    answer.resolve({ listIds: ['l1'], items: [item('i1', 'Milch')] })
+
+    await expect(loading).resolves.toBeNull()
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.statusOf('l1')).toBe('idle')
+  })
+
+  it('ignores a list whose load started later and was applied already', async () => {
+    const service = fakeService()
+    const answer = deferred<GroupItemList>()
+    service.listGroup.mockReturnValueOnce(answer.promise)
+    service.list.mockResolvedValueOnce([item('i1', 'Milch'), item('i2', 'Brot')])
+    const { store } = setup(service)
+
+    const loading = store.loadGroup('g1')
+    await store.load('l1')
+    answer.resolve({ listIds: ['l1'], items: [item('i1', 'Milch')] })
+    await loading
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+  })
+
+  it('does not bring back a list that was forgotten while it loaded', async () => {
+    const service = fakeService()
+    const answer = deferred<GroupItemList>()
+    service.listGroup.mockReturnValueOnce(answer.promise)
+    const storage = fakeStorage()
+    const { store } = setup(service, ANNA, storage)
+
+    const loading = store.loadGroup('g1')
+    store.forgetList('l1')
+    answer.resolve({ listIds: ['l1'], items: [item('i1', 'Milch')] })
+    await loading
+    await flushPromises()
+
+    expect(store.itemsOf('l1')).toEqual([])
+    expect(store.statusOf('l1')).toBe('idle')
+    expect(storage.items.l1).toBeUndefined()
+  })
+
+  it('takes a list again that was forgotten before it started', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const { store } = setup(service)
+    store.forgetList('l1')
+
+    await store.loadGroup('g1')
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+})
+
+describe('items store: reloadLoaded', () => {
+  it('reloads every loaded list', async () => {
     const service = fakeService([item('i1', 'Milch'), item('i2', 'Nägel', 'l2')])
-    const { store, events } = setup(service)
+    const { store } = setup(service)
     await store.load('l1')
     await store.load('l2')
     service.list.mockClear()
     service.list.mockResolvedValueOnce([item('i1', 'Milch'), item('i3', 'Brot')])
 
-    events.emit(READY)
+    store.reloadLoaded()
     await flushPromises()
 
     expect(service.list.mock.calls.map(([listId]) => listId).sort()).toEqual(['l1', 'l2'])
@@ -1107,43 +1248,43 @@ describe('items store: ready', () => {
 
   it('shows no spinner while it reloads', async () => {
     const service = fakeService([item('i1', 'Milch')])
-    const { store, events } = setup(service)
+    const { store } = setup(service)
     await store.load('l1')
     service.list.mockReturnValueOnce(new Promise(() => undefined))
 
-    events.emit(READY)
+    store.reloadLoaded()
 
     expect(store.statusOf('l1')).toBe('ready')
   })
 
-  it('does nothing on ready before any list was loaded', () => {
+  it('does nothing before any list was loaded', () => {
     const service = fakeService()
-    const { events } = setup(service)
+    const { store } = setup(service)
 
-    events.emit(READY)
+    store.reloadLoaded()
 
     expect(service.list).not.toHaveBeenCalled()
   })
 
   it('does not load a list that only got an item from a create', async () => {
     const service = fakeService()
-    const { store, events } = setup(service)
+    const { store } = setup(service)
     await store.create('l1', { name: 'Brot' })
 
-    events.emit(READY)
+    store.reloadLoaded()
 
     expect(service.list).not.toHaveBeenCalled()
     expect(store.statusOf('l1')).toBe('idle')
   })
 
-  it('reloads a list that was still loading when ready came', async () => {
+  it('reloads a list that is still loading', async () => {
     const service = fakeService([item('i1', 'Milch')])
     const first = deferred<Item[]>()
     service.list.mockReturnValueOnce(first.promise)
-    const { store, events } = setup(service)
+    const { store } = setup(service)
 
     const loading = store.load('l1')
-    events.emit(READY)
+    store.reloadLoaded()
     await flushPromises()
     expect(service.list).toHaveBeenCalledTimes(2)
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
@@ -1156,16 +1297,28 @@ describe('items store: ready', () => {
 
   it('keeps the items and reports the error when the reload fails', async () => {
     const service = fakeService([item('i1', 'Milch')])
-    const { store, events } = setup(service)
+    const { store } = setup(service)
     await store.load('l1')
     service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
 
-    events.emit(READY)
+    store.reloadLoaded()
     await flushPromises()
 
     expect(store.statusOf('l1')).toBe('error')
     expect(store.errorCodeOf('l1')).toBe('NETWORK')
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('skips the lists it is told to skip', async () => {
+    const service = fakeService([item('i1', 'Milch'), item('i2', 'Nägel', 'l2')])
+    const { store } = setup(service)
+    await store.load('l1')
+    await store.load('l2')
+    service.list.mockClear()
+
+    store.reloadLoaded(new Set(['l1']))
+
+    expect(service.list.mock.calls.map(([listId]) => listId)).toEqual(['l2'])
   })
 })
 
@@ -1183,14 +1336,14 @@ describe('items store: forgetList', () => {
     expect(names(store.itemsOf('l2'))).toEqual(['Nägel'])
   })
 
-  it('does not reload a forgotten list after ready', async () => {
+  it('does not reload a forgotten list', async () => {
     const service = fakeService([item('i1', 'Milch')])
-    const { store, events } = setup(service)
+    const { store } = setup(service)
     await store.load('l1')
     store.forgetList('l1')
     service.list.mockClear()
 
-    events.emit(READY)
+    store.reloadLoaded()
     await flushPromises()
 
     expect(service.list).not.toHaveBeenCalled()
@@ -1358,12 +1511,11 @@ describe('items store: removing checked items', () => {
   })
 
   it('keeps the items hidden while the list loads again', async () => {
-    const { store, events } = setup(fakeService(shopping()))
+    const { store } = setup(fakeService(shopping()))
     await store.load('l1')
 
     store.startRemovingChecked('l1')
-    events.emit(READY)
-    await flushPromises()
+    await store.load('l1')
 
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
   })
