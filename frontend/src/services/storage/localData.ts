@@ -1,5 +1,6 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { openDB, type DBSchema, type IDBPDatabase, type IDBPObjectStore } from 'idb'
 
+import type { OutboxChange, OutboxEntry } from '@/services/sync/outbox'
 import type { Group, Item, List, MeResponse } from '@/types/api'
 
 /**
@@ -14,7 +15,8 @@ import type { Group, Item, List, MeResponse } from '@/types/api'
  * after a switch.
  *
  * It saves whole states, one per household (lists) or list (items), the
- * same way the stores merge whole responses.
+ * same way the stores merge whole responses. Next to them it keeps the
+ * outbox: the item changes not sent yet, in the order they were made.
  *
  * Like the signed-in marker, it never throws: without IndexedDB (blocked
  * site data, some private windows) the app keeps working online, it just
@@ -43,12 +45,21 @@ export interface LocalData {
   writeItems(userId: string, listId: string, items: Item[]): Promise<void>
   removeItems(userId: string, listId: string): Promise<void>
 
+  // Appends a change to the outbox and answers its sequence number, which
+  // orders it after every change added before. null if it was not stored
+  // (no IndexedDB, not the owner).
+  addOutbox(userId: string, change: OutboxChange, queuedAt: number): Promise<number | null>
+  // The outbox in order, oldest first.
+  readOutbox(userId: string): Promise<OutboxEntry[] | null>
+  removeOutbox(userId: string, seq: number): Promise<void>
+
   // Removes everything, the owner too (explicit logout).
   clear(): Promise<void>
 }
 
 export const LOCAL_DATA_DB_NAME = 'mitbringsel'
-const DB_VERSION = 1
+// 2: added the outbox store.
+export const LOCAL_DATA_DB_VERSION = 2
 const ME_KEY = 'me'
 // The single key of the groups store: the user has one list of households.
 const GROUPS_KEY = 'all'
@@ -60,12 +71,24 @@ interface Schema extends DBSchema {
   groups: { key: typeof GROUPS_KEY; value: Group[] }
   lists: { key: string; value: List[] } // by group ID
   items: { key: string; value: Item[] } // by list ID
+  // By a sequence number IndexedDB counts up (autoIncrement), so the keys
+  // keep the order in which the changes were added.
+  outbox: { key: number; value: StoredChange }
 }
 
-type DataStore = 'groups' | 'lists' | 'items'
-const DATA_STORES: DataStore[] = ['groups', 'lists', 'items']
+// An outbox entry as stored; its seq is the key.
+type StoredChange = Omit<OutboxEntry, 'seq'>
+
+type DataStore = 'groups' | 'lists' | 'items' | 'outbox'
+const DATA_STORES: DataStore[] = ['groups', 'lists', 'items', 'outbox']
 
 type DB = IDBPDatabase<Schema>
+type OutboxStore<Mode extends 'readonly' | 'readwrite'> = IDBPObjectStore<
+  Schema,
+  ('meta' | 'outbox')[],
+  'outbox',
+  Mode
+>
 
 function warn(action: string, err: unknown) {
   console.warn(`local data: ${action} failed`, err)
@@ -84,12 +107,20 @@ export function createLocalData(name = LOCAL_DATA_DB_NAME): LocalData {
 
   function db(): Promise<DB> {
     if (opening) return opening
-    const p = openDB<Schema>(name, DB_VERSION, {
-      upgrade(database) {
-        database.createObjectStore('meta')
-        database.createObjectStore('groups')
-        database.createObjectStore('lists')
-        database.createObjectStore('items')
+    const p = openDB<Schema>(name, LOCAL_DATA_DB_VERSION, {
+      // Runs for a new database (oldVersion 0) and for one of an older app
+      // version. Each step adds what its version brought, so an upgrade
+      // keeps the data of the steps before.
+      upgrade(database, oldVersion) {
+        if (oldVersion < 1) {
+          database.createObjectStore('meta')
+          database.createObjectStore('groups')
+          database.createObjectStore('lists')
+          database.createObjectStore('items')
+        }
+        if (oldVersion < 2) {
+          database.createObjectStore('outbox', { autoIncrement: true })
+        }
       },
       // Another tab wants a newer version (a new app version): close this
       // connection so it can upgrade. The next call opens the new version.
@@ -187,6 +218,25 @@ export function createLocalData(name = LOCAL_DATA_DB_NAME): LocalData {
     })
   }
 
+  // Runs fn in a transaction on the outbox if userId owns the storage, and
+  // answers fallback otherwise.
+  function onOutbox<T, Mode extends 'readonly' | 'readwrite'>(
+    action: string,
+    userId: string,
+    mode: Mode,
+    fallback: T,
+    fn: (outbox: OutboxStore<Mode>) => Promise<T>,
+  ): Promise<T> {
+    return safely(action, fallback, async (d) => {
+      const tx = d.transaction(['meta', 'outbox'], mode)
+      return inTx(tx, async () => {
+        const me = await tx.objectStore('meta').get(ME_KEY)
+        if (me?.id !== userId) return fallback
+        return fn(tx.objectStore('outbox'))
+      })
+    })
+  }
+
   return {
     readMe: () => safely('read me', null, async (d) => (await d.get('meta', ME_KEY)) ?? null),
 
@@ -215,6 +265,19 @@ export function createLocalData(name = LOCAL_DATA_DB_NAME): LocalData {
     readItems: (userId, listId) => read('items', userId, listId),
     writeItems: (userId, listId, items) => write('items', userId, listId, items),
     removeItems: (userId, listId) => write('items', userId, listId, undefined),
+
+    addOutbox(userId, change, queuedAt) {
+      const value: StoredChange = plain({ change, queuedAt })
+      return onOutbox('add outbox', userId, 'readwrite', null, (outbox) => outbox.add(value))
+    },
+    readOutbox: (userId) =>
+      onOutbox('read outbox', userId, 'readonly', null, async (outbox) => {
+        // Both answer in key order, so they pair up by index.
+        const [keys, values] = await Promise.all([outbox.getAllKeys(), outbox.getAll()])
+        return values.map((value, i) => ({ seq: keys[i]!, ...value }))
+      }),
+    removeOutbox: (userId, seq) =>
+      onOutbox('remove outbox', userId, 'readwrite', undefined, (outbox) => outbox.delete(seq)),
 
     clear: () =>
       safely('clear', undefined, async (d) => {

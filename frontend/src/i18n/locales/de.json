@@ -165,6 +165,7 @@
     "METHOD_NOT_ALLOWED": "Diese Aktion ist hier nicht möglich.",
     "NETWORK": "Der Server ist nicht erreichbar.",
     "NOT_FOUND": "Das gibt es nicht (mehr).",
+    "OUTBOX_EXPIRED": "Diese Änderung lag über 30 Tage ungesendet und wurde verworfen.",
     "OWNER_IMMUTABLE": "Die Gründer:in kann weder austreten noch die Rolle wechseln. Lösche stattdessen den Haushalt.",
     "TOO_MANY_GROUPS": "Du hast schon 10 Haushalte gegründet. Lösche einen, um einen neuen zu gründen.",
     "RATE_LIMITED": "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
