@@ -7,7 +7,9 @@ import { reactive } from 'vue'
 
 import type { Group, Item, List, MeResponse } from '@/types/api'
 
-import { createLocalData, type LocalData } from '../localData'
+import type { OutboxChange } from '@/services/sync/outbox'
+
+import { createLocalData, LOCAL_DATA_DB_VERSION, type LocalData } from '../localData'
 
 const ANNA = '0190a8c4-0000-7000-8000-00000000000a'
 const BEN = '0190a8c4-0000-7000-8000-00000000000b'
@@ -88,12 +90,17 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+function removal(itemId: string): OutboxChange {
+  return { kind: 'remove', itemId }
+}
+
 // Stores something in every store for Anna.
 async function fillForAnna() {
   await data.claim(me(ANNA))
   await data.writeGroups(ANNA, [group('Home')])
   await data.writeLists(ANNA, GROUP, [list('Weekly')])
   await data.writeItems(ANNA, LIST, [item('Milk')])
+  await data.addOutbox(ANNA, removal('a'), 1000)
 }
 
 describe('localData', () => {
@@ -102,6 +109,7 @@ describe('localData', () => {
     expect(await data.readGroups(ANNA)).toBeNull()
     expect(await data.readLists(ANNA, GROUP)).toBeNull()
     expect(await data.readItems(ANNA, LIST)).toBeNull()
+    expect(await data.readOutbox(ANNA)).toBeNull()
   })
 
   it('gives back what it stored for the owner', async () => {
@@ -111,6 +119,9 @@ describe('localData', () => {
     expect(await data.readGroups(ANNA)).toEqual([group('Home')])
     expect(await data.readLists(ANNA, GROUP)).toEqual([list('Weekly')])
     expect(await data.readItems(ANNA, LIST)).toEqual([item('Milk')])
+    expect(await data.readOutbox(ANNA)).toEqual([
+      { seq: expect.any(Number), change: removal('a'), queuedAt: 1000 },
+    ])
   })
 
   it('keeps it across connections, like after a reload', async () => {
@@ -119,6 +130,62 @@ describe('localData', () => {
     const later = createLocalData()
     expect(await later.readMe()).toEqual(me(ANNA))
     expect(await later.readItems(ANNA, LIST)).toEqual([item('Milk')])
+    expect((await later.readOutbox(ANNA))?.map((e) => e.change)).toEqual([removal('a')])
+  })
+
+  describe('outbox', () => {
+    it('keeps the changes in the order they were added', async () => {
+      await data.claim(me(ANNA))
+      const first = await data.addOutbox(ANNA, removal('a'), 3000)
+      const second = await data.addOutbox(ANNA, removal('b'), 1000)
+      const third = await data.addOutbox(ANNA, removal('c'), 2000)
+
+      expect(first).toBeLessThan(second!)
+      expect(second).toBeLessThan(third!)
+      expect((await data.readOutbox(ANNA))?.map((e) => e.change)).toEqual([
+        removal('a'),
+        removal('b'),
+        removal('c'),
+      ])
+    })
+
+    it('removes one change by its seq', async () => {
+      await data.claim(me(ANNA))
+      await data.addOutbox(ANNA, removal('a'), 1000)
+      const seq = await data.addOutbox(ANNA, removal('b'), 1000)
+      await data.addOutbox(ANNA, removal('c'), 1000)
+
+      await data.removeOutbox(ANNA, seq!)
+
+      expect((await data.readOutbox(ANNA))?.map((e) => e.change)).toEqual([
+        removal('a'),
+        removal('c'),
+      ])
+    })
+
+    it('stores a reactive change as plain data', async () => {
+      await data.claim(me(ANNA))
+      const change = reactive<OutboxChange>({ kind: 'removeChecked', listId: LIST, itemIds: ['a'] })
+
+      await data.addOutbox(ANNA, change, 1000)
+
+      expect((await data.readOutbox(ANNA))?.[0]?.change).toEqual({
+        kind: 'removeChecked',
+        listId: LIST,
+        itemIds: ['a'],
+      })
+    })
+
+    it('adds, reads and removes nothing for a user who is not the owner', async () => {
+      await fillForAnna()
+
+      expect(await data.addOutbox(BEN, removal('b'), 1000)).toBeNull()
+      expect(await data.readOutbox(BEN)).toBeNull()
+      const [entry] = (await data.readOutbox(ANNA))!
+      await data.removeOutbox(BEN, entry!.seq)
+
+      expect((await data.readOutbox(ANNA))?.map((e) => e.change)).toEqual([removal('a')])
+    })
   })
 
   it('replaces a whole state on write', async () => {
@@ -200,6 +267,7 @@ describe('localData', () => {
       expect(await data.readGroups(BEN)).toBeNull()
       expect(await data.readLists(BEN, GROUP)).toBeNull()
       expect(await data.readItems(BEN, LIST)).toBeNull()
+      expect(await data.readOutbox(BEN)).toEqual([])
     })
 
     it('reads nothing for a user who is not the owner', async () => {
@@ -241,14 +309,38 @@ describe('localData', () => {
     expect(await data.readGroups(ANNA)).toBeNull()
     expect(await data.readLists(ANNA, GROUP)).toBeNull()
     expect(await data.readItems(ANNA, LIST)).toBeNull()
+    expect(await data.readOutbox(ANNA)).toEqual([])
+  })
+
+  it('upgrades a database of version 1 and keeps its data', async () => {
+    // What the app before the outbox stored.
+    const old = indexedDB.open('mitbringsel', 1)
+    old.onupgradeneeded = () => {
+      for (const store of ['meta', 'groups', 'lists', 'items']) old.result.createObjectStore(store)
+      const tx = old.transaction!
+      tx.objectStore('meta').put(me(ANNA), 'me')
+      tx.objectStore('items').put([item('Milk')], LIST)
+    }
+    await new Promise<void>((resolve, reject) => {
+      old.onsuccess = () => {
+        old.result.close()
+        resolve()
+      }
+      old.onerror = () => reject(old.error)
+    })
+
+    expect(await data.readItems(ANNA, LIST)).toEqual([item('Milk')])
+    expect(await data.readOutbox(ANNA)).toEqual([])
+    await data.addOutbox(ANNA, removal('a'), 1000)
+    expect((await data.readOutbox(ANNA))?.map((e) => e.change)).toEqual([removal('a')])
   })
 
   it('closes its connection when a newer version waits, and opens again', async () => {
     await fillForAnna()
 
-    // Another tab with a newer app opens version 2. It only gets through
-    // if this connection closes.
-    const newer = indexedDB.open('mitbringsel', 2)
+    // Another tab with a newer app opens the next version. It only gets
+    // through if this connection closes.
+    const newer = indexedDB.open('mitbringsel', LOCAL_DATA_DB_VERSION + 1)
     await new Promise<void>((resolve, reject) => {
       newer.onsuccess = () => {
         newer.result.close()
@@ -258,7 +350,7 @@ describe('localData', () => {
     })
 
     // The next call opens a new connection instead of using the closed one.
-    // Version 1 is older than the database now, so this fails and warns.
+    // Our version is older than the database now, so this fails and warns.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(await data.readMe()).toBeNull()
     expect(warn).toHaveBeenCalledWith('local data: read me failed', expect.anything())
