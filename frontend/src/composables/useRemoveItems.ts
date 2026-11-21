@@ -10,12 +10,15 @@ import { useToastsStore } from '@/stores/toasts'
  * a list (design "markt2-erledigt-entfernen") or one item from its form.
  * The items disappear at once and a toast offers "Undo". The toast's clock
  * decides: undo shows the items again, every other end of the toast (time
- * out, closed, pushed out by a newer one) sends the removal. So hovering the
- * toast also holds the removal back, as undo must work as long as it is
+ * out, closed, pushed out by a newer one) commits the removal. So hovering
+ * the toast also holds the removal back, as undo must work as long as it is
  * offered.
  *
+ * Removing one item puts it into the outbox; a refusal reaches
+ * useItemRejections. Removing checked items still sends directly (#133).
+ *
  * The removal belongs to the stores, not to the view: leaving the list
- * before the toast ends still sends it.
+ * before the toast ends still commits it.
  */
 export function useRemoveItems() {
   const { t } = useI18n()
@@ -37,7 +40,7 @@ export function useRemoveItems() {
 
   // `fromKeyboard` moves the focus to "Undo" in the toast, as a keyboard
   // user would otherwise have to search for it.
-  function offerUndo(removal: PendingRemoval, failedText: string, fromKeyboard: boolean) {
+  function offerUndo(removal: PendingRemoval, fromKeyboard: boolean, commit: () => void) {
     const [only] = removal.items
     const count = removal.items.length
     toasts.show({
@@ -50,23 +53,22 @@ export function useRemoveItems() {
           : t('list.done.removed', { count }),
       actionLabel: t('list.done.undo'),
       focusAction: fromKeyboard,
-      onEnd: (reason) => (reason === 'action' ? removal.undo() : void send(removal, failedText)),
+      onEnd: (reason) => (reason === 'action' ? removal.undo() : commit()),
     })
   }
 
   /** Removes the checked items of the list; nothing happens without any. */
   function removeChecked(listId: string, fromKeyboard = false) {
     const removal = items.startRemovingChecked(listId)
-    if (removal) offerUndo(removal, t('list.done.removeFailed'), fromKeyboard)
+    if (removal) {
+      offerUndo(removal, fromKeyboard, () => void send(removal, t('list.done.removeFailed')))
+    }
   }
 
   /** Removes one item, open or checked; nothing happens if it is gone. */
   function removeItem(itemId: string, fromKeyboard = false) {
     const removal = items.startRemovingItem(itemId)
-    const name = removal?.items[0]?.name
-    if (removal && name !== undefined) {
-      offerUndo(removal, t('list.itemForm.removeFailed', { name }), fromKeyboard)
-    }
+    if (removal) offerUndo(removal, fromKeyboard, () => void removal.commit())
   }
 
   return { removeChecked, removeItem }

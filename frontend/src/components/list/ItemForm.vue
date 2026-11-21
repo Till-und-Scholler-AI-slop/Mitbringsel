@@ -36,23 +36,13 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const {
-  name,
-  quantity,
-  unit,
-  note,
-  nameError,
-  quantityError,
-  noteError,
-  formError,
-  submitting,
-  submit,
-} = useItemForm({
-  open: () => props.open,
-  listId: () => props.listId,
-  initialName: () => props.initialName,
-  item: () => props.item,
-})
+const { name, quantity, unit, note, nameError, quantityError, noteError, submitting, submit } =
+  useItemForm({
+    open: () => props.open,
+    listId: () => props.listId,
+    initialName: () => props.initialName,
+    item: () => props.item,
+  })
 
 const meta = computed(() => {
   if (!props.item) return t('list.itemForm.newIn', { list: props.listName })
@@ -96,10 +86,6 @@ async function onSubmit() {
       :placeholder="t('list.itemForm.notePlaceholder')"
       :error="noteError"
     />
-    <p v-if="formError" class="failed" role="alert">
-      <BaseIcon name="alert" :size="18" />
-      <span>{{ formError }}</span>
-    </p>
     <div v-if="item" class="actions">
       <BaseButton variant="danger" class="remove" @click="onRemove">
         <BaseIcon name="trash" :size="18" />
@@ -137,16 +123,6 @@ async function onSubmit() {
   color: var(--color-qty-text);
   font-size: 0.8125rem;
   line-height: 1.125rem;
-  font-weight: var(--font-weight-bold);
-}
-
-.failed {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--color-danger-text);
-  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
 }
 

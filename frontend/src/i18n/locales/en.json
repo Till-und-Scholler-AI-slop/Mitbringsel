@@ -216,7 +216,12 @@
       "title": "Nothing on the list yet",
       "description": "Everything you want to buy will show up here."
     },
-    "checkFailed": "Checking the item did not work.",
+    "rejected": {
+      "create": "“{name}” could not be added.",
+      "update": "The change to “{name}” was not saved.",
+      "check": "The check mark on “{name}” was not saved.",
+      "remove": "“{name}” could not be deleted."
+    },
     "row": {
       "edit": "Edit {name}",
       "editHint": "Edit",
@@ -246,8 +251,7 @@
       "label": "Add item",
       "placeholder": "What do we need?",
       "enterHint": "Enter ↵",
-      "details": "Add with details",
-      "failed": "“{name}” could not be added"
+      "details": "Add with details"
     },
     "itemForm": {
       "newTitle": "New item",
@@ -269,7 +273,6 @@
       "by": "By {name} · {list}",
       "save": "Save",
       "remove": "Delete",
-      "removeFailed": "“{name}” could not be deleted.",
       "deletedMeanwhile": "“{name}” was deleted"
     },
     "noLists": {
