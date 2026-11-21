@@ -143,6 +143,14 @@
       "body": "Signing in isn’t possible without internet. As soon as you’re back online, you can sign in."
     }
   },
+  "logout": {
+    "confirm": {
+      "title": "Sign out?",
+      "body": "{count} change has not reached the server yet. If you sign out now, it will be lost. | {count} changes have not reached the server yet. If you sign out now, they will be lost.",
+      "confirm": "Sign out anyway",
+      "cancel": "Cancel"
+    }
+  },
   "language": {
     "label": "Language"
   },

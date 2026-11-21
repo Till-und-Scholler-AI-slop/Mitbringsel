@@ -6,6 +6,7 @@ import { RouterLink } from 'vue-router'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSticker from '@/components/base/BaseSticker.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
+import LogoutConfirmDialog from '@/components/layout/LogoutConfirmDialog.vue'
 import ProfileMenu from '@/components/start/ProfileMenu.vue'
 import SyncStatus from '@/components/layout/SyncStatus.vue'
 import { useLogout } from '@/composables/useLogout'
@@ -28,7 +29,13 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const groups = useGroupsStore()
 const lists = useListsStore()
-const logout = useLogout()
+const {
+  logout,
+  confirmOpen: logoutConfirmOpen,
+  pendingCount,
+  busy: loggingOut,
+  confirmLogout,
+} = useLogout()
 const listHintId = useId()
 
 const current = computed(() => (props.groupId ? groups.byId(props.groupId) : undefined))
@@ -117,6 +124,13 @@ function onListKeydown(event: KeyboardEvent, list: List) {
         @logout="logout"
       />
     </div>
+
+    <LogoutConfirmDialog
+      v-model:open="logoutConfirmOpen"
+      :pending-count="pendingCount"
+      :loading="loggingOut"
+      @confirm="confirmLogout"
+    />
   </nav>
 </template>
 

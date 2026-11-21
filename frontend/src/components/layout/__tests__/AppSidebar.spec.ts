@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -7,6 +7,7 @@ import { createAppI18n } from '@/i18n'
 import type { AuthService } from '@/services/api/auth'
 import type { GroupsService } from '@/services/api/groups'
 import type { ListsService } from '@/services/api/lists'
+import { localData } from '@/services/storage/localData'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import { useListsStore } from '@/stores/lists'
@@ -86,6 +87,13 @@ function list(id: string, name: string, archivedAt: string | null = null): List 
 beforeEach(async () => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+  }
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.removeAttribute('open')
+    this.dispatchEvent(new Event('close'))
+  }
   authService.getMe.mockResolvedValue({
     id: 'u1',
     email: 'lena@example.com',
@@ -104,6 +112,10 @@ beforeEach(async () => {
   await useAuthStore().load()
   await useGroupsStore().load()
   await useListsStore().load('g1')
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 async function mountSidebar(props: { groupId?: string; listId?: string } = {}) {
@@ -196,6 +208,40 @@ describe('AppSidebar', () => {
 
     await wrapper.get('.profile .toggle').trigger('click')
     await wrapper.get('.profile .panel button').trigger('click')
+    await flushPromises()
+
+    expect(authService.logout).toHaveBeenCalledTimes(1)
+    expect(router.currentRoute.value.name).toBe('login')
+    wrapper.unmount()
+  })
+
+  it('asks before signing out when the outbox has pending changes', async () => {
+    vi.spyOn(localData, 'readOutbox').mockResolvedValue([
+      { seq: 1, queuedAt: 1, change: { kind: 'remove', itemId: 'i1' } },
+      { seq: 2, queuedAt: 2, change: { kind: 'remove', itemId: 'i2' } },
+    ])
+    const { wrapper, router } = await mountSidebar()
+
+    await wrapper.get('.profile .toggle').trigger('click')
+    await wrapper.get('.profile .panel button').trigger('click')
+    await flushPromises()
+
+    expect(authService.logout).not.toHaveBeenCalled()
+    const dialog = wrapper.get('dialog[open]')
+    expect(dialog.get('h2').text()).toBe('Sign out?')
+    expect(dialog.get('.message-text').text()).toBe(
+      '2 changes have not reached the server yet. If you sign out now, they will be lost.',
+    )
+
+    await dialog.get('.cancel').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(authService.logout).not.toHaveBeenCalled()
+
+    await wrapper.get('.profile .toggle').trigger('click')
+    await wrapper.get('.profile .panel button').trigger('click')
+    await flushPromises()
+    await wrapper.get('dialog[open] .confirm').trigger('click')
     await flushPromises()
 
     expect(authService.logout).toHaveBeenCalledTimes(1)

@@ -7,6 +7,7 @@ import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import AppFrame from '@/components/layout/AppFrame.vue'
+import LogoutConfirmDialog from '@/components/layout/LogoutConfirmDialog.vue'
 import SyncStatus from '@/components/layout/SyncStatus.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import GroupCard from '@/components/start/GroupCard.vue'
@@ -37,7 +38,13 @@ const loading = computed(() => groups.status === 'loading' && groups.groups.leng
 const failed = computed(() => groups.status === 'error' && groups.groups.length === 0)
 const empty = computed(() => groups.status === 'ready' && groups.groups.length === 0)
 
-const logout = useLogout()
+const {
+  logout,
+  confirmOpen: logoutConfirmOpen,
+  pendingCount,
+  busy: loggingOut,
+  confirmLogout,
+} = useLogout()
 
 onMounted(() => groups.load())
 
@@ -134,6 +141,12 @@ watch(online, (isOnline) => {
 
       <CreateGroupDialog v-model:open="createOpen" />
       <JoinGroupDialog v-model:open="joinOpen" />
+      <LogoutConfirmDialog
+        v-model:open="logoutConfirmOpen"
+        :pending-count="pendingCount"
+        :loading="loggingOut"
+        @confirm="confirmLogout"
+      />
     </div>
   </AppFrame>
 </template>

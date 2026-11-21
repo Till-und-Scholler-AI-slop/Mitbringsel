@@ -143,6 +143,14 @@
       "body": "Ohne Internet ist die Anmeldung gerade nicht möglich. Sobald du wieder online bist, kannst du dich anmelden."
     }
   },
+  "logout": {
+    "confirm": {
+      "title": "Abmelden?",
+      "body": "{count} Änderung ist noch nicht beim Server angekommen. Wenn du dich jetzt abmeldest, geht sie verloren. | {count} Änderungen sind noch nicht beim Server angekommen. Wenn du dich jetzt abmeldest, gehen sie verloren.",
+      "confirm": "Trotzdem abmelden",
+      "cancel": "Abbrechen"
+    }
+  },
   "language": {
     "label": "Sprache"
   },
