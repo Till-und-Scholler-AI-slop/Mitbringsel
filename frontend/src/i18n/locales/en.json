@@ -460,7 +460,8 @@
     "label": "Navigation",
     "start": "Start",
     "households": "Households",
-    "lists": "Lists of {name}"
+    "lists": "Lists of {name}",
+    "listActionsHint": "Right-click or press Context Menu (Shift+F10) to edit, archive or delete"
   },
   "sync": {
     "synced": "Synced",

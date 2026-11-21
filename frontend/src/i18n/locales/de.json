@@ -460,7 +460,8 @@
     "label": "Navigation",
     "start": "Start",
     "households": "Haushalte",
-    "lists": "Listen von {name}"
+    "lists": "Listen von {name}",
+    "listActionsHint": "Rechtsklick oder Kontextmenütaste (Umschalt+F10) zum Bearbeiten, Archivieren oder Löschen"
   },
   "sync": {
     "synced": "Synchron",

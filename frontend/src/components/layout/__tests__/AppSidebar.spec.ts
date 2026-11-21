@@ -202,4 +202,68 @@ describe('AppSidebar', () => {
     expect(router.currentRoute.value.name).toBe('login')
     wrapper.unmount()
   })
+
+  it('opens list actions on right click without navigating and suppresses the browser menu', async () => {
+    const { wrapper, router } = await mountSidebar({ groupId: 'g1', listId: 'l2' })
+    await router.push('/groups/g1/lists/l2')
+    const firstLink = wrapper.get('.lists').findAll('a')[0]!
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    firstLink.element.dispatchEvent(event)
+    await flushPromises()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(wrapper.emitted('listActions')).toEqual([[expect.objectContaining({ id: 'l1' })]])
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l2')
+    wrapper.unmount()
+  })
+
+  it.each([
+    { name: 'ContextMenu key', init: { key: 'ContextMenu' } },
+    { name: 'Shift+F10', init: { key: 'F10', shiftKey: true } },
+  ])('opens list actions via keyboard ($name) and prevents the browser menu', async ({ init }) => {
+    const { wrapper, router } = await mountSidebar({ groupId: 'g1', listId: 'l2' })
+    await router.push('/groups/g1/lists/l2')
+    const secondLink = wrapper.get('.lists').findAll('a')[1]!
+
+    const event = new KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true })
+    secondLink.element.dispatchEvent(event)
+    await flushPromises()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(wrapper.emitted('listActions')).toEqual([[expect.objectContaining({ id: 'l2' })]])
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l2')
+    wrapper.unmount()
+  })
+
+  it('ignores other keys and navigates on normal click', async () => {
+    const { wrapper, router } = await mountSidebar({ groupId: 'g1', listId: 'l2' })
+    await router.push('/groups/g1/lists/l2')
+    const firstLink = wrapper.get('.lists').findAll('a')[0]!
+
+    await firstLink.trigger('keydown', { key: 'F10' })
+    await firstLink.trigger('keydown', { key: 'F10', shiftKey: true, ctrlKey: true })
+    await firstLink.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('listActions')).toBeUndefined()
+
+    await firstLink.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('listActions')).toBeUndefined()
+    expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l1')
+    wrapper.unmount()
+  })
+
+  it('tells screen readers how to open list actions on every sidebar list entry', async () => {
+    const { wrapper } = await mountSidebar({ groupId: 'g1', listId: 'l2' })
+    const links = wrapper.get('.lists').findAll('a')
+
+    const describedByIds = links.map((l) => l.attributes('aria-describedby'))
+    expect(describedByIds[0]).toBeTruthy()
+    expect(describedByIds[1]).toBe(describedByIds[0])
+    expect(wrapper.get(`#${describedByIds[0]}`).text()).toBe(
+      'Right-click or press Context Menu (Shift+F10) to edit, archive or delete',
+    )
+    wrapper.unmount()
+  })
 })

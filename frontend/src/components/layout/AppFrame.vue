@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppToasts from '@/components/layout/AppToasts.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
-import type { Group } from '@/types/api'
+import type { Group, List } from '@/types/api'
 
 // The frame of the start page and the list view. From 48rem on the sidebar
 // stands left of the page; below, the page brings its own green header and
@@ -14,6 +14,7 @@ import type { Group } from '@/types/api'
 // bottomBar: the page keeps a bar at the bottom of the phone screen (the
 // quick-add bar of the list view); the toasts move above it.
 defineProps<{ groupId?: string; listId?: string; bottomBar?: boolean }>()
+const emit = defineEmits<{ listActions: [list: List] }>()
 
 const router = useRouter()
 const createOpen = ref(false)
@@ -31,6 +32,7 @@ function openCreated(group: Group) {
         :group-id="groupId"
         :list-id="listId"
         @create="createOpen = true"
+        @list-actions="emit('listActions', $event)"
       />
     </div>
     <div class="page">

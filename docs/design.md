@@ -25,7 +25,7 @@ Das visuelle Design entsteht in Claude Design. Gewählt ist die Richtung „Mark
 Es gibt keinen eigenen Screen mit der Listenübersicht eines Haushalts. Wer einen Haushalt öffnet, landet direkt in einer Liste: in der zuletzt geöffneten (pro Gerät gemerkt), sonst in der ersten aktiven. Hat der Haushalt keine Liste, zeigt die Listenansicht einen Leerzustand mit „Liste anlegen“.
 
 - **Listen wechseln:** über die Chips im Kopf der Listenansicht.
-- **Listen-Aktionen** (umbenennen, archivieren, löschen): Chip gedrückt halten (Touch), Rechtsklick (Maus) oder den schon aktiven Chip noch einmal antippen bzw. mit Enter auslösen (Tastatur, Screenreader).
+- **Listen-Aktionen** (umbenennen, archivieren, löschen): Chip gedrückt halten (Touch), Rechtsklick (Maus) oder den schon aktiven Chip noch einmal antippen bzw. mit Enter auslösen (Tastatur, Screenreader). Auf dem Desktop öffnen sie sich ebenso über Rechtsklick oder die Kontextmenütaste (`Umschalt+F10`) auf einem Listeneintrag in der Seitenleiste.
 - **Archivierte Listen:** ein Chip „Archiv (n)“ am Ende der Chip-Reihe.
 - **Haushalt wechseln:** Wechsler-Menü am Haushaltsnamen im Kopf der Listenansicht (`start-4-wechsler`). Es enthält die Haushalte, „Haushalt verwalten“, „Haushalt gründen“, „Einladungslink einfügen“ und „Alle Haushalte“.
 - **Haushalt verwalten:** eigener Screen (`verwalten-*`), erreichbar über das Wechsler-Menü und auf dem Desktop über die Seitenleiste. Die Karten der Startseite haben kein Zahnrad.
