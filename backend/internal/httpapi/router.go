@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,6 +58,9 @@ type Deps struct {
 	ItemClock ItemClock
 	// Hub holds the live connections of /api/v1/ws.
 	Hub *realtime.Hub
+	// WSHandlers tracks active WebSocket handlers so server shutdown can wait
+	// until they have written their close frames. Optional; nil skips tracking.
+	WSHandlers *sync.WaitGroup
 	// PublicBaseURL is where browsers reach the app. Live connections are
 	// only accepted from pages of its host.
 	PublicBaseURL string
@@ -134,7 +138,7 @@ func newRouter(deps Deps, ws wsConfig) http.Handler {
 	// learns nothing about whether the visitor is logged in. The limit comes
 	// after requireUser because it counts per user.
 	r.handle(http.MethodGet, wsPath, requireOrigin(deps.PublicBaseURL)(protect(wsLimit(
-		wsHandler(deps.Hub, deps.Groups, deps.PublicBaseURL, newWSHandlers(), ws)))))
+		wsHandler(deps.Hub, deps.Groups, deps.PublicBaseURL, newWSHandlers(), ws, deps.WSHandlers)))))
 	// Not behind requireUser: the page behind an invite link shows the
 	// invitation before the visitor has signed in. The token is the secret.
 	r.handle(http.MethodGet, invitePath, previewLimit(previewInviteHandler(deps.Invites)))

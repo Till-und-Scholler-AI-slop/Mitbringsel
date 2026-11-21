@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -112,6 +113,7 @@ func run() error {
 		slog.Info("google login disabled: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are not set")
 	}
 
+	var wsHandlers sync.WaitGroup
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Deps{
@@ -125,6 +127,7 @@ func run() error {
 			Items:         items,
 			ItemClock:     itemClock,
 			Hub:           hub,
+			WSHandlers:    &wsHandlers,
 			PublicBaseURL: cfg.PublicBaseURL,
 			Google:        google,
 		}),
@@ -167,17 +170,46 @@ func run() error {
 		slog.Info("shutdown signal received")
 	}
 
-	// Give in-flight requests time to finish, but not forever.
+	// Give in-flight requests and active WebSocket close frames time to
+	// finish, but not forever.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("shutdown: %w", err)
+	if err := shutdownServer(shutdownCtx, srv, &wsHandlers); err != nil {
+		return err
 	}
 	// ctx is cancelled, so the cleanup ends quickly; waiting keeps it from
 	// running a query while the deferred pool.Close shuts the pool.
 	<-cleanupDone
 	return nil
+}
+
+// shutdownServer stops accepting new connections, waits for in-flight HTTP
+// requests, and then waits for active WebSocket handlers to finish writing
+// their close frames within ctx.
+func shutdownServer(ctx context.Context, srv *http.Server, wsHandlers *sync.WaitGroup) error {
+	if err := srv.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+	if err := waitWithContext(ctx, wsHandlers); err != nil {
+		return fmt.Errorf("wait for websocket handlers: %w", err)
+	}
+	return nil
+}
+
+// waitWithContext waits until wg finishes or ctx expires.
+func waitWithContext(ctx context.Context, wg *sync.WaitGroup) error {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // newItemClock returns the clock for item changes made over REST. Its node
