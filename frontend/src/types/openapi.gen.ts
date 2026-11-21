@@ -813,6 +813,13 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             expiresAt: string;
+            /**
+             * Format: uuid
+             * @description User ID of the creator, so a client can tell its own links
+             *     apart: names are not unique. null if the creator deleted their
+             *     account.
+             */
+            createdBy: string | null;
             /** @description null if the creator deleted their account. */
             createdByName: string | null;
         };

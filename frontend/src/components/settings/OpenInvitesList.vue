@@ -9,6 +9,7 @@ import OpenInviteRow from '@/components/settings/OpenInviteRow.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { MAX_OPEN_INVITES } from '@/services/inviteLink'
+import { useAuthStore } from '@/stores/auth'
 import { useGroupInvitesStore } from '@/stores/groupInvites'
 
 // The parent loads the links; this shows them and revokes.
@@ -18,6 +19,7 @@ const emit = defineEmits<{ revoked: [] }>()
 
 const { t } = useI18n()
 const invites = useGroupInvitesStore()
+const auth = useAuthStore()
 const loadError = useErrorMessage(() => invites.errorCode)
 
 const revoking = ref<string | null>(null)
@@ -74,6 +76,7 @@ async function revoke(inviteId: string) {
         v-for="invite in invites.invites"
         :key="invite.id"
         :invite="invite"
+        :is-mine="invite.createdBy !== null && invite.createdBy === auth.user?.id"
         :busy="revoking === invite.id"
         :error="revokeFailed?.id === invite.id ? revokeFailedMessage : null"
         @revoke="revoke(invite.id)"

@@ -7,8 +7,14 @@ import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import { timeAgo, timeLeft } from '@/services/relativeTime'
 import type { Invite } from '@/types/api'
 
-// busy: the revoke request of this link is running. error: its message, if it failed.
-const props = defineProps<{ invite: Invite; busy: boolean; error: string | null }>()
+// isMine: the signed-in user made the link. busy: the revoke request of this
+// link is running. error: its message, if it failed.
+const props = defineProps<{
+  invite: Invite
+  isMine: boolean
+  busy: boolean
+  error: string | null
+}>()
 defineEmits<{ revoke: [] }>()
 
 const { t, locale } = useI18n()
@@ -16,11 +22,12 @@ const { t, locale } = useI18n()
 // Taken when the row is drawn; the text does not tick on its own.
 const now = new Date()
 
-const createdBy = computed(() =>
-  props.invite.createdByName === null
+const createdBy = computed(() => {
+  if (props.isMine) return t('settings.invites.open.createdByYou')
+  return props.invite.createdByName === null
     ? t('settings.invites.open.createdByUnknown')
-    : t('settings.invites.open.createdBy', { name: props.invite.createdByName }),
-)
+    : t('settings.invites.open.createdBy', { name: props.invite.createdByName })
+})
 
 const details = computed(() => {
   const left = timeLeft(new Date(props.invite.expiresAt), now)
