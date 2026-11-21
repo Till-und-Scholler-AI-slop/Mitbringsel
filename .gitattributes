@@ -1,0 +1,4 @@
+# Mark generated code so GitHub excludes it from language statistics and collapses it in diffs.
+frontend/src/types/openapi.gen.ts linguist-generated=true
+backend/internal/httpapi/apigen/** linguist-generated=true
+backend/internal/platform/db/sqlcgen/** linguist-generated=true
