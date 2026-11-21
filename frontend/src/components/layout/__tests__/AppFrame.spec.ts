@@ -5,21 +5,37 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createAppI18n } from '@/i18n'
 import type { GroupsService } from '@/services/api/groups'
+import type { ListsService } from '@/services/api/lists'
+import { useGroupsStore } from '@/stores/groups'
+import { useListsStore } from '@/stores/lists'
 
 import AppFrame from '../AppFrame.vue'
 
-const groupsService = vi.hoisted(() => ({
-  list: vi.fn<GroupsService['list']>(),
-  create: vi.fn<GroupsService['create']>(),
-  rename: vi.fn<GroupsService['rename']>(),
-  remove: vi.fn<GroupsService['remove']>(),
-  removeMember: vi.fn<GroupsService['removeMember']>(),
-  setMemberRole: vi.fn<GroupsService['setMemberRole']>(),
+const { groupsService, listsService } = vi.hoisted(() => ({
+  groupsService: {
+    list: vi.fn<GroupsService['list']>(),
+    create: vi.fn<GroupsService['create']>(),
+    rename: vi.fn<GroupsService['rename']>(),
+    remove: vi.fn<GroupsService['remove']>(),
+    removeMember: vi.fn<GroupsService['removeMember']>(),
+    setMemberRole: vi.fn<GroupsService['setMemberRole']>(),
+  },
+  listsService: {
+    list: vi.fn<ListsService['list']>(),
+    create: vi.fn<ListsService['create']>(),
+    update: vi.fn<ListsService['update']>(),
+    setArchived: vi.fn<ListsService['setArchived']>(),
+    remove: vi.fn<ListsService['remove']>(),
+  },
 }))
 
 vi.mock('@/stores/groups', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/groups')>()
   return { ...original, useGroupsStore: original.defineGroupsStore(groupsService, () => 'u1') }
+})
+vi.mock('@/stores/lists', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/stores/lists')>()
+  return { ...original, useListsStore: original.defineListsStore(listsService, () => 'u1') }
 })
 
 beforeEach(() => {
@@ -34,16 +50,18 @@ beforeEach(() => {
   }
 })
 
-async function mountFrame() {
+async function mountFrame(props: { groupId?: string; listId?: string } = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'home', component: { template: '<p />' } },
       { path: '/groups/:groupId', name: 'group', component: { template: '<p />' } },
+      { path: '/groups/:groupId/lists/:listId', name: 'list', component: { template: '<p />' } },
     ],
   })
   await router.push('/')
   const wrapper = mount(AppFrame, {
+    props,
     slots: { default: '<p class="content">Page</p>' },
     global: { plugins: [createAppI18n(['en'], null), router] },
     attachTo: document.body,
@@ -78,6 +96,39 @@ describe('AppFrame', () => {
 
     expect(groupsService.create).toHaveBeenCalledWith('Familie')
     expect(router.currentRoute.value.fullPath).toBe('/groups/g9')
+    wrapper.unmount()
+  })
+
+  it('forwards listActions from the sidebar', async () => {
+    groupsService.list.mockResolvedValue([
+      {
+        id: 'g1',
+        name: 'WG',
+        role: 'owner',
+        members: [],
+        createdAt: '2026-01-01T10:00:00Z',
+        updatedAt: '2026-01-01T10:00:00Z',
+      },
+    ])
+    listsService.list.mockResolvedValue([
+      {
+        id: 'l1',
+        groupId: 'g1',
+        name: 'Supermarkt',
+        icon: 'supermarket',
+        archivedAt: null,
+        createdAt: '2026-01-01T10:00:00Z',
+        updatedAt: '2026-01-01T10:00:00Z',
+        serverSeq: 1,
+      },
+    ])
+    await useGroupsStore().load()
+    await useListsStore().load('g1')
+    const { wrapper } = await mountFrame({ groupId: 'g1', listId: 'l1' })
+
+    await wrapper.get('.side .lists a').trigger('contextmenu')
+
+    expect(wrapper.emitted('listActions')).toEqual([[expect.objectContaining({ id: 'l1' })]])
     wrapper.unmount()
   })
 })

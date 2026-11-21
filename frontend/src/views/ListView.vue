@@ -125,7 +125,12 @@ function openCreated(created: List) {
 </script>
 
 <template>
-  <AppFrame :group-id="groupId" :list-id="listId" :bottom-bar="list !== undefined">
+  <AppFrame
+    :group-id="groupId"
+    :list-id="listId"
+    :bottom-bar="list !== undefined"
+    @list-actions="actionsId = $event.id"
+  >
     <div class="page">
       <div class="column">
         <ListHeader :group="group">

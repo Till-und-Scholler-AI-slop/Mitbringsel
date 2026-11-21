@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
@@ -12,23 +12,36 @@ import { useLogout } from '@/composables/useLogout'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import { useListsStore } from '@/stores/lists'
+import type { List } from '@/types/api'
 
 // The green navigation on the left of the desktop layout: start, the
 // households, the lists of the open household, founding one, the profile.
 //
-// groupId, listId: what is open; neither on the start page. The dialog for
-// founding belongs to the parent, so it stays when the sidebar is hidden.
+// groupId, listId: what is open; neither on the start page. The dialogs for
+// founding and list actions belong to the parents, so they stay open when the
+// sidebar is hidden. List actions open on right click or the context menu key
+// (ContextMenu / Shift+F10) on a list entry; normal clicks navigate as usual.
 const props = defineProps<{ groupId?: string; listId?: string }>()
-const emit = defineEmits<{ create: [] }>()
+const emit = defineEmits<{ create: []; listActions: [list: List] }>()
 
 const { t } = useI18n()
 const auth = useAuthStore()
 const groups = useGroupsStore()
 const lists = useListsStore()
 const logout = useLogout()
+const listHintId = useId()
 
 const current = computed(() => (props.groupId ? groups.byId(props.groupId) : undefined))
 const currentLists = computed(() => (props.groupId ? lists.activeLists(props.groupId) : []))
+
+function onListKeydown(event: KeyboardEvent, list: List) {
+  if (event.ctrlKey || event.altKey || event.metaKey) return
+  const isContextKey =
+    (event.key === 'ContextMenu' && !event.shiftKey) || (event.key === 'F10' && event.shiftKey)
+  if (!isContextKey) return
+  event.preventDefault()
+  emit('listActions', list)
+}
 </script>
 
 <template>
@@ -71,6 +84,9 @@ const currentLists = computed(() => (props.groupId ? lists.activeLists(props.gro
                 :class="['list', { 'list--current': list.id === listId }]"
                 :to="{ name: 'list', params: { groupId: group.id, listId: list.id } }"
                 :aria-current="list.id === listId ? 'page' : undefined"
+                :aria-describedby="listHintId"
+                @contextmenu.prevent="emit('listActions', list)"
+                @keydown="onListKeydown($event, list)"
               >
                 <!-- 40 px: its art is about as large as the 32 px dot in the design. -->
                 <BaseSticker :icon="list.icon" :size="40" />
@@ -80,6 +96,9 @@ const currentLists = computed(() => (props.groupId ? lists.activeLists(props.gro
           </ul>
         </li>
       </ul>
+      <span v-if="currentLists.length > 0" :id="listHintId" class="sr-only">{{
+        t('nav.listActionsHint')
+      }}</span>
 
       <button type="button" class="create" aria-haspopup="dialog" @click="emit('create')">
         <BaseIcon name="plus" :size="18" :stroke-width="2.75" /> {{ t('start.create.open') }}

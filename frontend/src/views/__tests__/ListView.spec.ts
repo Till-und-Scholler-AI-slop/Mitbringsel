@@ -565,6 +565,76 @@ describe('ListView: list actions', () => {
     expect(wrapper.findAll('dialog[open] a').map((a) => a.text())).toEqual(['Grillparty'])
     wrapper.unmount()
   })
+
+  it('opens list actions from the sidebar on right click and renames the list', async () => {
+    listsService.update.mockResolvedValue(list('l2', 'Gartencenter'))
+    const { wrapper } = await mountView()
+
+    await wrapper.findAll('.side .lists a')[1]!.trigger('contextmenu')
+    expect(wrapper.get('dialog[open] .question').text()).toBe('What should happen to “Baumarkt”?')
+    // Member role: delete is hidden just as from the chips.
+    expect(actionButton(wrapper, 'Delete')).toBeUndefined()
+
+    await actionButton(wrapper, 'Edit').trigger('click')
+    await wrapper.get('dialog[open] input').setValue('Gartencenter')
+    await wrapper.get('dialog[open] form').trigger('submit')
+    await flushPromises()
+
+    expect(listsService.update).toHaveBeenCalledWith('l2', 'Gartencenter', 'general')
+    expect(wrapper.findAll('.side .lists a').map((a) => a.text())).toEqual([
+      'Supermarkt',
+      'Gartencenter',
+    ])
+    expect(wrapper.findAll('.chip-name').map((e) => e.text())).toEqual([
+      'Supermarkt',
+      'Gartencenter',
+    ])
+    wrapper.unmount()
+  })
+
+  it('opens list actions from the sidebar via context menu key and archives the list', async () => {
+    listsService.setArchived.mockResolvedValue(list('l2', 'Baumarkt', '2026-02-01T10:00:00Z'))
+    const { wrapper } = await mountView()
+
+    await wrapper.findAll('.side .lists a')[1]!.trigger('keydown', { key: 'ContextMenu' })
+    expect(wrapper.get('dialog[open] .question').text()).toBe('What should happen to “Baumarkt”?')
+
+    await actionButton(wrapper, 'Archive').trigger('click')
+    await flushPromises()
+
+    expect(listsService.setArchived).toHaveBeenCalledWith('l2', true)
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(wrapper.findAll('.side .lists a').map((a) => a.text())).toEqual(['Supermarkt'])
+    expect(wrapper.get('.chip--archive').text()).toBe('Archive (1)')
+    wrapper.unmount()
+  })
+
+  it('deletes the open list from the sidebar via Shift+F10 and moves to the next active list', async () => {
+    groupsService.list.mockResolvedValue([{ ...GROUP, role: 'owner' }])
+    listsService.remove.mockResolvedValue(undefined)
+    const { wrapper, router } = await mountView()
+
+    await wrapper.findAll('.side .lists a')[0]!.trigger('keydown', { key: 'F10', shiftKey: true })
+    await actionButton(wrapper, 'Delete').trigger('click')
+    await wrapper.get('dialog[open] button.delete').trigger('click')
+    await flushPromises()
+
+    expect(listsService.remove).toHaveBeenCalledWith('l1')
+    expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l2' })
+    expect(wrapper.find('.toast').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('navigates on a normal click on a sidebar list entry without opening actions', async () => {
+    const { wrapper, router } = await mountView()
+
+    await wrapper.findAll('.side .lists a')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l2' })
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })
 
 describe('ListView: items', () => {
