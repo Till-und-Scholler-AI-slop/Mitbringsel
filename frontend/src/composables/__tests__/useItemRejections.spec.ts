@@ -45,7 +45,7 @@ vi.mock('@/stores/items', async (importOriginal) => {
   }
 })
 
-function item(id: string, name: string): Item {
+function item(id: string, name: string, checked = false): Item {
   return {
     id,
     listId: 'l1',
@@ -53,9 +53,9 @@ function item(id: string, name: string): Item {
     quantity: null,
     unit: null,
     note: null,
-    checked: false,
-    checkedBy: null,
-    checkedAt: null,
+    checked,
+    checkedBy: checked ? 'user-1' : null,
+    checkedAt: checked ? '2026-02-01T10:00:00Z' : null,
     createdBy: 'user-1',
     createdAt: '2026-01-01T10:00:00Z',
     serverSeq: 1,
@@ -79,7 +79,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   serverEvents.clear()
   outbox.clear()
-  itemsService.list.mockResolvedValue([item('i1', 'Milch')])
+  itemsService.list.mockResolvedValue([item('i1', 'Milch'), item('i2', 'Brot', true)])
 })
 
 describe('useItemRejections', () => {
@@ -112,6 +112,13 @@ describe('useItemRejections', () => {
       '„Milch“ konnte nicht gelöscht werden.',
       'Dafür fehlt dir die Berechtigung.',
     ],
+    [
+      'removeChecked',
+      async (items: ReturnType<typeof useItemsStore>) => items.startRemovingChecked('l1')?.commit(),
+      new ApiError('FORBIDDEN', 403),
+      'Die erledigten Artikel konnten nicht entfernt werden.',
+      'Dafür fehlt dir die Berechtigung.',
+    ],
   ] as const)(
     'shows a translated error toast for a refused %s',
     async (_kind, act, error, text, detail) => {
@@ -133,6 +140,8 @@ describe('useItemRejections', () => {
 
     await items.setChecked('i1', true)
     outbox.reject(new ApiError('FORBIDDEN', 403))
+    await items.startRemovingChecked('l1')?.commit()
+    outbox.reject(new ApiError(ERROR_CODE_OUTBOX_EXPIRED))
     await flushPromises()
 
     expect(toasts.toasts).toMatchObject([
@@ -140,6 +149,11 @@ describe('useItemRejections', () => {
         kind: 'error',
         text: 'The check mark on “Milch” was not saved.',
         detail: 'You are not allowed to do this.',
+      },
+      {
+        kind: 'error',
+        text: 'The checked items could not be removed.',
+        detail: 'This change waited more than 30 days unsent and was dropped.',
       },
     ])
     wrapper.unmount()

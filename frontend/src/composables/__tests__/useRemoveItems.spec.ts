@@ -7,7 +7,7 @@ import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
 import { useItemsStore } from '@/stores/items'
-import { TOAST_DURATION_MS, useToastsStore } from '@/stores/toasts'
+import { MAX_TOASTS, TOAST_DURATION_MS, useToastsStore } from '@/stores/toasts'
 import type { Item } from '@/types/api'
 
 import { useRemoveItems } from '../useRemoveItems'
@@ -163,6 +163,19 @@ describe('useRemoveItems: checked items', () => {
     expect(itemsService.removeChecked).toHaveBeenCalledOnce()
   })
 
+  it('sends the removal when a newer toast pushes the undo toast out', async () => {
+    const { removeChecked, toasts } = setup()
+    await loadList(item('i2', 'Brot', true))
+
+    removeChecked('l1')
+    for (let i = 0; i < MAX_TOASTS; i++) {
+      toasts.show({ kind: 'info', text: `other ${i}` })
+    }
+    await flushPromises()
+
+    expect(itemsService.removeChecked).toHaveBeenCalledWith('l1', ['i2'])
+  })
+
   it('brings the items back on undo and sends nothing', async () => {
     const { removeChecked, items, toasts } = setup()
     await loadList(item('i2', 'Brot', true))
@@ -176,8 +189,8 @@ describe('useRemoveItems: checked items', () => {
     expect(itemsService.removeChecked).not.toHaveBeenCalled()
   })
 
-  it('shows an error toast and the items again if sending fails', async () => {
-    itemsService.removeChecked.mockRejectedValueOnce(new ApiError('NETWORK'))
+  it('brings the items back on refusal without showing an error toast itself', async () => {
+    itemsService.removeChecked.mockRejectedValueOnce(new ApiError('FORBIDDEN', 403))
     const { removeChecked, items, toasts } = setup()
     await loadList(item('i2', 'Brot', true))
 
@@ -186,13 +199,7 @@ describe('useRemoveItems: checked items', () => {
     await flushPromises()
 
     expect(names(items.checkedItems('l1'))).toEqual(['Brot'])
-    expect(toasts.toasts).toMatchObject([
-      {
-        kind: 'error',
-        text: 'Die erledigten Artikel konnten nicht entfernt werden.',
-        detail: expect.any(String),
-      },
-    ])
+    expect(toasts.toasts).toEqual([])
   })
 
   it('does nothing without checked items', async () => {
