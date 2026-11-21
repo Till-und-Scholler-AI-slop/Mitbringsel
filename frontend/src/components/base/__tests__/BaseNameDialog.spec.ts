@@ -223,4 +223,13 @@ describe('BaseNameDialog', () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('emits update:name when the input changes', async () => {
+    const { wrapper } = mountDialog()
+
+    await wrapper.get('input').setValue('Drogerie')
+
+    expect(wrapper.emitted('update:name')).toContainEqual(['Drogerie'])
+    wrapper.unmount()
+  })
 })

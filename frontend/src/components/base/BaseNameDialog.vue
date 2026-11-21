@@ -31,6 +31,7 @@ const props = defineProps<{
   save: (trimmedName: string) => Promise<void>
 }>()
 
+const emit = defineEmits<{ 'update:name': [name: string] }>()
 const open = defineModel<boolean>('open', { required: true })
 
 const name = ref('')
@@ -79,8 +80,9 @@ watch(
   { immediate: true },
 )
 
-watch(name, () => {
+watch(name, (value) => {
   errorCode.value = null
+  emit('update:name', value)
 })
 
 async function submit() {
