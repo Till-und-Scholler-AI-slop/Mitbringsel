@@ -72,7 +72,8 @@ WITH i AS (
     VALUES ($1, $2, $3, $4)
     RETURNING id, group_id, token_hash, created_by, created_at, expires_at, revoked_at
 )
-SELECT i.id, i.group_id, i.created_at, i.expires_at, u.display_name AS created_by_name
+SELECT i.id, i.group_id, i.created_at, i.expires_at, i.created_by,
+       u.display_name AS created_by_name
 FROM i
 LEFT JOIN users u ON u.id = i.created_by
 `
@@ -89,6 +90,7 @@ type CreateGroupInviteRow struct {
 	GroupID       uuid.UUID
 	CreatedAt     time.Time
 	ExpiresAt     time.Time
+	CreatedBy     *uuid.UUID
 	CreatedByName *string
 }
 
@@ -106,6 +108,7 @@ func (q *Queries) CreateGroupInvite(ctx context.Context, arg CreateGroupInvitePa
 		&i.GroupID,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.CreatedBy,
 		&i.CreatedByName,
 	)
 	return i, err
@@ -165,7 +168,8 @@ func (q *Queries) GetGroupInviteByTokenHash(ctx context.Context, tokenHash []byt
 }
 
 const listActiveGroupInvites = `-- name: ListActiveGroupInvites :many
-SELECT i.id, i.group_id, i.created_at, i.expires_at, u.display_name AS created_by_name
+SELECT i.id, i.group_id, i.created_at, i.expires_at, i.created_by,
+       u.display_name AS created_by_name
 FROM group_invites i
 LEFT JOIN users u ON u.id = i.created_by
 WHERE i.group_id = $1
@@ -184,12 +188,13 @@ type ListActiveGroupInvitesRow struct {
 	GroupID       uuid.UUID
 	CreatedAt     time.Time
 	ExpiresAt     time.Time
+	CreatedBy     *uuid.UUID
 	CreatedByName *string
 }
 
 // Active means not revoked and not expired. now comes in as a parameter, so
-// the service owns the clock. created_by_name is NULL if the creator
-// deleted their account.
+// the service owns the clock. created_by and created_by_name are NULL if
+// the creator deleted their account.
 func (q *Queries) ListActiveGroupInvites(ctx context.Context, arg ListActiveGroupInvitesParams) ([]ListActiveGroupInvitesRow, error) {
 	rows, err := q.db.Query(ctx, listActiveGroupInvites, arg.GroupID, arg.Now)
 	if err != nil {
@@ -204,6 +209,7 @@ func (q *Queries) ListActiveGroupInvites(ctx context.Context, arg ListActiveGrou
 			&i.GroupID,
 			&i.CreatedAt,
 			&i.ExpiresAt,
+			&i.CreatedBy,
 			&i.CreatedByName,
 		); err != nil {
 			return nil, err

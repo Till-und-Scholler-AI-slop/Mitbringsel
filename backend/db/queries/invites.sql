@@ -5,15 +5,17 @@ WITH i AS (
     VALUES ($1, $2, $3, $4)
     RETURNING *
 )
-SELECT i.id, i.group_id, i.created_at, i.expires_at, u.display_name AS created_by_name
+SELECT i.id, i.group_id, i.created_at, i.expires_at, i.created_by,
+       u.display_name AS created_by_name
 FROM i
 LEFT JOIN users u ON u.id = i.created_by;
 
 -- name: ListActiveGroupInvites :many
 -- Active means not revoked and not expired. now comes in as a parameter, so
--- the service owns the clock. created_by_name is NULL if the creator
--- deleted their account.
-SELECT i.id, i.group_id, i.created_at, i.expires_at, u.display_name AS created_by_name
+-- the service owns the clock. created_by and created_by_name are NULL if
+-- the creator deleted their account.
+SELECT i.id, i.group_id, i.created_at, i.expires_at, i.created_by,
+       u.display_name AS created_by_name
 FROM group_invites i
 LEFT JOIN users u ON u.id = i.created_by
 WHERE i.group_id = $1
