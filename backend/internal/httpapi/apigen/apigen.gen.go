@@ -616,6 +616,11 @@ type HealthStatus string
 type Invite struct {
 	CreatedAt time.Time `json:"createdAt"`
 
+	// CreatedBy User ID of the creator, so a client can tell its own links
+	// apart: names are not unique. null if the creator deleted their
+	// account.
+	CreatedBy *uuid.UUID `json:"createdBy"`
+
 	// CreatedByName null if the creator deleted their account.
 	CreatedByName *string   `json:"createdByName"`
 	ExpiresAt     time.Time `json:"expiresAt"`
@@ -631,6 +636,11 @@ type InviteAccepted struct {
 // InviteCreated defines model for InviteCreated.
 type InviteCreated struct {
 	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy User ID of the creator, so a client can tell its own links
+	// apart: names are not unique. null if the creator deleted their
+	// account.
+	CreatedBy *uuid.UUID `json:"createdBy"`
 
 	// CreatedByName null if the creator deleted their account.
 	CreatedByName *string   `json:"createdByName"`

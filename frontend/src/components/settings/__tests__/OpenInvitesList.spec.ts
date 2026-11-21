@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
 import type { GroupInvitesService } from '@/services/api/groupInvites'
+import { useAuthStore } from '@/stores/auth'
 import type { Invite } from '@/types/api'
 
 import OpenInvitesList from '../OpenInvitesList.vue'
@@ -25,17 +26,27 @@ vi.mock('@/stores/groupInvites', async (importOriginal) => {
 
 import { useGroupInvitesStore } from '@/stores/groupInvites'
 
+// The creator's ID is made from the name; no name means a deleted account.
 function invite(id: string, name: string | null = 'Lena'): Invite {
   return {
     id,
     createdAt: '2026-11-04T10:00:00Z',
     expiresAt: '2026-11-11T10:00:00Z',
+    createdBy: name === null ? null : `u-${name.toLowerCase()}`,
     createdByName: name,
   }
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  useAuthStore().user = {
+    id: 'u-jonas',
+    email: 'jonas@example.com',
+    displayName: 'Jonas',
+    avatarUrl: null,
+    locale: 'en',
+    theme: 'system',
+  }
   vi.clearAllMocks()
   service.list.mockResolvedValue([])
   service.revoke.mockResolvedValue(undefined)
@@ -59,6 +70,23 @@ describe('OpenInvitesList', () => {
     expect(wrapper.get('h3').text()).toBe('Open links')
     expect(wrapper.get('.count').text()).toBe('10 of 10')
     expect(wrapper.findAll('.row')).toHaveLength(10)
+  })
+
+  it('tells the links of the signed-in user apart by ID, not by name', async () => {
+    const wrapper = await mountList([
+      invite('i1', 'Jonas'),
+      // Another Jonas: same name, other account.
+      { ...invite('i2', 'Jonas'), createdBy: 'u-other-jonas' },
+      invite('i3', 'Lena'),
+      invite('i4', null),
+    ])
+
+    expect(wrapper.findAll('.created-by').map((e) => e.text())).toEqual([
+      'Created by you',
+      'Created by Jonas',
+      'Created by Lena',
+      'Created by a deleted account',
+    ])
   })
 
   it('says so when there is no open link', async () => {

@@ -52,7 +52,9 @@ type Invite struct {
 	GroupID   uuid.UUID
 	CreatedAt time.Time
 	ExpiresAt time.Time
-	// CreatedByName is empty if the creator deleted their account.
+	// CreatedBy is nil and CreatedByName empty if the creator deleted their
+	// account. Names are not unique; the ID tells whose link it is.
+	CreatedBy     *uuid.UUID
 	CreatedByName string
 }
 

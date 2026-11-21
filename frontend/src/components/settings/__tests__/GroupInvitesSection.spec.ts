@@ -40,6 +40,7 @@ beforeEach(() => {
     id: 'i1',
     createdAt: '2026-11-04T10:00:00Z',
     expiresAt: '2026-11-11T10:00:00Z',
+    createdBy: 'u-lena',
     createdByName: 'Lena',
     token: 'secret-token',
   })
@@ -80,6 +81,7 @@ describe('GroupInvitesSection', () => {
         id: 'i0',
         createdAt: '2026-11-03T10:00:00Z',
         expiresAt: '2026-11-10T10:00:00Z',
+        createdBy: 'u-jonas',
         createdByName: 'Jonas',
       },
     ])
@@ -103,6 +105,7 @@ describe('GroupInvitesSection', () => {
         id: 'i0',
         createdAt: '2026-11-03T10:00:00Z',
         expiresAt: '2026-11-10T10:00:00Z',
+        createdBy: 'u-jonas',
         createdByName: 'Jonas',
       },
     ])

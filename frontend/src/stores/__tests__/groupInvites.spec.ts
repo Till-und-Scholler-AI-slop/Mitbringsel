@@ -12,6 +12,7 @@ const OLD: Invite = {
   id: 'i-old',
   createdAt: '2026-11-01T10:00:00Z',
   expiresAt: '2026-11-08T10:00:00Z',
+  createdBy: 'u-lena',
   createdByName: 'Lena',
 }
 
@@ -19,6 +20,7 @@ const NEW: InviteCreated = {
   id: 'i-new',
   createdAt: '2026-11-04T10:00:00Z',
   expiresAt: '2026-11-11T10:00:00Z',
+  createdBy: 'u-jonas',
   createdByName: 'Jonas',
   token: 'secret-token',
 }

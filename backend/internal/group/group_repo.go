@@ -185,6 +185,7 @@ func (r *PostgresRepository) CreateInvite(ctx context.Context, groupID, createdB
 		GroupID:       row.GroupID,
 		CreatedAt:     row.CreatedAt,
 		ExpiresAt:     row.ExpiresAt,
+		CreatedBy:     row.CreatedBy,
 		CreatedByName: deref(row.CreatedByName),
 	}, nil
 }
@@ -201,6 +202,7 @@ func (r *PostgresRepository) ListActiveInvites(ctx context.Context, groupID uuid
 			GroupID:       row.GroupID,
 			CreatedAt:     row.CreatedAt,
 			ExpiresAt:     row.ExpiresAt,
+			CreatedBy:     row.CreatedBy,
 			CreatedByName: deref(row.CreatedByName),
 		}
 	}

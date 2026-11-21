@@ -68,10 +68,11 @@ func (f *fakeInvites) Accept(_ context.Context, actor uuid.UUID, token string) (
 }
 
 func testInvite() group.Invite {
+	creator := testUserID
 	return group.Invite{
 		ID: testInviteID, GroupID: testGroupID,
 		CreatedAt: groupTime, ExpiresAt: groupTime.AddDate(0, 0, 7),
-		CreatedByName: "Anna Müller",
+		CreatedBy: &creator, CreatedByName: "Anna Müller",
 	}
 }
 
@@ -136,6 +137,9 @@ func TestCreateInvite(t *testing.T) {
 	if got.Token != testInviteToken || got.ID != testInviteID {
 		t.Errorf("body = %+v, want the token and ID", got)
 	}
+	if got.CreatedBy == nil || *got.CreatedBy != testUserID {
+		t.Errorf("CreatedBy = %v, want the creator", got.CreatedBy)
+	}
 	if got.CreatedByName == nil || *got.CreatedByName != "Anna Müller" {
 		t.Errorf("CreatedByName = %v", got.CreatedByName)
 	}
@@ -154,9 +158,7 @@ func TestListInvites(t *testing.T) {
 	})
 
 	t.Run("invites without token", func(t *testing.T) {
-		anonymous := testInvite()
-		anonymous.CreatedByName = ""
-		rec := inviteRequest(t, &fakeInvites{list: []group.Invite{testInvite(), anonymous}}, true,
+		rec := inviteRequest(t, &fakeInvites{list: []group.Invite{testInvite()}}, true,
 			http.MethodGet, groupInvitesPathFor(""), "")
 
 		if rec.Code != http.StatusOK {
@@ -166,14 +168,51 @@ func TestListInvites(t *testing.T) {
 			t.Errorf("list contains a token: %s", rec.Body)
 		}
 		requireUTCTimestamps(t, rec.Body.Bytes())
-		var got apigen.InviteList
-		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-			t.Fatalf("decode body %s: %v", rec.Body, err)
-		}
-		if len(got.Invites) != 2 || got.Invites[0].CreatedByName == nil || got.Invites[1].CreatedByName != nil {
-			t.Errorf("invites = %+v, want the second one without creator", got.Invites)
-		}
 	})
+
+	deleted := testInvite()
+	deleted.CreatedBy = nil
+	deleted.CreatedByName = ""
+
+	// The creator fields are required and nullable: a deleted account
+	// sends null, not a missing key.
+	tests := []struct {
+		name          string
+		invite        group.Invite
+		wantCreatedBy any
+		wantName      any
+	}{
+		{"with creator", testInvite(), testUserID.String(), "Anna Müller"},
+		{"creator deleted their account", deleted, nil, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := inviteRequest(t, &fakeInvites{list: []group.Invite{tt.invite}}, true,
+				http.MethodGet, groupInvitesPathFor(""), "")
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d", rec.Code)
+			}
+			// A map, because decoding into apigen.Invite cannot tell null
+			// from a missing key.
+			var got struct {
+				Invites []map[string]any `json:"invites"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode body %s: %v", rec.Body, err)
+			}
+			if len(got.Invites) != 1 {
+				t.Fatalf("invites = %+v, want one", got.Invites)
+			}
+			invite := got.Invites[0]
+			for key, want := range map[string]any{"createdBy": tt.wantCreatedBy, "createdByName": tt.wantName} {
+				value, ok := invite[key]
+				if !ok || value != want {
+					t.Errorf("%s = %v (present %v), want %v", key, value, ok, want)
+				}
+			}
+		})
+	}
 }
 
 func TestRevokeInvite(t *testing.T) {

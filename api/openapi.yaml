@@ -1496,7 +1496,7 @@ components:
 
     Invite:
       type: object
-      required: [id, createdAt, expiresAt, createdByName]
+      required: [id, createdAt, expiresAt, createdBy, createdByName]
       properties:
         id:
           type: string
@@ -1510,6 +1510,17 @@ components:
         expiresAt:
           type: string
           format: date-time
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: |
+            User ID of the creator, so a client can tell its own links
+            apart: names are not unique. null if the creator deleted their
+            account.
         createdByName:
           type: string
           nullable: true

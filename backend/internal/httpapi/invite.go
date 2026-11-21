@@ -33,6 +33,7 @@ func newInviteResponse(i group.Invite) apigen.Invite {
 		ID:            i.ID,
 		CreatedAt:     i.CreatedAt.UTC(),
 		ExpiresAt:     i.ExpiresAt.UTC(),
+		CreatedBy:     i.CreatedBy,
 		CreatedByName: nullIfEmpty(i.CreatedByName),
 	}
 }
@@ -103,6 +104,7 @@ func createInviteHandler(invites InviteService) http.HandlerFunc {
 			ID:            invite.ID,
 			CreatedAt:     invite.CreatedAt.UTC(),
 			ExpiresAt:     invite.ExpiresAt.UTC(),
+			CreatedBy:     invite.CreatedBy,
 			CreatedByName: nullIfEmpty(invite.CreatedByName),
 			Token:         token,
 		})

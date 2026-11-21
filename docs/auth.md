@@ -82,6 +82,7 @@ Warum die eigene Origin-Prüfung: `http.CrossOriginProtection` lässt GET durch,
 
 - Owner und Admins erzeugen einen Einladungslink mit zufälligem Token (256 Bit, base64url). In der Datenbank liegt nur der SHA-256-Hash; den Token zeigt nur die Antwort auf `POST /groups/{id}/invites`, einmalig. Das Frontend baut daraus den Link `/invite/<token>`.
 - Der Link gilt 7 Tage für beliebig viele Personen und kann widerrufen werden. Pro Gruppe sind höchstens 10 Links gleichzeitig offen.
+- `GET /groups/{id}/invites` listet die offenen Links mit ihrem Ersteller: `createdBy` (User-ID) und `createdByName`, beide `null`, wenn das Konto gelöscht ist. Namen sind nicht eindeutig; deshalb vergleicht das Frontend die ID mit dem angemeldeten Nutzer und zeigt bei eigenen Links „Erstellt von dir“.
 - `GET /invites/{token}` braucht keine Anmeldung, damit die Seite hinter dem Link die Einladung zeigen kann. Wer den Token hat, sieht Gruppenname, die einladende Person, die Mitgliederzahl, die ersten vier Mitglieder mit Vornamen und Avatar sowie das Ablaufdatum des Links; die vollständige Liste bleibt hinter dem Login. Die Antwort trägt `Cache-Control: no-store`.
 - Wer den Link öffnet, meldet sich bei Bedarf mit Google an und tritt mit `POST /invites/{token}/accept` als Member bei. Wer schon Mitglied ist, behält seine Rolle.
 - Unbekannte Token antworten `404 INVITE_NOT_FOUND`, abgelaufene oder widerrufene `410 INVITE_EXPIRED`. Das verrät nichts, weil sich 256-Bit-Token nicht erraten lassen.

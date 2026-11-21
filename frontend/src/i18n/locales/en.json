@@ -446,6 +446,7 @@
         "empty": "No open links.",
         "loadFailed": "The open links could not be loaded.",
         "createdBy": "Created by {name}",
+        "createdByYou": "Created by you",
         "createdByUnknown": "Created by a deleted account",
         "details": "{age} · {remaining}",
         "remaining": {

@@ -358,6 +358,13 @@ func TestPostgresRepository(t *testing.T) {
 		if err != nil || !creatorIsNull {
 			t.Errorf("created_by IS NULL = %v, %v; want true", creatorIsNull, err)
 		}
+		listed, err := repo.ListActiveInvites(ctx, created.ID, time.Now())
+		if err != nil || len(listed) != 1 {
+			t.Fatalf("ListActiveInvites() = %+v, %v; want the invite", listed, err)
+		}
+		if listed[0].CreatedBy != nil || listed[0].CreatedByName != "" {
+			t.Errorf("CreatedBy, CreatedByName = %v, %q; want no creator", listed[0].CreatedBy, listed[0].CreatedByName)
+		}
 
 		if _, err := pool.Exec(ctx, `DELETE FROM groups WHERE id = $1`, created.ID); err != nil {
 			t.Fatalf("delete group: %v", err)
@@ -499,13 +506,16 @@ func TestPostgresRepository(t *testing.T) {
 		if err != nil {
 			t.Fatalf("invite Create() error = %v", err)
 		}
-		if invite.CreatedByName != "inv-anna" {
-			t.Errorf("CreatedByName = %q, want the creator", invite.CreatedByName)
+		if invite.CreatedBy == nil || *invite.CreatedBy != anna || invite.CreatedByName != "inv-anna" {
+			t.Errorf("CreatedBy, CreatedByName = %v, %q; want the creator", invite.CreatedBy, invite.CreatedByName)
 		}
 
 		listed, err := invites.List(ctx, anna, created.ID)
 		if err != nil || len(listed) != 1 || listed[0].ID != invite.ID {
 			t.Fatalf("List() = %+v, %v; want the new invite", listed, err)
+		}
+		if listed[0].CreatedBy == nil || *listed[0].CreatedBy != anna {
+			t.Errorf("listed CreatedBy = %v, want the creator", listed[0].CreatedBy)
 		}
 
 		preview, err := invites.Preview(ctx, token)
