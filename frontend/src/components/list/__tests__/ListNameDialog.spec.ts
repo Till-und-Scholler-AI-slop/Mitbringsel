@@ -80,29 +80,84 @@ describe('ListNameDialog: new list', () => {
   })
 
   it('creates the list with the trimmed name and closes', async () => {
-    service.create.mockResolvedValue({ ...LIST, name: 'Baumarkt' })
+    service.create.mockResolvedValue({ ...LIST, name: 'Urlaub' })
     const wrapper = await mountDialog()
 
-    await wrapper.get('input').setValue('  Baumarkt  ')
+    await wrapper.get('input').setValue('  Urlaub  ')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(service.create).toHaveBeenCalledWith('g1', 'Baumarkt', 'general')
+    expect(service.create).toHaveBeenCalledWith('g1', 'Urlaub', 'general')
     expect(wrapper.props('open')).toBe(false)
     wrapper.unmount()
   })
 
-  it('creates the list with the picked icon', async () => {
-    service.create.mockResolvedValue({ ...LIST, name: 'Baumarkt', icon: 'hardware' })
+  it('suggests an icon from the name and follows changes until picked by hand', async () => {
+    service.create.mockResolvedValue({ ...LIST, name: 'Bäcker', icon: 'bakery' })
     const wrapper = await mountDialog()
 
     expect(picked(wrapper)).toBe('general')
+
+    await wrapper.get('input').setValue('Drogerie')
+    expect(picked(wrapper)).toBe('drugstore')
+
+    // Falls back to general when the name no longer matches any icon.
+    await wrapper.get('input').setValue('Urlaub')
+    expect(picked(wrapper)).toBe('general')
+
+    await wrapper.get('input').setValue('Bäcker')
+    expect(picked(wrapper)).toBe('bakery')
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(service.create).toHaveBeenCalledWith('g1', 'Bäcker', 'bakery')
+    wrapper.unmount()
+  })
+
+  it('keeps the manually picked icon even when the name changes afterwards', async () => {
+    service.create.mockResolvedValue({ ...LIST, name: 'Drogerie', icon: 'garden' })
+    const wrapper = await mountDialog()
+
     await wrapper.get('input').setValue('Baumarkt')
+    expect(picked(wrapper)).toBe('hardware')
+
+    await wrapper.get('input[value="garden"]').setValue(true)
+    expect(picked(wrapper)).toBe('garden')
+
+    await wrapper.get('input').setValue('Drogerie')
+    expect(picked(wrapper)).toBe('garden')
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(service.create).toHaveBeenCalledWith('g1', 'Drogerie', 'garden')
+    wrapper.unmount()
+  })
+
+  it('keeps general when the user picks it back by hand', async () => {
+    const wrapper = await mountDialog()
+
+    await wrapper.get('input').setValue('Drogerie')
+    expect(picked(wrapper)).toBe('drugstore')
+
+    await wrapper.get('input[value="general"]').setValue(true)
+    await wrapper.get('input').setValue('Baumarkt')
+    expect(picked(wrapper)).toBe('general')
+    wrapper.unmount()
+  })
+
+  it('creates the list with the picked icon', async () => {
+    service.create.mockResolvedValue({ ...LIST, name: 'Urlaub', icon: 'hardware' })
+    const wrapper = await mountDialog()
+
+    expect(picked(wrapper)).toBe('general')
+    await wrapper.get('input').setValue('Urlaub')
     await wrapper.get('input[value="hardware"]').setValue(true)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(service.create).toHaveBeenCalledWith('g1', 'Baumarkt', 'hardware')
+    expect(service.create).toHaveBeenCalledWith('g1', 'Urlaub', 'hardware')
     wrapper.unmount()
   })
 
@@ -154,16 +209,19 @@ describe('ListNameDialog: new list', () => {
     wrapper.unmount()
   })
 
-  it('starts empty again when it is opened a second time', async () => {
+  it('starts empty again and suggests again when it is opened a second time', async () => {
     const wrapper = await mountDialog()
     await wrapper.get('input').setValue('Baumarkt')
-    await wrapper.get('input[value="hardware"]').setValue(true)
+    await wrapper.get('input[value="garden"]').setValue(true)
 
     await wrapper.setProps({ open: false })
     await wrapper.setProps({ open: true })
 
     expect(input(wrapper).value).toBe('')
     expect(picked(wrapper)).toBe('general')
+
+    await wrapper.get('input').setValue('Drogerie')
+    expect(picked(wrapper)).toBe('drugstore')
     wrapper.unmount()
   })
 })
@@ -174,6 +232,14 @@ describe('ListNameDialog: edit', () => {
 
     expect(wrapper.get('h2').text()).toBe('Edit list')
     expect(input(wrapper).value).toBe('Supermarkt')
+    expect(picked(wrapper)).toBe('bakery')
+    wrapper.unmount()
+  })
+
+  it('does not suggest a new icon when renaming an existing list', async () => {
+    const wrapper = await mountDialog({ ...LIST, icon: 'bakery' })
+
+    await wrapper.get('input').setValue('Drogerie')
     expect(picked(wrapper)).toBe('bakery')
     wrapper.unmount()
   })

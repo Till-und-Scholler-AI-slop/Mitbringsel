@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import BaseNameDialog from '@/components/base/BaseNameDialog.vue'
 import ListIconPicker from '@/components/list/ListIconPicker.vue'
-import { DEFAULT_LIST_ICON } from '@/services/listIcons'
+import { DEFAULT_LIST_ICON, suggestListIcon } from '@/services/listIcons'
 import { LIST_NAME_MAX_LENGTH, validateListName } from '@/services/listName'
 import { useListsStore } from '@/stores/lists'
 import type { List, ListIcon } from '@/types/api'
@@ -20,12 +20,27 @@ const lists = useListsStore()
 
 const startIcon = computed(() => props.list?.icon ?? DEFAULT_LIST_ICON)
 const icon = ref<ListIcon>(startIcon.value)
+const pickedByUser = ref(false)
 
 // Every opening starts with the list's icon (or the default when creating),
 // like BaseNameDialog does with the name.
 watch(open, (isOpen) => {
-  if (isOpen) icon.value = startIcon.value
+  if (isOpen) {
+    icon.value = startIcon.value
+    pickedByUser.value = false
+  }
 })
+
+function onNameChange(name: string) {
+  // Only suggest while creating, and stop once the user picked an icon by hand.
+  if (props.list || pickedByUser.value) return
+  icon.value = suggestListIcon(name) ?? DEFAULT_LIST_ICON
+}
+
+function pickIcon(value: ListIcon) {
+  pickedByUser.value = true
+  icon.value = value
+}
 
 async function save(trimmed: string) {
   if (props.list) {
@@ -51,7 +66,8 @@ async function save(trimmed: string) {
     :changed="icon !== startIcon"
     :validate="validateListName"
     :save="save"
+    @update:name="onNameChange"
   >
-    <ListIconPicker v-model="icon" />
+    <ListIconPicker :model-value="icon" @update:model-value="pickIcon" />
   </BaseNameDialog>
 </template>

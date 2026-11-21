@@ -330,7 +330,7 @@ describe('ListView: opening the household', () => {
     await wrapper.get('dialog[open] form').trigger('submit')
     await flushPromises()
 
-    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie', 'general')
+    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie', 'drugstore')
     expect(router.currentRoute.value.fullPath).toBe('/groups/g1/lists/l3')
     wrapper.unmount()
   })
@@ -436,7 +436,7 @@ describe('ListView: header', () => {
     await wrapper.get('dialog[open] form').trigger('submit')
     await flushPromises()
 
-    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie', 'general')
+    expect(listsService.create).toHaveBeenCalledWith('g1', 'Drogerie', 'drugstore')
     expect(router.currentRoute.value.params).toMatchObject({ groupId: 'g1', listId: 'l9' })
     wrapper.unmount()
   })
