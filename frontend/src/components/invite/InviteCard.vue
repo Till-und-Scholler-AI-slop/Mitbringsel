@@ -4,17 +4,33 @@ import { useI18n } from 'vue-i18n'
 
 import BaseAvatar from '@/components/base/BaseAvatar.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import { timeLeft } from '@/services/relativeTime'
 import type { InvitePreview } from '@/types/api'
 
 const INVITER_AVATAR_SIZE = 52
 const MEMBER_AVATAR_SIZE = 40
+const EXPIRY_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+}
 
 const props = defineProps<{ preview: InvitePreview }>()
 
-const { t } = useI18n()
+const { t, d } = useI18n()
+
+// Taken when the card is drawn; the text does not tick on its own.
+const now = new Date()
 
 // The preview lists at most four members; the rest is only counted.
 const others = computed(() => Math.max(0, props.preview.memberCount - props.preview.members.length))
+
+const expiresAt = computed(() => new Date(props.preview.expiresAt))
+const expiryDate = computed(() => d(expiresAt.value, EXPIRY_DATE_FORMAT))
+const remaining = computed(() => {
+  const left = timeLeft(expiresAt.value, now)
+  return t(`invite.remaining.${left.unit}`, left.count)
+})
 </script>
 
 <template>
@@ -57,6 +73,16 @@ const others = computed(() => Math.max(0, props.preview.memberCount - props.prev
       </ul>
       <span v-if="others > 0" class="more">{{ t('invite.more', { count: others }) }}</span>
     </div>
+
+    <p class="expiry">
+      <BaseIcon class="expiry-icon" name="clock" :size="18" />
+      <i18n-t keypath="invite.validUntil" tag="span" class="expiry-text">
+        <template #date>
+          <time :datetime="preview.expiresAt">{{ expiryDate }}</time>
+        </template>
+        <template #remaining>{{ remaining }}</template>
+      </i18n-t>
+    </p>
   </section>
 </template>
 
@@ -192,6 +218,33 @@ const others = computed(() => Math.max(0, props.preview.memberCount - props.prev
   background: var(--color-bg);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
+}
+
+.expiry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding-top: 0.875rem;
+  border-top: var(--border-width-sm) dashed var(--color-divider);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.1875rem;
+}
+
+.expiry-icon {
+  flex: none;
+}
+
+.expiry-text {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.expiry time {
+  color: var(--color-text);
+  font-weight: var(--font-weight-black);
 }
 
 /* Desktop (design "markt2-einladung-desktop-*"): a little more room. */

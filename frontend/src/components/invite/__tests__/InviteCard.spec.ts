@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
-import { createAppI18n } from '@/i18n'
+import { createAppI18n, type Locale } from '@/i18n'
 import type { InvitePreview } from '@/types/api'
 
 import InviteCard from '../InviteCard.vue'
@@ -21,12 +21,16 @@ function preview(overrides: Partial<InvitePreview> = {}): InvitePreview {
   }
 }
 
-function mountCard(p: InvitePreview) {
+function mountCard(p: InvitePreview, locale: Locale = 'en') {
   return mount(InviteCard, {
     props: { preview: p },
-    global: { plugins: [createAppI18n(['en'], null)] },
+    global: { plugins: [createAppI18n([locale], null)] },
   })
 }
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('InviteCard', () => {
   it('says who invites to which household', () => {
@@ -56,5 +60,31 @@ describe('InviteCard', () => {
     const wrapper = mountCard(preview({ memberCount: 6 }))
 
     expect(wrapper.get('.more').text()).toBe('+ 4 more')
+  })
+
+  it('shows the expiry date and remaining time in German with a datetime attribute', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-21T12:00:00Z'))
+
+    const expiresAt = '2026-11-27T12:00:00Z'
+    const wrapper = mountCard(preview({ expiresAt }), 'de')
+
+    expect(wrapper.get('.expiry').text()).toBe('Link gültig bis Fr., 27. Nov. · noch 6 Tage')
+    const time = wrapper.get('.expiry time')
+    expect(time.text()).toBe('Fr., 27. Nov.')
+    expect(time.attributes('datetime')).toBe(expiresAt)
+  })
+
+  it('formats the expiry date and remaining time in English', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-27T10:00:00Z'))
+
+    const expiresAt = '2026-11-27T12:00:00Z'
+    const wrapper = mountCard(preview({ expiresAt }), 'en')
+
+    expect(wrapper.get('.expiry').text()).toBe('Link valid until Fri, Nov 27 · 2 hours left')
+    const time = wrapper.get('.expiry time')
+    expect(time.text()).toBe('Fri, Nov 27')
+    expect(time.attributes('datetime')).toBe(expiresAt)
   })
 })
