@@ -33,6 +33,9 @@ Jeder Commit und PR, an dem ein KI-Agent mitgearbeitet hat (Claude Code, Antigra
   | KI | Trailer | GitHub-Account |
   | --- | --- | --- |
   | Claude | `Co-Authored-By: Claude <Modell> <noreply@anthropic.com>` | `claude` |
+  | Gemini (Antigravity) | `Co-authored-by: Gemini <Modell> (Antigravity) <200291788+gemini-code-assist@users.noreply.github.com>` | `gemini-code-assist` (inoffiziell, siehe unten) |
+
+  Für Antigravity und Gemini gibt es keinen offiziellen Trailer. `gemini-code-assist` ist ein echter Google-Account (Name „Gemini“) von Gemini Code Assist; Adressen wie `gemini@google.com` gehören keinem Account oder sogar Fremden und dürfen nicht verwendet werden.
 
 - Gibt es für ein Werkzeug keinen geprüften Trailer, sagt der Agent das dem Nutzer, statt eine E-Mail zu raten. Ist ein neuer Trailer geprüft, kommt er in die Tabelle.
 - Squash-Merge: GitHub übernimmt die Trailer der Branch-Commits in die Nachricht des Squash-Commits; sie werden nicht gelöscht.
