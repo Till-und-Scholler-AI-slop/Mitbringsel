@@ -40,6 +40,25 @@ Ab `48rem` Breite gilt ein eigenes Layout, nicht das gestreckte Smartphone-Layou
 - **Einladung** mit Kopf und Karte nebeneinander (`markt2-einladung-desktop-*`).
 - **Login** nach `login-desktop-*`.
 
+## App-Icons (PWA)
+
+Das App-Icon greift den geneigten Mitbringsel-Sticker auf: ein geometrisches **M** (als SVG-Pfad, unabhängig von Systemschriften) in Tinte (`#16181D`) auf einer leicht gedrehten Tomaten-Pille (`#FF7A59`) mit hartem Sticker-Schatten auf Kopf-Grün (`#1F7A3A`).
+
+- `frontend/public/icon.svg`: abgerundete Kachel für Browser-Favicon und Standard-PNGs (`pwa-192x192.png`, `pwa-512x512.png`, `favicon.ico`).
+- `frontend/public/icon-maskable.svg`: vollflächiges `#1F7A3A` ohne Transparenz, Sticker innerhalb der zentralen 80 %-Safe-Zone für `pwa-512x512-maskable.png` und `apple-touch-icon.png` (180 × 180).
+
+Neu erzeugen der Rasterdateien nach Änderungen an den SVGs (ohne neue Node-Dependency, mit `rsvg-convert` und ImageMagick `magick`):
+
+```bash
+rsvg-convert -w 192 -h 192 frontend/public/icon.svg -o frontend/public/pwa-192x192.png
+rsvg-convert -w 512 -h 512 frontend/public/icon.svg -o frontend/public/pwa-512x512.png
+rsvg-convert -w 512 -h 512 frontend/public/icon-maskable.svg -o frontend/public/pwa-512x512-maskable.png
+rsvg-convert -w 180 -h 180 frontend/public/icon-maskable.svg -o frontend/public/apple-touch-icon.png
+rsvg-convert -w 32 -h 32 frontend/public/icon.svg -o /tmp/favicon-32.png && magick /tmp/favicon-32.png frontend/public/favicon.ico && rm /tmp/favicon-32.png
+```
+
+Alternativ lassen sich die PNGs auch mit `google-chrome-stable --headless=new --hide-scrollbars --force-device-scale-factor=1 --window-size=W,H --screenshot=<ziel>.png file://<pfad>.svg` erzeugen (für transparente Ecken zusätzlich `--default-background-color=00000000`).
+
 ## Anforderungen an das Design
 
 - Mobile first, Touch-Ziele mindestens 44 × 44 px, Artikel mit einer Hand im Supermarkt abhakbar

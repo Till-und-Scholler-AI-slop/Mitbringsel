@@ -2,6 +2,9 @@ import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { VitePWA } from 'vite-plugin-pwa'
+
+import { pwaOptions } from './pwa.config.ts'
 
 // Where the Go server listens during development. Override with the
 // VITE_API_PROXY_TARGET environment variable, e.g. if port 8080 is taken.
@@ -9,7 +12,7 @@ const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:80
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), VitePWA(pwaOptions)],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
