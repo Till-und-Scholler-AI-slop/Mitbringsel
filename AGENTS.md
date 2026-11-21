@@ -27,4 +27,6 @@ Antworten knapp halten: nur wirklich wichtige Infos, kein Geschwafel. Ausnahme s
 
 Code-Regeln, Tests und Commits: `docs/conventions.md` und `docs/testing.md`. Wichtige Entscheidungen als ADR in `docs/adr/`.
 
+Jeder Commit und PR, an dem ein Agent mitgearbeitet hat, nennt die KI als Co-Autor: `docs/conventions.md`, Abschnitt „KI als Co-Autor“.
+
 Das Repository ist öffentlich: Alles, was committet wird, ist für alle sichtbar. Nie interne Hostnamen (z.B. von Firmen-Registries), private E-Mail-Adressen oder Secrets committen.
