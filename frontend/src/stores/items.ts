@@ -224,7 +224,10 @@ export function defineItemsStore(
     const stored = shallowRef<OutboxEntry[]>([])
     // - local: changes of this tab on their way into the outbox, so a tap
     //   shows before the outbox has stored it and been read again.
-    const local = shallowRef<QueuedChange[]>([])
+    interface LocalChange extends QueuedChange {
+      hold?: string
+    }
+    const local = shallowRef<LocalChange[]>([])
     // - settled: entries this tab got the answer or refusal of. A read that
     //   started before may still list them; their state is the server's now.
     const settled = shallowRef<ReadonlySet<number>>(new Set())
@@ -327,21 +330,65 @@ export function defineItemsStore(
       return byList.value[listId]
     }
 
+    // Tells whether a change still on its way into the outbox is already among
+    // the entries read from it, so pendingCount does not count it twice while
+    // enqueue() and refresh() overlap.
+    function matchesEntry(queued: LocalChange, entry: OutboxEntry): boolean {
+      if (queued.hold !== undefined) {
+        return (
+          entry.hold === queued.hold &&
+          queued.change.kind === 'removeChecked' &&
+          entry.change.kind === 'removeChecked' &&
+          queued.change.itemIds[0] === entry.change.itemIds[0]
+        )
+      }
+      const a = queued.change
+      const b = entry.change
+      if (a.kind !== b.kind) return false
+      switch (a.kind) {
+        case 'create':
+          return b.kind === 'create' && a.item.id === b.item.id
+        case 'update':
+          return b.kind === 'update' && a.itemId === b.itemId && a.change.clock === b.change.clock
+        case 'remove':
+          return b.kind === 'remove' && a.itemId === b.itemId
+        case 'removeChecked':
+          return false
+      }
+    }
+
+    // Outbox entries this tab does not consider done or undone yet.
+    const activeStored = computed(() =>
+      stored.value.filter(
+        (entry) =>
+          !settled.value.has(entry.seq) &&
+          !(entry.hold !== undefined && ignoredHolds.value.has(entry.hold)),
+      ),
+    )
+
+    // Local changes not yet reflected in the latest outbox read.
+    const unstoredLocal = computed(() =>
+      local.value.filter((queued) => !stored.value.some((entry) => matchesEntry(queued, entry))),
+    )
+
     // The pending changes per item. Entries this tab is done with or undid
     // no longer count, even if the newest read still lists them.
     const pending = computed(() =>
-      foldPending(
-        [
-          ...stored.value.filter(
-            (entry) =>
-              !settled.value.has(entry.seq) &&
-              !(entry.hold !== undefined && ignoredHolds.value.has(entry.hold)),
-          ),
-          ...local.value,
-        ],
-        currentUserId(),
-      ),
+      foldPending([...activeStored.value, ...local.value], currentUserId()),
     )
+
+    /**
+     * Number of outbox entries still waiting to reach the server (including
+     * held "remove checked" entries and changes from other tabs).
+     */
+    const pendingCount = computed(() => activeStored.value.length + unstoredLocal.value.length)
+
+    /** Whether the item has an unsynced create, edit, check or removal. */
+    function isPending(itemId: string): boolean {
+      const entry = pending.value.get(itemId)
+      if (!entry) return false
+      return entry.created !== null || entry.removed || Object.keys(entry.fields).length > 0
+    }
 
     // What the readers show: per list the items of the server with their
     // pending changes, plus the items that only a pending create knows. An
@@ -859,11 +906,14 @@ export function defineItemsStore(
       const started = generation
       const current = () => started === generation
       const queuedAt = Date.now()
-      const queued: QueuedChange[] = changes.map((change) => ({ change, queuedAt }))
+      const held = box.enqueueHeld(changes)
+      const queued: LocalChange[] = changes.map((change) => ({
+        change,
+        queuedAt,
+        hold: held.holdId,
+      }))
       const queuedSet = new Set(queued)
       local.value = [...local.value, ...queued]
-
-      const held = box.enqueueHeld(changes)
       const dropLocal = () => {
         if (current()) local.value = local.value.filter((q) => !queuedSet.has(q))
       }
@@ -1026,6 +1076,8 @@ export function defineItemsStore(
       statusOf,
       errorCodeOf,
       byId,
+      pendingCount,
+      isPending,
       load,
       loadGroup,
       reloadLoaded,

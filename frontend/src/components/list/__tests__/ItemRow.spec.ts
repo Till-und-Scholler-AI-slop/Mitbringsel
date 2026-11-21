@@ -195,3 +195,38 @@ describe('ItemRow: form open in the panel', () => {
     ).toBeUndefined()
   })
 })
+
+describe('ItemRow: pending sync', () => {
+  it('shows the clock icon with its label only when pending', () => {
+    expect(mountRow(item()).find('.pending').exists()).toBe(false)
+
+    const wrapper = mountRow(item(), JONAS, { pending: true })
+    const clock = wrapper.get('.pending')
+    expect(clock.attributes('role')).toBe('img')
+    expect(clock.attributes('aria-label')).toBe('Not synced yet')
+    expect(wrapper.get('button').attributes('aria-label')).toBe(
+      'Milch, by Jonas, not synced yet – check off',
+    )
+  })
+
+  it('uses the German label for the clock icon', () => {
+    const wrapper = mount(ItemRow, {
+      props: { item: item(), person: JONAS, pending: true },
+      global: { plugins: [createAppI18n(['de'], null)] },
+    })
+
+    expect(wrapper.get('.pending').attributes('aria-label')).toBe('Noch nicht synchronisiert')
+    expect(wrapper.get('button').attributes('aria-label')).toBe(
+      'Milch, von Jonas, noch nicht synchronisiert – abhaken',
+    )
+  })
+
+  it('shows no clock icon for a done item', () => {
+    const wrapper = mountRow(item({ checked: true }), JONAS, { pending: true })
+
+    expect(wrapper.find('.pending').exists()).toBe(false)
+    expect(wrapper.get('button').attributes('aria-label')).toBe(
+      'Milch, checked by Jonas – bring back',
+    )
+  })
+})

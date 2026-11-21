@@ -12,9 +12,9 @@ Getestet wird, was kaputtgehen darf, ohne dass man es sofort merkt: Sync- und Ko
 | WebSocket-Hub | Unit und Integration | Unit (`realtime`): Räume, langsamer Client, Limit, Rennen beim Verbinden; Integration mit zwei Clients ab Schritt 3. Phase 5: zwei Clients, Änderung von A kommt bei B an; Entfernen aus der Gruppe; langsamer Client. Phase 6: Wiederverbinden mit Outbox und Neuladen |
 | HTTP-Handler | `httptest` | Statuscodes, Fehlerformat, Validierung |
 | Outbox und Sync-Service (Frontend) | Unit mit Vitest, IndexedDB-Fake | Reihenfolge, erneutes Senden, Rollback bei Ablehnung, nur ein sendender Tab |
-| Artikel-Store mit Outbox | Vitest mit `fakeOutbox.ts`, 5 Integrationstests mit echter Outbox | sofort sichtbar, Antwort ersetzt, Ablehnung rollt zurück und meldet, Tabs, Neuladen, HLC, Abgehakte entfernen mit Hold/Tab-zu/Rückgängig |
+| Artikel-Store mit Outbox | Vitest mit `fakeOutbox.ts`, 5 Integrationstests mit echter Outbox | sofort sichtbar, Antwort ersetzt, Ablehnung rollt zurück und meldet, Tabs, Neuladen, HLC, Abgehakte entfernen mit Hold/Tab-zu/Rückgängig, `pendingCount` und `isPending` |
 | Lokale Daten (Frontend) | Unit mit Vitest, `fake-indexeddb` | Lesen und Schreiben, Daten eines anderen Nutzers werden gelöscht und nie gelesen, ohne IndexedDB läuft die App weiter |
-| Stores und Basis-Komponenten | Vitest + Vue Test Utils | Props, Events, Zustände von `BaseButton`, `BaseInput` |
+| Stores und Basis-Komponenten | Vitest + Vue Test Utils | Props, Events, Zustände von `BaseButton`, `BaseInput`, `BaseSyncIndicator` (alle 4 Sync-Zustände und aria-Labels), `ItemRow` (Uhr-Symbol bei ausstehenden Artikeln) |
 | Kern-Szenarien | E2E mit Playwright | Zwei Browser-Kontexte bearbeiten dieselbe Liste; ein Kontext geht offline, ändert und kommt zurück |
 
 ## Regeln

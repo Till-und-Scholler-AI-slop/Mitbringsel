@@ -249,7 +249,9 @@
       "justChangedBy": "just changed by {name}",
       "justChangedByAnon": "just changed",
       "editing": "Editing",
-      "editingLabel": "being edited"
+      "editingLabel": "being edited",
+      "pending": "Not synced yet",
+      "pendingLabel": "not synced yet"
     },
     "done": {
       "title": "Done ({count})",
@@ -479,7 +481,17 @@
     "synced": "Synced",
     "syncedLong": "All synced",
     "offline": "Offline",
+    "pending": "{count} pending",
+    "offlinePending": "Offline · {count} pending",
     "syncedHint": "Everyone sees the same state.",
-    "offlineHint": "You see the last known state. Changes need a connection again."
+    "offlineHint": "Changes stay on this device and go out as soon as you’re back online.",
+    "pendingHint": "Sending changes …",
+    "pendingHintIn": "Sending to {name} …",
+    "aria": {
+      "synced": "Sync status: All synced",
+      "offline": "Sync status: Offline",
+      "pending": "Sync status: {count} pending change | Sync status: {count} pending changes",
+      "offlinePending": "Sync status: Offline, {count} pending change | Sync status: Offline, {count} pending changes"
+    }
   }
 }

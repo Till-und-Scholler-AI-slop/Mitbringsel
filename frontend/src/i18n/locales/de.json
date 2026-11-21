@@ -249,7 +249,9 @@
       "justChangedBy": "gerade von {name} geändert",
       "justChangedByAnon": "gerade geändert",
       "editing": "Wird bearbeitet",
-      "editingLabel": "wird bearbeitet"
+      "editingLabel": "wird bearbeitet",
+      "pending": "Noch nicht synchronisiert",
+      "pendingLabel": "noch nicht synchronisiert"
     },
     "done": {
       "title": "Erledigt ({count})",
@@ -479,7 +481,17 @@
     "synced": "Synchron",
     "syncedLong": "Alles synchron",
     "offline": "Offline",
+    "pending": "{count} ausstehend",
+    "offlinePending": "Offline · {count} ausstehend",
     "syncedHint": "Alle sehen denselben Stand.",
-    "offlineHint": "Du siehst den letzten Stand. Ändern geht erst wieder mit Verbindung."
+    "offlineHint": "Änderungen bleiben auf diesem Gerät und gehen raus, sobald du wieder online bist.",
+    "pendingHint": "Wird gerade übertragen …",
+    "pendingHintIn": "Wird gerade an {name} übertragen …",
+    "aria": {
+      "synced": "Sync-Status: Alles synchron",
+      "offline": "Sync-Status: Offline",
+      "pending": "Sync-Status: {count} Änderung ausstehend | Sync-Status: {count} Änderungen ausstehend",
+      "offlinePending": "Sync-Status: Offline, {count} Änderung ausstehend | Sync-Status: Offline, {count} Änderungen ausstehend"
+    }
   }
 }

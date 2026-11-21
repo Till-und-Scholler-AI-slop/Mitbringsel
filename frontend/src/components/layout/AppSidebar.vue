@@ -114,7 +114,7 @@ function onListKeydown(event: KeyboardEvent, list: List) {
 
     <span class="spacer" aria-hidden="true" />
 
-    <SyncStatus class="sync" size="lg" hint />
+    <SyncStatus class="sync" size="lg" hint :household-name="current?.name" />
 
     <div v-if="auth.user" class="profile">
       <ProfileMenu

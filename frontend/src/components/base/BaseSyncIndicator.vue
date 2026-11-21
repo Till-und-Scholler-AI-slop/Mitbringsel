@@ -3,12 +3,13 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import type { IconName } from '@/components/base/icons'
 
 /**
  * The sync chip of the design: white with a ticked cloud while synced, dark
- * with a crossed-out cloud while offline. It only shows a state; which one
- * comes from the sync store (`indicator`), so it can be tested without one.
- * "Pending" joins with the outbox in phase 6.
+ * with a crossed-out cloud while offline, and yellow whenever changes are
+ * still in the outbox (upload cloud online, crossed-out cloud offline). It
+ * only shows what its props say, so it can be tested without the stores.
  *
  * md fits the green headers of the phone; lg is the sidebar version, with a
  * longer label and, with `hint`, a line that says what the state means.
@@ -16,30 +17,69 @@ import BaseIcon from '@/components/base/BaseIcon.vue'
 const props = withDefaults(
   defineProps<{
     state: 'synced' | 'offline'
+    pendingCount?: number
     size?: 'md' | 'lg'
     hint?: boolean
+    householdName?: string
   }>(),
-  { size: 'md', hint: false },
+  { pendingCount: 0, size: 'md', hint: false },
 )
 
 const { t } = useI18n()
 
-const synced = computed(() => props.state === 'synced')
+const pending = computed(() => Math.max(0, props.pendingCount))
+const hasPending = computed(() => pending.value > 0)
+const offline = computed(() => props.state === 'offline')
+
+const chipClass = computed(() => {
+  if (hasPending.value) return 'chip--pending'
+  return offline.value ? 'chip--offline' : 'chip--synced'
+})
+
+const icon = computed<IconName>(() => {
+  if (offline.value) return 'cloudOff'
+  return hasPending.value ? 'cloudUpload' : 'cloudCheck'
+})
+
 const label = computed(() => {
-  if (!synced.value) return t('sync.offline')
+  if (offline.value && hasPending.value) {
+    return t('sync.offlinePending', { count: pending.value })
+  }
+  if (offline.value) return t('sync.offline')
+  if (hasPending.value) return t('sync.pending', { count: pending.value })
   return props.size === 'lg' ? t('sync.syncedLong') : t('sync.synced')
 })
+
+const ariaLabel = computed(() => {
+  if (offline.value && hasPending.value) {
+    return t('sync.aria.offlinePending', { count: pending.value })
+  }
+  if (offline.value) return t('sync.aria.offline')
+  if (hasPending.value) return t('sync.aria.pending', { count: pending.value })
+  return t('sync.aria.synced')
+})
+
+const hintText = computed(() => {
+  if (offline.value) return t('sync.offlineHint')
+  if (hasPending.value) {
+    return props.householdName
+      ? t('sync.pendingHintIn', { name: props.householdName })
+      : t('sync.pendingHint')
+  }
+  return t('sync.syncedHint')
+})
+
 const iconSize = computed(() => (props.size === 'lg' ? 18 : 16))
 </script>
 
 <template>
-  <!-- role="status": screen readers announce the change, without interrupting. -->
-  <div :class="['sync', `sync--${size}`]" role="status">
-    <span :class="['chip', synced ? 'chip--synced' : 'chip--offline']">
-      <BaseIcon :name="synced ? 'cloudCheck' : 'cloudOff'" :size="iconSize" :stroke-width="2.5" />
+  <div :class="['sync', `sync--${size}`]">
+    <!-- role="status": screen readers announce the change, without interrupting. -->
+    <span :class="['chip', chipClass]" role="status" :aria-label="ariaLabel">
+      <BaseIcon :name="icon" :size="iconSize" :stroke-width="2.5" />
       {{ label }}
     </span>
-    <p v-if="hint" class="hint">{{ synced ? t('sync.syncedHint') : t('sync.offlineHint') }}</p>
+    <p v-if="hint" class="hint">{{ hintText }}</p>
   </div>
 </template>
 
@@ -82,6 +122,13 @@ const iconSize = computed(() => (props.size === 'lg' ? 18 : 16))
   border-color: var(--color-offline-border);
   background: var(--color-offline-bg);
   color: var(--color-offline-text);
+}
+
+/* Yellow sticker in both themes while changes wait in the outbox. */
+.chip--pending {
+  border-color: var(--color-on-accent);
+  background: var(--color-accent-sun);
+  color: var(--color-on-accent);
 }
 
 .hint {

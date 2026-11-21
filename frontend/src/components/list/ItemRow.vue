@@ -15,6 +15,7 @@ const AVATAR_SIZE_DONE = 22
 // recent: another member just changed the item; name is null if that member
 // is not (yet) among the known members. Only open items show it.
 // editing: its form is open in the panel next to the list (desktop).
+// pending: this item has an unsynced change in the outbox (shown on open items).
 // opensDialog: false when the edit button opens that panel, not a dialog.
 const props = withDefaults(
   defineProps<{
@@ -22,9 +23,10 @@ const props = withDefaults(
     person: { name: string; avatarUrl: string | null } | null
     recent?: { name: string | null } | null
     editing?: boolean
+    pending?: boolean
     opensDialog?: boolean
   }>(),
-  { recent: null, editing: false, opensDialog: true },
+  { recent: null, editing: false, pending: false, opensDialog: true },
 )
 // edit: only open items offer it (design "markt2-liste"); a done item comes
 // back with a tap first.
@@ -39,6 +41,7 @@ const done = computed(() => props.item.checked)
 const recentShown = computed(() => props.recent !== null && !done.value)
 const recentName = computed(() => (recentShown.value ? (props.recent?.name ?? null) : null))
 const editingShown = computed(() => props.editing && !done.value)
+const pendingShown = computed(() => props.pending && !done.value)
 
 // What a screen reader says: the whole row is one button, so everything the
 // eye sees on it has to be in the label.
@@ -53,8 +56,9 @@ const label = computed(() => {
       : t('list.row.justChangedByAnon')
     : null
   const editing = editingShown.value ? t('list.row.editingLabel') : null
+  const pending = pendingShown.value ? t('list.row.pendingLabel') : null
   const action = t(done.value ? 'list.row.uncheck' : 'list.row.check')
-  return `${[...details, by, recent, editing].filter(Boolean).join(', ')} – ${action}`
+  return `${[...details, by, recent, editing, pending].filter(Boolean).join(', ')} – ${action}`
 })
 </script>
 
@@ -70,7 +74,18 @@ const label = computed(() => {
         <BaseIcon v-if="done" name="check" :size="16" :stroke-width="3.5" />
       </span>
       <span class="text">
-        <span class="name" lang="de">{{ item.name }}</span>
+        <span class="name-row">
+          <span class="name" lang="de">{{ item.name }}</span>
+          <span
+            v-if="pendingShown"
+            class="pending"
+            role="img"
+            :aria-label="t('list.row.pending')"
+            :title="t('list.row.pending')"
+          >
+            <BaseIcon name="clock" :size="16" />
+          </span>
+        </span>
         <span v-if="item.note && !done" class="note">{{ item.note }}</span>
         <!-- Only the name gets cut off when it is too long, so "just changed"
            always stays visible; the title shows the whole text. -->
@@ -237,6 +252,20 @@ const label = computed(() => {
   flex-direction: column;
   align-items: flex-start;
   gap: 3px;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pending {
+  flex: none;
+  display: inline-flex;
+  color: var(--color-pending-icon);
 }
 
 .name {

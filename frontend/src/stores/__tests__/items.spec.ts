@@ -2857,3 +2857,119 @@ describe('items store: real outbox integration', () => {
     }
   })
 })
+
+describe('items store: pendingCount and isPending', () => {
+  it('counts outbox entries (not items) and drops them on answer and rejection', async () => {
+    const milch = item('i1', 'Milch')
+    const brot = item('i2', 'Brot')
+    const { store, outbox } = setup(fakeService([milch, brot]))
+    await store.load('l1')
+
+    expect(store.pendingCount).toBe(0)
+    expect(store.isPending('i1')).toBe(false)
+    expect(store.isPending('i2')).toBe(false)
+
+    // Two changes on the same item count as two pending entries.
+    await store.update('i1', { name: 'Hafermilch' })
+    await store.update('i1', { quantity: 2, unit: 'l' })
+    await store.create('l1', { name: 'Olivenöl' })
+
+    expect(store.pendingCount).toBe(3)
+    expect(store.isPending('i1')).toBe(true)
+    expect(store.isPending('new-1')).toBe(true)
+    expect(store.isPending('i2')).toBe(false)
+
+    outbox.answer({ kind: 'update', item: later(milch, 2, { name: 'Hafermilch' }) })
+    await flushPromises()
+    expect(store.pendingCount).toBe(2)
+    expect(store.isPending('i1')).toBe(true)
+
+    outbox.reject(new ApiError('ITEM_QUANTITY_INVALID', 400))
+    await flushPromises()
+    expect(store.pendingCount).toBe(1)
+    expect(store.isPending('i1')).toBe(false)
+    expect(store.isPending('new-1')).toBe(true)
+
+    outbox.answer({ kind: 'create', item: item('new-1', 'Olivenöl') })
+    await flushPromises()
+    expect(store.pendingCount).toBe(0)
+    expect(store.isPending('new-1')).toBe(false)
+  })
+
+  it('never double-counts while a write is being stored into the outbox', async () => {
+    const { store } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    const writing = store.update('i1', { name: 'Hafermilch' })
+    expect(store.pendingCount).toBe(1)
+    expect(store.isPending('i1')).toBe(true)
+
+    await writing
+    expect(store.pendingCount).toBe(1)
+    expect(store.isPending('i1')).toBe(true)
+  })
+
+  it('tracks entries added and sent by another tab', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    const entry = outbox.fromOtherTab({
+      kind: 'update',
+      itemId: 'i1',
+      change: { name: 'Hafermilch', clock: formatHLC(NOW, 1, 'other') },
+    })
+    await flushPromises()
+
+    expect(store.pendingCount).toBe(1)
+    expect(store.isPending('i1')).toBe(true)
+
+    outbox.leaveFromOtherTab(entry.seq)
+    await flushPromises()
+
+    expect(store.pendingCount).toBe(0)
+    expect(store.isPending('i1')).toBe(false)
+  })
+
+  it('counts held removeChecked entries until undo or server answer, without marking unchecked items pending', async () => {
+    const milch = item('i1', 'Milch', 'l1', true)
+    const brot = item('i2', 'Brot', 'l1', true)
+    const { store, events, outbox } = setup(fakeService([milch, brot]))
+    await store.load('l1')
+
+    const removal = store.startRemovingChecked('l1')
+    expect(store.pendingCount).toBe(1)
+    await flushPromises()
+    expect(store.pendingCount).toBe(1)
+
+    // Another member unchecks Milch while removeChecked is still waiting:
+    // Milch reappears open and has no pending change of its own.
+    events.emit(changed(later(milch, 2, { checked: false, checkedBy: null, checkedAt: null })))
+    expect(store.isPending('i1')).toBe(false)
+
+    removal?.undo()
+    expect(store.pendingCount).toBe(0)
+    await flushPromises()
+    expect(store.pendingCount).toBe(0)
+
+    const second = store.startRemovingChecked('l1')
+    await second?.commit()
+    expect(store.pendingCount).toBe(1)
+
+    outbox.answer({ kind: 'removeChecked', deleted: [{ itemId: 'i2', serverSeq: 3 }] })
+    await flushPromises()
+    expect(store.pendingCount).toBe(0)
+  })
+
+  it('clears pendingCount and isPending when signing out or switching users', async () => {
+    const { store, user } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+    await store.update('i1', { name: 'Hafermilch' })
+    expect(store.pendingCount).toBe(1)
+    expect(store.isPending('i1')).toBe(true)
+
+    user.value = null
+    await flushPromises()
+    expect(store.pendingCount).toBe(0)
+    expect(store.isPending('i1')).toBe(false)
+  })
+})
