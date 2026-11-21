@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -810,6 +812,114 @@ func TestWS_hubCloseGoesAway(t *testing.T) {
 
 	requireCloseStatus(t, conn, websocket.StatusGoingAway, "server shutting down")
 	srv.waitHandlerDone(t)
+}
+
+func TestWS_shutdownWaitsForCloseFrame(t *testing.T) {
+	hub := realtime.NewHub(realtime.DefaultMaxConnsPerUser, realtime.DefaultSendBuffer)
+	var wsHandlers sync.WaitGroup
+
+	router := NewRouter(Deps{
+		Env: config.EnvDevelopment,
+		DB:  fakePinger{},
+		Sessions: &fakeWSSessions{users: map[string]uuid.UUID{
+			wsTestToken:  testUserID,
+			wsOtherToken: wsOtherUserID,
+		}},
+		Groups:        wsGroups(),
+		Hub:           hub,
+		WSHandlers:    &wsHandlers,
+		PublicBaseURL: wsTestBaseURL,
+	})
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv := &http.Server{Handler: router}
+	srv.RegisterOnShutdown(hub.Close)
+
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- srv.Serve(ln)
+	}()
+	t.Cleanup(func() {
+		hub.Close()
+		_ = srv.Close()
+		if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			t.Errorf("Serve: %v", err)
+		}
+	})
+
+	dial := func(token string) *websocket.Conn {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(t.Context(), wsWait)
+		defer cancel()
+		conn, _, err := websocket.Dial(ctx, "http://"+ln.Addr().String()+wsPath, &websocket.DialOptions{
+			HTTPHeader: wsHeader(token, wsTestBaseURL),
+		})
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		t.Cleanup(func() { _ = conn.CloseNow() })
+		requireMessage(t, conn, "ready")
+		return conn
+	}
+
+	anna := dial(wsTestToken)
+	ben := dial(wsOtherToken)
+
+	// Anna is already reading like a real browser; Ben waits until after
+	// srv.Shutdown returns so we can prove WSHandlers waits for the close
+	// handshake to finish instead of returning right after Shutdown.
+	annaErr := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(t.Context(), wsWait)
+		defer cancel()
+		_, _, err := anna.Read(ctx)
+		annaErr <- err
+	}()
+
+	shutdownCtx, cancel := context.WithTimeout(t.Context(), wsWait)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	waitDone := make(chan struct{})
+	go func() {
+		wsHandlers.Wait()
+		close(waitDone)
+	}()
+
+	// Anna receives the 1001 close frame as soon as hub.Close runs.
+	select {
+	case err := <-annaErr:
+		var closeErr websocket.CloseError
+		if !errors.As(err, &closeErr) {
+			t.Fatalf("anna read error = %v, want close frame 1001", err)
+		}
+		if closeErr.Code != websocket.StatusGoingAway || closeErr.Reason != "server shutting down" {
+			t.Errorf("anna close = %d %q, want 1001 %q", closeErr.Code, closeErr.Reason, "server shutting down")
+		}
+	case <-time.After(wsWait):
+		t.Fatal("anna did not receive close frame in time")
+	}
+
+	// Ben has not read the close frame yet, so his handler is still completing
+	// the close handshake and WSHandlers must still be waiting.
+	select {
+	case <-waitDone:
+		t.Fatal("WSHandlers.Wait returned before Ben's handler finished closing")
+	default:
+	}
+
+	requireCloseStatus(t, ben, websocket.StatusGoingAway, "server shutting down")
+
+	select {
+	case <-waitDone:
+	case <-time.After(wsWait):
+		t.Fatal("WSHandlers.Wait did not return after all handlers closed")
+	}
 }
 
 func TestWS_groupLoadFails(t *testing.T) {

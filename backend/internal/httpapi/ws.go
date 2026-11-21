@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -141,7 +142,7 @@ func closeStatusFor(err error) (websocket.StatusCode, string) {
 // side ends it. It must run behind requireUser. The handler goroutine is the
 // goroutine of the connection: ServeHTTP does not return before the
 // connection is over, because the connection would be cut when it did.
-func wsHandler(hub *realtime.Hub, groups GroupIDLister, publicBaseURL string, handlers wsHandlers, cfg wsConfig) http.HandlerFunc {
+func wsHandler(hub *realtime.Hub, groups GroupIDLister, publicBaseURL string, handlers wsHandlers, cfg wsConfig, active *sync.WaitGroup) http.HandlerFunc {
 	// requireOrigin has already compared the Origin; the library checks it
 	// once more and takes the patterns for hosts that may differ from the
 	// Host header, which is the case behind the Vite proxy.
@@ -174,8 +175,15 @@ func wsHandler(hub *realtime.Hub, groups GroupIDLister, publicBaseURL string, ha
 			writeError(w, http.StatusInternalServerError, apigen.ErrorCodeInternal)
 			return
 		}
+		// Tracked before websocket.Accept hijacks the connection: http.Server.Shutdown
+		// waits for every non-hijacked request to return or hijack, so Add(1)
+		// always happens before Shutdown returns and Wait begins.
+		if active != nil {
+			active.Add(1)
+			defer active.Done()
+		}
 		// defer runs the calls in reverse order when the function returns:
-		// cancel, CloseNow, then Unregister, as declared bottom-up.
+		// cancel, CloseNow, Unregister, then Done, as declared bottom-up.
 		defer hub.Unregister(client)
 
 		// Accept answers the request itself if it refuses, so there is
