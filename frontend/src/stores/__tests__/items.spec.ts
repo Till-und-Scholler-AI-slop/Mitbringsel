@@ -2452,9 +2452,12 @@ describe('items store: real outbox integration', () => {
     let seq = 0
     let entries: { userId: string; entry: OutboxEntry }[] = []
     return {
-      addOutbox(userId, change, queuedAt) {
+      addOutbox(userId, change, queuedAt, hold) {
         const nextSeq = ++seq
-        entries.push({ userId, entry: { seq: nextSeq, change, queuedAt } })
+        const entry: OutboxEntry = hold
+          ? { seq: nextSeq, change, queuedAt, hold }
+          : { seq: nextSeq, change, queuedAt }
+        entries.push({ userId, entry })
         return Promise.resolve(nextSeq)
       },
       readOutbox(userId) {

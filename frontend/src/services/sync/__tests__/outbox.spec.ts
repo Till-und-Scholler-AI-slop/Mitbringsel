@@ -54,9 +54,9 @@ function fakeStorage() {
   let entries: OutboxEntry[] = []
   let seq = 0
   const storage: OutboxStorage = {
-    addOutbox: async (userId, change, queuedAt) => {
+    addOutbox: async (userId, change, queuedAt, hold) => {
       if (userId !== owner) return null
-      entries.push({ seq: ++seq, change, queuedAt })
+      entries.push(hold ? { seq: ++seq, change, queuedAt, hold } : { seq: ++seq, change, queuedAt })
       return seq
     },
     readOutbox: async (userId) => (userId === owner ? [...entries] : null),
@@ -514,6 +514,298 @@ describe('outbox', () => {
 
     expect(items.create).toHaveBeenCalledTimes(1)
     expect(store.changes()).toEqual([creation('milk')])
+  })
+
+  describe('held entries', () => {
+    function removeChecked(...itemIds: string[]): OutboxChange {
+      return { kind: 'removeChecked', listId: LIST, itemIds }
+    }
+
+    let holdCounter: number
+
+    beforeEach(() => {
+      holdCounter = 0
+    })
+
+    const openWithHolds = (overrides: Partial<OutboxOptions> = {}) =>
+      open({ newHoldId: () => `h${++holdCounter}`, ...overrides })
+
+    it('holds entries until release and blocks later entries behind them', async () => {
+      const onSent = vi.fn()
+      const outbox = openWithHolds({ onSent })
+
+      const held = outbox.enqueueHeld([removeChecked('a'), removeChecked('b')])
+      await held.stored
+      await outbox.enqueue(creation('milk'))
+      await settle()
+
+      expect(held.holdId).toBe('mitbringsel-outbox-hold-h1')
+      expect(items.removeChecked).not.toHaveBeenCalled()
+      expect(items.create).not.toHaveBeenCalled()
+      expect(await outbox.entries()).toEqual([
+        { seq: 1, change: removeChecked('a'), queuedAt: START, hold: held.holdId },
+        { seq: 2, change: removeChecked('b'), queuedAt: START, hold: held.holdId },
+        { seq: 3, change: creation('milk'), queuedAt: START },
+      ])
+
+      held.release()
+      await settle()
+
+      expect(items.removeChecked).toHaveBeenCalledTimes(2)
+      expect(items.removeChecked.mock.calls).toEqual([
+        [LIST, ['a']],
+        [LIST, ['b']],
+      ])
+      expect(items.create).toHaveBeenCalledTimes(1)
+      expect(onSent).toHaveBeenCalledTimes(3)
+      expect(store.changes()).toEqual([])
+    })
+
+    it('removes entries unsent on cancel, notifies listeners and sends later entries', async () => {
+      const outbox = openWithHolds()
+      const listener = vi.fn()
+      outbox.subscribe(listener)
+
+      const held = outbox.enqueueHeld([removeChecked('a'), removeChecked('b')])
+      await held.stored
+      await outbox.enqueue(creation('milk'))
+      await settle()
+      listener.mockClear()
+
+      await held.cancel()
+      await settle()
+
+      expect(items.removeChecked).not.toHaveBeenCalled()
+      expect(items.create).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalled()
+      expect(store.changes()).toEqual([])
+    })
+
+    it('lets another tab wait on the hold and send after release', async () => {
+      const tabA = openWithHolds()
+      const tabB = openWithHolds()
+      // Tab B already holds the outbox lock (sending an earlier entry).
+      let finishFirst: (() => void) | undefined
+      items.create.mockImplementationOnce(
+        () => new Promise((resolve) => (finishFirst = () => resolve(serverItem('first')))),
+      )
+      await tabB.enqueue(creation('first'))
+      await settle()
+
+      const held = tabA.enqueueHeld([removeChecked('a')])
+      await held.stored
+      finishFirst!()
+      await settle()
+
+      // Tab B reached the held entry and waits for tab A's hold lock.
+      expect(items.removeChecked).not.toHaveBeenCalled()
+
+      held.release()
+      await settle()
+
+      expect(items.removeChecked).toHaveBeenCalledWith(LIST, ['a'])
+      expect(store.changes()).toEqual([])
+    })
+
+    it('makes another tab skip cancelled entries when the hold ends', async () => {
+      const tabA = openWithHolds()
+      const tabB = openWithHolds()
+      let finishFirst: (() => void) | undefined
+      items.create.mockImplementationOnce(
+        () => new Promise((resolve) => (finishFirst = () => resolve(serverItem('first')))),
+      )
+      await tabB.enqueue(creation('first'))
+      await settle()
+
+      const held = tabA.enqueueHeld([removeChecked('a')])
+      await held.stored
+      await tabB.enqueue(creation('after'))
+      finishFirst!()
+      await settle()
+
+      expect(items.removeChecked).not.toHaveBeenCalled()
+      expect(items.create).toHaveBeenCalledTimes(1)
+
+      await held.cancel()
+      await settle()
+
+      expect(items.removeChecked).not.toHaveBeenCalled()
+      expect(items.create.mock.calls.map(([, item]) => item.id)).toEqual(['first', 'after'])
+      expect(store.changes()).toEqual([])
+    })
+
+    it('sends an abandoned hold from storage at once, as after a crash', async () => {
+      await store.storage.addOutbox(ANNA, removeChecked('a'), START, 'mitbringsel-outbox-hold-dead')
+      const outbox = openWithHolds()
+
+      outbox.trigger()
+      await settle()
+
+      expect(items.removeChecked).toHaveBeenCalledWith(LIST, ['a'])
+      expect(store.changes()).toEqual([])
+    })
+
+    it('releases holds on stop without letting the stopped outbox send', async () => {
+      const tabA = openWithHolds()
+      const held = tabA.enqueueHeld([removeChecked('a')])
+      await held.stored
+      await settle()
+      expect(items.removeChecked).not.toHaveBeenCalled()
+
+      tabA.stop()
+      await settle()
+
+      // Stopped tab A's waiting drain must not send, and the hold lock is free.
+      expect(items.removeChecked).not.toHaveBeenCalled()
+      expect(store.changes()).toEqual([removeChecked('a')])
+
+      const tabB = openWithHolds()
+      tabB.trigger()
+      await settle()
+
+      expect(items.removeChecked).toHaveBeenCalledWith(LIST, ['a'])
+      expect(store.changes()).toEqual([])
+    })
+
+    it('supports hold, release and cancel in memory without storage', async () => {
+      const outbox = openWithHolds({
+        storage: {
+          addOutbox: async () => null,
+          readOutbox: async () => null,
+          removeOutbox: async () => {},
+        },
+      })
+
+      const first = outbox.enqueueHeld([removeChecked('a')])
+      await first.stored
+      await settle()
+      expect(items.removeChecked).not.toHaveBeenCalled()
+      expect(await outbox.entries()).toEqual([
+        { seq: -1, change: removeChecked('a'), queuedAt: START, hold: first.holdId },
+      ])
+
+      await first.cancel()
+      await settle()
+      expect(items.removeChecked).not.toHaveBeenCalled()
+      expect(await outbox.entries()).toEqual([])
+
+      const second = outbox.enqueueHeld([removeChecked('b')])
+      await second.stored
+      await settle()
+      expect(items.removeChecked).not.toHaveBeenCalled()
+
+      second.release()
+      await settle()
+      expect(items.removeChecked).toHaveBeenCalledWith(LIST, ['b'])
+      expect(await outbox.entries()).toEqual([])
+    })
+
+    it('does not bypass a hold on trigger', async () => {
+      const outbox = openWithHolds()
+      const held = outbox.enqueueHeld([removeChecked('a')])
+      await held.stored
+      await settle()
+
+      outbox.trigger()
+      await settle()
+
+      expect(items.removeChecked).not.toHaveBeenCalled()
+
+      held.release()
+      await settle()
+      expect(items.removeChecked).toHaveBeenCalledWith(LIST, ['a'])
+    })
+
+    it('drops an expired held entry without waiting for its hold', async () => {
+      const onRejected = vi.fn()
+      const outbox = openWithHolds({ onRejected })
+      items.create.mockRejectedValueOnce(new ApiError('UNAUTHENTICATED', 401))
+      await outbox.enqueue(creation('blocker'))
+      await settle()
+
+      const held = outbox.enqueueHeld([removeChecked('a')])
+      await held.stored
+
+      vi.setSystemTime(START + MAX_AGE_MS + 1)
+      outbox.trigger()
+      await settle()
+
+      // Expired held entry is dropped even though held.release() was never called.
+      expect(items.removeChecked).not.toHaveBeenCalled()
+      expect(onRejected).toHaveBeenCalledWith(
+        { seq: 2, change: removeChecked('a'), queuedAt: START, hold: held.holdId },
+        new ApiError(ERROR_CODE_OUTBOX_EXPIRED),
+      )
+      expect(store.changes()).toEqual([])
+    })
+
+    it('allows release before stored resolves', async () => {
+      const outbox = openWithHolds()
+      const held = outbox.enqueueHeld([removeChecked('a')])
+      held.release()
+
+      await held.stored
+      await settle()
+
+      expect(items.removeChecked).toHaveBeenCalledWith(LIST, ['a'])
+      expect(store.changes()).toEqual([])
+    })
+
+    it('counts only the first call of release or cancel', async () => {
+      const outbox = openWithHolds()
+
+      const releasedFirst = outbox.enqueueHeld([removeChecked('a')])
+      await releasedFirst.stored
+      releasedFirst.release()
+      await releasedFirst.cancel()
+      await settle()
+      expect(items.removeChecked).toHaveBeenCalledWith(LIST, ['a'])
+
+      items.removeChecked.mockClear()
+      const cancelledFirst = outbox.enqueueHeld([removeChecked('b')])
+      await cancelledFirst.stored
+      const cancelling = cancelledFirst.cancel()
+      cancelledFirst.release()
+      await cancelling
+      await settle()
+      expect(items.removeChecked).not.toHaveBeenCalled()
+    })
+
+    it('stores nothing without a signed-in user or after stop', async () => {
+      user = null
+      const withoutUser = openWithHolds()
+      const h1 = withoutUser.enqueueHeld([removeChecked('a')])
+      await h1.stored
+      expect(store.changes()).toEqual([])
+
+      user = ANNA
+      const stopped = openWithHolds()
+      stopped.stop()
+      const h2 = stopped.enqueueHeld([removeChecked('b')])
+      await h2.stored
+      expect(store.changes()).toEqual([])
+    })
+
+    it('keeps holds working in the same tab without navigator.locks', async () => {
+      // Omit `locks` so createOutbox uses the browserLocks fallback (jsdom has no navigator.locks).
+      const outbox = createOutbox({
+        storage: store.storage,
+        items,
+        userId: () => user,
+        random: () => 1,
+        newHoldId: () => `fb${++holdCounter}`,
+      })
+      outboxes.push(outbox)
+
+      const held = outbox.enqueueHeld([removeChecked('a')])
+      await held.stored
+      await settle()
+      expect(items.removeChecked).not.toHaveBeenCalled()
+
+      held.release()
+      await settle()
+      expect(items.removeChecked).toHaveBeenCalledWith(LIST, ['a'])
+    })
   })
 })
 

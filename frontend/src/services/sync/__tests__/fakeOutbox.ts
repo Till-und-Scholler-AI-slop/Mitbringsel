@@ -1,6 +1,7 @@
 import { ApiError, HTTP_STATUS_UNAUTHORIZED } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
 import type {
+  HeldChanges,
   Outbox,
   OutboxAnswer,
   OutboxChange,
@@ -34,15 +35,17 @@ export interface FakeOutbox {
   changes(): OutboxChange[]
   /** How often trigger() was called. */
   readonly triggers: number
-  /** The server answers the oldest entry: it leaves, onSent follows. */
+  /** The server answers the oldest entry: it leaves, onSent follows. Throws if held. */
   answer(answer: OutboxAnswer): void
-  /** The server refuses the oldest entry: it leaves, onRejected follows. */
+  /** The server refuses the oldest entry: it leaves, onRejected follows. Throws if held. */
   reject(error: ApiError): void
+  /** Whether a hold was released (by release() or stop()). */
+  released(holdId: string): boolean
   /**
    * Another tab adds a change. Also before open(): then it waits in the
    * storage, as after a reload.
    */
-  fromOtherTab(change: OutboxChange, queuedAt?: number): OutboxEntry
+  fromOtherTab(change: OutboxChange, queuedAt?: number, hold?: string): OutboxEntry
   /** Another tab sent an entry (the oldest by default): it leaves without callbacks. */
   leaveFromOtherTab(seq?: number): void
   /**
@@ -58,6 +61,7 @@ interface Instance {
   options: FakeOutboxCallbacks
   stopped: boolean
   listeners: Set<() => void>
+  holds: Set<string>
 }
 
 // Like the real outbox: a missing session waits, a timeout, too many
@@ -97,6 +101,9 @@ async function send(service: Sender, change: OutboxChange): Promise<OutboxAnswer
 export function createFakeOutbox(): FakeOutbox {
   let list: OutboxEntry[] = []
   let seq = 0
+  let holdSeq = 0
+  const activeHolds = new Set<string>()
+  const releasedHolds = new Set<string>()
   // The user the storage belongs to: opening an outbox for another one
   // empties it, like localData.claim() at the sign-in. Entries from another
   // tab before the first open() belong to whoever opens it.
@@ -117,11 +124,20 @@ export function createFakeOutbox(): FakeOutbox {
     }
   }
 
-  function add(change: OutboxChange, queuedAt: number): OutboxEntry {
-    const entry = { seq: ++seq, change, queuedAt }
+  function add(change: OutboxChange, queuedAt: number, hold?: string): OutboxEntry {
+    const entry: OutboxEntry = hold
+      ? { seq: ++seq, change, queuedAt, hold }
+      : { seq: ++seq, change, queuedAt }
     list.push(entry)
     notify()
     return entry
+  }
+
+  function releaseHold(instance: Instance, holdId: string) {
+    if (!activeHolds.delete(holdId)) return
+    instance.holds.delete(holdId)
+    releasedHolds.add(holdId)
+    void sendAll()
   }
 
   // The newest open outbox whose user is still signed in gets the callback,
@@ -135,6 +151,9 @@ export function createFakeOutbox(): FakeOutbox {
   function oldest(): OutboxEntry {
     const entry = list[0]
     if (!entry) throw new Error('fake outbox: no entry to answer')
+    if (entry.hold && activeHolds.has(entry.hold)) {
+      throw new Error(`fake outbox: entry ${entry.seq} is still held by ${entry.hold}`)
+    }
     return entry
   }
 
@@ -159,6 +178,7 @@ export function createFakeOutbox(): FakeOutbox {
     sending = true
     try {
       for (let entry = list[0]; entry && service && run === sendRun; entry = list[0]) {
+        if (entry.hold && activeHolds.has(entry.hold)) return
         let result: { answer: OutboxAnswer } | { error: ApiError }
         try {
           result = { answer: await send(service, entry.change) }
@@ -180,7 +200,12 @@ export function createFakeOutbox(): FakeOutbox {
       const user = options.userId()
       if (user !== null && owner !== null && user !== owner) list = []
       owner = user ?? owner
-      const instance: Instance = { options, stopped: false, listeners: new Set() }
+      const instance: Instance = {
+        options,
+        stopped: false,
+        listeners: new Set(),
+        holds: new Set(),
+      }
       instances.push(instance)
       const signedIn = () => {
         const current = options.userId()
@@ -195,6 +220,51 @@ export function createFakeOutbox(): FakeOutbox {
           }
           return Promise.resolve()
         },
+        enqueueHeld(changes): HeldChanges {
+          const holdId = `mitbringsel-outbox-hold-${++holdSeq}`
+          if (!signedIn() || changes.length === 0) {
+            return {
+              holdId,
+              stored: Promise.resolve(),
+              release: () => {},
+              cancel: () => Promise.resolve(),
+            }
+          }
+          activeHolds.add(holdId)
+          instance.holds.add(holdId)
+          const queuedAt = Date.now()
+          const added: OutboxEntry[] = []
+          for (const change of changes) {
+            const entry: OutboxEntry = { seq: ++seq, change, queuedAt, hold: holdId }
+            list.push(entry)
+            added.push(entry)
+          }
+          notify()
+          void sendAll()
+
+          let decided = false
+          return {
+            holdId,
+            stored: Promise.resolve(),
+            release() {
+              if (decided) return
+              decided = true
+              releaseHold(instance, holdId)
+            },
+            cancel() {
+              if (decided) return Promise.resolve()
+              decided = true
+              if (activeHolds.delete(holdId)) {
+                instance.holds.delete(holdId)
+                const seqs = new Set(added.map((e) => e.seq))
+                list = list.filter((e) => !seqs.has(e.seq))
+                notify()
+                void sendAll()
+              }
+              return Promise.resolve()
+            },
+          }
+        },
         entries: () => Promise.resolve(signedIn() ? [...list] : []),
         trigger() {
           if (instance.stopped) return
@@ -208,6 +278,9 @@ export function createFakeOutbox(): FakeOutbox {
         stop() {
           instance.stopped = true
           instance.listeners.clear()
+          for (const holdId of [...instance.holds]) {
+            releaseHold(instance, holdId)
+          }
         },
       }
     },
@@ -227,9 +300,10 @@ export function createFakeOutbox(): FakeOutbox {
     reject(error) {
       settle(oldest(), { error })
     },
+    released: (holdId) => releasedHolds.has(holdId),
 
-    fromOtherTab(change, queuedAt = Date.now()) {
-      return add(change, queuedAt)
+    fromOtherTab(change, queuedAt = Date.now(), hold) {
+      return add(change, queuedAt, hold)
     },
     leaveFromOtherTab(entrySeq) {
       const entry = entrySeq === undefined ? oldest() : list.find((e) => e.seq === entrySeq)
@@ -245,9 +319,13 @@ export function createFakeOutbox(): FakeOutbox {
       for (const instance of instances) {
         instance.stopped = true
         instance.listeners.clear()
+        instance.holds.clear()
       }
       instances = []
       list = []
+      activeHolds.clear()
+      releasedHolds.clear()
+      holdSeq = 0
       owner = null
       triggers = 0
       sendRun++

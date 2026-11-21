@@ -1,6 +1,7 @@
 import { ApiError, HTTP_STATUS_UNAUTHORIZED } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
 import type { LocalData } from '@/services/storage/localData'
+import { uuidv7 } from '@/services/sync/uuidv7'
 import type { CreateItemRequest, DeletedItem, Item, UpdateItemRequest } from '@/types/api'
 
 /**
@@ -41,6 +42,21 @@ export interface OutboxEntry {
   change: OutboxChange
   // Date.now() when the change was made.
   queuedAt: number
+  // Name of a Web Lock. While a tab holds it, this entry and everything
+  // after it wait; the browser lets go of it when that tab is gone.
+  hold?: string
+}
+
+/** Changes stored together and held until released or cancelled. */
+export interface HeldChanges {
+  // Known at once, so the caller can hide or ignore the entries before they are stored.
+  readonly holdId: string
+  // Resolves once the entries are stored (or kept in memory without IndexedDB).
+  readonly stored: Promise<void>
+  // Lets the entries go out in their turn. Only the first call of release() or cancel() counts.
+  release(): void
+  // Takes the entries out unsent, then lets go of the lock.
+  cancel(): Promise<void>
 }
 
 /** What the server answered to a change. */
@@ -88,11 +104,16 @@ export interface OutboxOptions {
   now?: () => number
   // Between 0 and 1, for the jitter of the retry delay.
   random?: () => number
+  // The ID part of a new hold name; tests pass a counter.
+  newHoldId?: () => string
 }
 
 export interface Outbox {
   // Stores the change and starts sending.
   enqueue(change: OutboxChange): Promise<void>
+  // Stores the changes in this order under one new hold. Without a user or
+  // after stop() it stores nothing.
+  enqueueHeld(changes: OutboxChange[]): HeldChanges
   // The changes not sent yet, oldest first.
   entries(): Promise<OutboxEntry[]>
   // Sends now: also after a 401 stopped it, and without waiting for the
@@ -101,15 +122,33 @@ export interface Outbox {
   // Calls listener whenever a change joins or leaves the outbox, in this
   // tab or in another one. Answers a function that ends this.
   subscribe(listener: () => void): () => void
-  // Ends sending for good, e.g. when the user signs out.
+  // Ends sending for good and releases every hold this outbox still keeps,
+  // e.g. when the user signs out.
   stop(): void
 }
 
-// Uses navigator.locks if the browser has it. Without it, every tab sends
-// on its own: that may change the order between tabs, but sending twice
-// is harmless.
+// Per-name queue inside one tab, used when the browser has no
+// navigator.locks. That keeps holds working within the tab; another tab may
+// still send on its own (and even before undo), which is harmless for
+// retries because sending twice is idempotent.
+const inTabLocks = new Map<string, Promise<unknown>>()
+
+function runInTabLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  const prev = inTabLocks.get(name) ?? Promise.resolve()
+  const run = prev.then(fn)
+  const tail = run.catch(() => {})
+  inTabLocks.set(name, tail)
+  void tail.finally(() => {
+    if (inTabLocks.get(name) === tail) inTabLocks.delete(name)
+  })
+  return run
+}
+
+// Uses navigator.locks if the browser has it, else the in-tab queue above.
 const browserLocks: LockRunner = (name, fn) =>
-  typeof navigator !== 'undefined' && navigator.locks ? navigator.locks.request(name, fn) : fn()
+  typeof navigator !== 'undefined' && navigator.locks
+    ? navigator.locks.request(name, fn)
+    : runInTabLock(name, fn)
 
 type Verdict = 'retry' | 'stop' | 'reject'
 
@@ -130,6 +169,7 @@ export function createOutbox(options: OutboxOptions): Outbox {
   const locks = options.locks ?? browserLocks
   const now = options.now ?? Date.now
   const random = options.random ?? Math.random
+  const newHoldId = options.newHoldId ?? (() => uuidv7())
 
   // Changes that could not be stored (no IndexedDB): this tab keeps them in
   // memory and sends them after the stored ones. Their seq is negative, so
@@ -139,6 +179,9 @@ export function createOutbox(options: OutboxOptions): Outbox {
   // Entries this tab is done with. If removing one from the storage fails,
   // it is not sent again and again.
   const done = new Set<number>()
+  // Holds this outbox currently keeps. stop() releases them all, like a
+  // closed tab lets go of its Web Locks.
+  const activeHolds = new Set<() => void>()
 
   const listeners = new Set<() => void>()
   const channel =
@@ -259,6 +302,13 @@ export function createOutbox(options: OutboxOptions): Outbox {
         continue
       }
 
+      if (entry.hold) {
+        await locks(entry.hold, () => Promise.resolve())
+        if (!current()) return
+        const still = await next(user)
+        if (still?.seq !== entry.seq) continue // cancelled meanwhile
+      }
+
       let answer: OutboxAnswer
       try {
         answer = await send(entry.change)
@@ -302,6 +352,14 @@ export function createOutbox(options: OutboxOptions): Outbox {
       })
   }
 
+  function acquire(name: string): Promise<() => void> {
+    return new Promise((granted) => {
+      locks(name, () => new Promise<void>((release) => granted(release))).catch((err: unknown) =>
+        console.warn('outbox: hold failed', err),
+      )
+    })
+  }
+
   function trigger() {
     if (stopped) return
     paused = false
@@ -322,6 +380,91 @@ export function createOutbox(options: OutboxOptions): Outbox {
       start()
     },
 
+    enqueueHeld(changes) {
+      const holdId = `${LOCK_NAME}-hold-${newHoldId()}`
+      const user = userId()
+      if (user === null || stopped || changes.length === 0) {
+        return {
+          holdId,
+          stored: Promise.resolve(),
+          release: () => {},
+          cancel: () => Promise.resolve(),
+        }
+      }
+
+      let decision: 'none' | 'released' | 'cancelled' = 'none'
+      const currentDecision = () => decision
+      let releaseLock: (() => void) | null = null
+      let cancelWork: Promise<void> | null = null
+      const heldEntries: OutboxEntry[] = []
+
+      function releaseHold() {
+        if (!releaseLock) return
+        const fn = releaseLock
+        releaseLock = null
+        activeHolds.delete(releaseHold)
+        fn()
+      }
+
+      const stored = (async () => {
+        const releaseFn = await acquire(holdId)
+        if (stopped || currentDecision() === 'cancelled') {
+          releaseFn()
+          return
+        }
+        releaseLock = releaseFn
+        activeHolds.add(releaseHold)
+
+        const queuedAt = now()
+        for (const change of changes) {
+          const seq = await storage.addOutbox(user, change, queuedAt, holdId)
+          if (seq === null) {
+            const entry: OutboxEntry = { seq: -++memorySeq, change, queuedAt, hold: holdId }
+            memory.push({ userId: user, entry })
+            heldEntries.push(entry)
+          } else {
+            heldEntries.push({ seq, change, queuedAt, hold: holdId })
+          }
+        }
+        notify()
+        if (currentDecision() === 'released' || stopped) {
+          releaseHold()
+        }
+        start()
+      })()
+
+      return {
+        holdId,
+        stored,
+        release() {
+          if (decision !== 'none') return
+          decision = 'released'
+          releaseHold()
+        },
+        cancel() {
+          if (decision === 'cancelled') return cancelWork!
+          if (decision === 'released') return Promise.resolve()
+          decision = 'cancelled'
+          cancelWork = (async () => {
+            await stored
+            if (heldEntries.length > 0) {
+              for (const entry of heldEntries) done.add(entry.seq)
+              for (const entry of heldEntries) {
+                if (entry.seq < 0) {
+                  memory = memory.filter((m) => m.entry.seq !== entry.seq)
+                } else {
+                  await storage.removeOutbox(user, entry.seq)
+                }
+              }
+              notify()
+            }
+            releaseHold()
+          })()
+          return cancelWork
+        },
+      }
+    },
+
     async entries() {
       const user = userId()
       return user === null ? [] : entriesOf(user)
@@ -337,6 +480,7 @@ export function createOutbox(options: OutboxOptions): Outbox {
     stop() {
       stopped = true
       wake?.()
+      for (const release of [...activeHolds]) release()
       listeners.clear()
       channel?.close()
     },
