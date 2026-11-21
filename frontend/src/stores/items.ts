@@ -25,6 +25,9 @@ const ITEM_NOT_FOUND = 'ITEM_NOT_FOUND'
 // The error code of the API for a create whose ID belongs to another item,
 // e.g. one deleted since: sending a create again after a delete.
 const ITEM_ID_TAKEN = 'ITEM_ID_TAKEN'
+// The error code of the API for a list that does not exist (anymore) or is
+// no longer accessible to the user.
+const LIST_NOT_FOUND = 'LIST_NOT_FOUND'
 
 /** idle: not loaded yet. error: the last load failed (items may still be shown). */
 export type ItemsStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -36,16 +39,22 @@ export type NewItem = Omit<CreateItemRequest, 'id' | 'clock'>
 export type ItemChange = Omit<UpdateItemRequest, 'clock'>
 
 /** Which kind of own change the server refused. */
-export type ItemRejectionKind = 'create' | 'update' | 'check' | 'remove'
+export type ItemRejectionKind = 'create' | 'update' | 'check' | 'remove' | 'removeChecked'
 
-/** An own change the server refused: the item shows its state again. */
-export interface ItemRejection {
-  kind: ItemRejectionKind
-  /** The name of the item, as the user knows it. */
-  name: string
-  /** The error code of the API, or OUTBOX_EXPIRED. */
-  code: string
-}
+/** An own change the server refused: the items show their state again. */
+export type ItemRejection =
+  | {
+      kind: 'create' | 'update' | 'check' | 'remove'
+      /** The name of the item, as the user knows it. */
+      name: string
+      /** The error code of the API, or OUTBOX_EXPIRED. */
+      code: string
+    }
+  | {
+      kind: 'removeChecked'
+      /** The error code of the API, or OUTBOX_EXPIRED. */
+      code: string
+    }
 
 /** What the store passes when it opens the outbox of a user. */
 export type OutboxCallbacks = Required<Pick<OutboxOptions, 'userId' | 'onSent' | 'onRejected'>>
@@ -67,13 +76,10 @@ export interface PendingRemoval {
   /** The hidden items as they were when hidden, oldest first. */
   items: Item[]
   /**
-   * Sends the removal. Removing one item only puts it into the outbox: it
-   * stays hidden as a pending change, and a refusal of the server reaches
-   * onRejected(), not the caller. Removing the checked items still sends
-   * at once (#133): what the server deleted is gone for good, the rest
-   * (e.g. unchecked by someone meanwhile) shows again, and if a request
-   * fails, every item the server did not confirm shows again and the
-   * ApiError is thrown. Only the first call of commit() or undo() counts.
+   * Finishes the removal. Both actions go through the outbox: the items stay
+   * hidden as a pending change, and a refusal of the server reaches
+   * onRejected(), not the caller. Never throws. Only the first call of
+   * commit() or undo() counts.
    */
   commit(): Promise<void>
   /** Shows the items again without sending anything. */
@@ -123,12 +129,14 @@ interface ListItems {
  * item stays deleted: the store remembers its ID and ignores every later
  * state of it.
  *
- * Removing waits the other way round: the items disappear at once, but the
- * removal only goes to the outbox (or, for the checked items, to the
- * server) when the caller commits, a few seconds later, so "undo" never has
- * to bring items back on the server (deleting wins,
- * docs/adr/0004-lww-pro-feld.md). Until then the items stay in the store
- * and are only hidden from the readers.
+ * Removing waits the other way round so "undo" never has to bring items back
+ * on the server (deleting wins, docs/adr/0004-lww-pro-feld.md):
+ * - Removing checked items puts held entries into the outbox at once, so
+ *   closing or crashing the tab during the undo toast still lets them go
+ *   out. The pending overlay hides them while they are checked; commit()
+ *   releases the hold, undo() takes them out unsent.
+ * - Removing one item hides it locally and puts it into the outbox only on
+ *   commit().
  *
  * Changes of other members arrive as events and go the same way as answers.
  * Events are best effort, so after every (re)connect of the socket the
@@ -193,12 +201,10 @@ export function defineItemsStore(
     // started before must not bring the list back: the list is gone.
     const forgottenAt = new Map<string, number>()
 
-    // Items of a pending removal and how they hide. Read by the readers, so
-    // reactive. 'whileChecked' (removing the checked items): one that
-    // someone unchecks meanwhile shows up again among the open items, as the
-    // server will skip it. 'always' (removing one item): it goes whatever
-    // happens to it meanwhile, as deleting wins.
-    const hidden = ref(new Map<string, 'whileChecked' | 'always'>())
+    // Items of a pending single-item removal while its undo toast runs. Read
+    // by the readers, so reactive. They stay hidden whatever happens to them
+    // meanwhile, as deleting wins.
+    const hidden = ref(new Set<string>())
 
     // Writes to the local storage, coalesced (see persistQueue).
     const persistQueue = createPersistQueue()
@@ -222,6 +228,12 @@ export function defineItemsStore(
     // - settled: entries this tab got the answer or refusal of. A read that
     //   started before may still list them; their state is the server's now.
     const settled = shallowRef<ReadonlySet<number>>(new Set())
+    // Holds this tab already undid: filtered from stored so an in-flight
+    // read does not make the items flicker while cancel() removes them.
+    const ignoredHolds = shallowRef<ReadonlySet<string>>(new Set())
+    // Holds whose refusal was already reported, so multi-block removals
+    // produce at most one error toast.
+    const reportedHolds = new Set<string>()
     // Reads of the outbox answer in any order: only the newest one counts.
     let readCounter = 0
     let appliedRead = 0
@@ -235,12 +247,14 @@ export function defineItemsStore(
       touchedAt.clear()
       appliedLoadStart.clear()
       forgottenAt.clear()
-      hidden.value = new Map()
+      hidden.value = new Set()
       holdsState.clear()
       persistQueue.clear()
       stored.value = []
       local.value = []
       settled.value = new Set()
+      ignoredHolds.value = new Set()
+      reportedHolds.clear()
     }
 
     // The receive rule of the HLC: the next change of this tab must be
@@ -313,11 +327,18 @@ export function defineItemsStore(
       return byList.value[listId]
     }
 
-    // The pending changes per item. Entries this tab is done with no longer
-    // count, even if the newest read still lists them.
+    // The pending changes per item. Entries this tab is done with or undid
+    // no longer count, even if the newest read still lists them.
     const pending = computed(() =>
       foldPending(
-        [...stored.value.filter((entry) => !settled.value.has(entry.seq)), ...local.value],
+        [
+          ...stored.value.filter(
+            (entry) =>
+              !settled.value.has(entry.seq) &&
+              !(entry.hold !== undefined && ignoredHolds.value.has(entry.hold)),
+          ),
+          ...local.value,
+        ],
         currentUserId(),
       ),
     )
@@ -366,14 +387,9 @@ export function defineItemsStore(
       return { perList, perId }
     })
 
-    function isHidden(item: Item): boolean {
-      const how = hidden.value.get(item.id)
-      return how === 'always' || (how === 'whileChecked' && item.checked)
-    }
-
     /** All items of the list, oldest first, without those being removed. */
     function itemsOf(listId: string): Item[] {
-      return (shown.value.perList[listId] ?? []).filter((item) => !isHidden(item))
+      return (shown.value.perList[listId] ?? []).filter((item) => !hidden.value.has(item.id))
     }
 
     /** The items of the list that are not checked yet, oldest first. */
@@ -717,7 +733,7 @@ export function defineItemsStore(
 
     // What a refused change was, for the message. Only checked set:
     // the checkbox; any other field: an edit.
-    function rejectionKindOf(change: OutboxChange): ItemRejectionKind | null {
+    function rejectionKindOf(change: OutboxChange): ItemRejectionKind {
       switch (change.kind) {
         case 'create':
           return 'create'
@@ -728,31 +744,38 @@ export function defineItemsStore(
         case 'remove':
           return 'remove'
         case 'removeChecked':
-          // #133 decides how a refused "remove checked" is reported.
-          return null
+          return 'removeChecked'
       }
     }
 
-    // onRejected: the change left the outbox unsent or refused, so the item
-    // shows the state of the server again, and the listeners say why.
+    // onRejected: the change left the outbox unsent or refused, so the items
+    // show the state of the server again, and the listeners say why.
     function takeRejection(entry: OutboxEntry, error: ApiError) {
       const change = entry.change
-      const itemId =
-        change.kind === 'create'
-          ? change.item.id
-          : change.kind === 'removeChecked'
-            ? null
-            : change.itemId
+      if (change.kind === 'removeChecked') {
+        settle(entry.seq)
+        // The list was deleted or the user lost access; forgetList cleans up.
+        if (error.code === LIST_NOT_FOUND) return
+        if (entry.hold) {
+          if (reportedHolds.has(entry.hold)) return
+          reportedHolds.add(entry.hold)
+        }
+        for (const listener of [...rejectionListeners]) {
+          listener({ kind: 'removeChecked', code: error.code })
+        }
+        return
+      }
+
+      const itemId = change.kind === 'create' ? change.item.id : change.itemId
       // Looked up before settling: the server state is what shows again.
-      const server = itemId ? serverItem(itemId) : undefined
+      const server = serverItem(itemId)
       settle(entry.seq)
 
       // Someone else deleted the item (or its list) meanwhile: it goes
       // anyway, so there is nothing to report (ADR 0006, addendum #132).
       if (
-        itemId &&
-        (error.code === ITEM_NOT_FOUND ||
-          (change.kind === 'create' && error.code === ITEM_ID_TAKEN))
+        error.code === ITEM_NOT_FOUND ||
+        (change.kind === 'create' && error.code === ITEM_ID_TAKEN)
       ) {
         forget(itemId, server?.listId ?? (change.kind === 'create' ? change.listId : undefined))
         return
@@ -763,7 +786,7 @@ export function defineItemsStore(
 
       const kind = rejectionKindOf(change)
       const name = change.kind === 'create' ? change.item.name : server?.name
-      if (kind === null || name === undefined) return
+      if (kind === 'removeChecked' || name === undefined) return
       for (const listener of [...rejectionListeners]) {
         listener({ kind, name, code: error.code })
       }
@@ -809,37 +832,100 @@ export function defineItemsStore(
     }
 
     /**
-     * Hides `items` until the returned removal is committed or undone.
-     * `send` does the requests and applies their answers; it is given a
-     * check whether the user is still the same. Whatever it did not delete
-     * shows again afterwards, also when it throws.
+     * Enqueues held removal entries for the checked items of the list so they
+     * disappear at once, and returns how to finish: commit() releases the
+     * hold, undo() takes the entries out unsent. Null if the list has no
+     * checked items. The IDs are taken now, so an item someone checks
+     * meanwhile is not removed with them.
      */
-    function startRemoval(
-      items: Item[],
-      how: 'whileChecked' | 'always',
-      send: (current: () => boolean) => Promise<void>,
-    ): PendingRemoval {
+    function startRemovingChecked(listId: string): PendingRemoval | null {
+      const box = outbox
+      const items = checkedItems(listId).map((item) => ({ ...toRaw(item) }))
+      if (items.length === 0 || !box) {
+        return null
+      }
+      const ids = items.map((item) => item.id)
+      // One entry per block, as the server takes only so many IDs. All blocks
+      // share one hold so undo cancels them together and a refusal reports once.
+      const changes: OutboxChange[] = []
+      for (let start = 0; start < ids.length; start += MAX_REMOVE_CHECKED) {
+        changes.push({
+          kind: 'removeChecked',
+          listId,
+          itemIds: ids.slice(start, start + MAX_REMOVE_CHECKED),
+        })
+      }
+
       const started = generation
       const current = () => started === generation
-      const ids = items.map((item) => item.id)
-      for (const id of ids) {
-        hidden.value.set(id, how)
+      const queuedAt = Date.now()
+      const queued: QueuedChange[] = changes.map((change) => ({ change, queuedAt }))
+      const queuedSet = new Set(queued)
+      local.value = [...local.value, ...queued]
+
+      const held = box.enqueueHeld(changes)
+      const dropLocal = () => {
+        if (current()) local.value = local.value.filter((q) => !queuedSet.has(q))
       }
+      const storing = (async () => {
+        try {
+          await held.stored
+          if (current()) await refresh()
+        } finally {
+          dropLocal()
+        }
+      })()
+
+      let done = false
+
+      async function commit() {
+        if (done) return
+        done = true
+        held.release()
+        await storing
+      }
+
+      function undo() {
+        if (done) return
+        done = true
+        if (!current()) return
+        ignoredHolds.value = new Set(ignoredHolds.value).add(held.holdId)
+        dropLocal()
+        void held.cancel()
+      }
+
+      return { items, commit, undo }
+    }
+
+    /**
+     * Hides one item at once, checked or not, and returns how to finish. Null
+     * if the store does not show the item (anymore). commit() puts the
+     * removal into the outbox, where it keeps the item hidden until the
+     * server deleted it; a tab closed before commit() loses the removal.
+     */
+    function startRemovingItem(itemId: string): PendingRemoval | null {
+      const item = byId(itemId)
+      if (!item || hidden.value.has(item.id)) {
+        return null
+      }
+      const snapshot = { ...toRaw(item) }
+      const started = generation
+      const current = () => started === generation
+      hidden.value.add(itemId)
       let done = false
 
       function show() {
-        // After a reset the map belongs to the next user.
+        // After a reset the set belongs to the next user.
         if (!current()) return
-        for (const id of ids) {
-          hidden.value.delete(id)
-        }
+        hidden.value.delete(itemId)
       }
 
       async function commit() {
         if (done) return
         done = true
         try {
-          await send(current)
+          // Not for the next user, whose outbox this would be.
+          if (current()) await write({ kind: 'remove', itemId })
         } finally {
           show()
         }
@@ -851,52 +937,7 @@ export function defineItemsStore(
         show()
       }
 
-      return { items, commit, undo }
-    }
-
-    /**
-     * Hides the checked items of the list at once and returns how to finish:
-     * commit() sends the removal, undo() shows the items again. Null if the
-     * list has no checked items. The IDs are taken now, so an item someone
-     * checks meanwhile is not removed with them.
-     */
-    function startRemovingChecked(listId: string): PendingRemoval | null {
-      const items = checkedItems(listId).map((item) => ({ ...toRaw(item) }))
-      if (items.length === 0) {
-        return null
-      }
-      const ids = items.map((item) => item.id)
-      return startRemoval(items, 'whileChecked', async (current) => {
-        // One request per block, as the server takes only so many IDs. Each
-        // answer is applied at once, so a failing later block does not bring
-        // back what an earlier one deleted.
-        for (let start = 0; start < ids.length; start += MAX_REMOVE_CHECKED) {
-          const block = ids.slice(start, start + MAX_REMOVE_CHECKED)
-          const deleted = await service.removeChecked(listId, block)
-          if (!current()) return
-          for (const gone of deleted) {
-            takeDeletion(listId, gone.itemId, gone.serverSeq)
-          }
-        }
-      })
-    }
-
-    /**
-     * Hides one item at once, checked or not, and returns how to finish, as
-     * startRemovingChecked() does. Null if the store does not show the item
-     * (anymore). commit() puts the removal into the outbox, where it keeps
-     * the item hidden until the server deleted it; a tab closed before
-     * commit() loses the removal.
-     */
-    function startRemovingItem(itemId: string): PendingRemoval | null {
-      const item = byId(itemId)
-      if (!item || isHidden(item)) {
-        return null
-      }
-      return startRemoval([{ ...toRaw(item) }], 'always', async (current) => {
-        // Not for the next user, whose outbox this would be.
-        if (current()) await write({ kind: 'remove', itemId })
-      })
+      return { items: [snapshot], commit, undo }
     }
 
     /**

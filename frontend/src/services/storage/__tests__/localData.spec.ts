@@ -176,6 +176,19 @@ describe('localData', () => {
       })
     })
 
+    it('stores and reads the hold name and omits it when absent', async () => {
+      await data.claim(me(ANNA))
+      const first = await data.addOutbox(ANNA, removal('a'), 1000, 'mitbringsel-outbox-hold-1')
+      const second = await data.addOutbox(ANNA, removal('b'), 2000)
+
+      const entries = await data.readOutbox(ANNA)
+      expect(entries).toEqual([
+        { seq: first, change: removal('a'), queuedAt: 1000, hold: 'mitbringsel-outbox-hold-1' },
+        { seq: second, change: removal('b'), queuedAt: 2000 },
+      ])
+      expect('hold' in entries![1]!).toBe(false)
+    })
+
     it('adds, reads and removes nothing for a user who is not the owner', async () => {
       await fillForAnna()
 

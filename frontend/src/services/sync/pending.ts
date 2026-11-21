@@ -29,6 +29,8 @@ export interface PendingItem {
   fields: PendingFields
   // A pending remove hides the item.
   removed: boolean
+  // A pending removeChecked hides the item as long as it is checked.
+  removedIfChecked: boolean
 }
 
 export interface ApplyOptions {
@@ -38,7 +40,7 @@ export interface ApplyOptions {
 }
 
 function emptyPending(): PendingItem {
-  return { created: null, fields: {}, removed: false }
+  return { created: null, fields: {}, removed: false, removedIfChecked: false }
 }
 
 // The item that a create shows. The server has not answered, so there is
@@ -134,8 +136,9 @@ export function foldPending(
         of(change.itemId).removed = true
         break
       case 'removeChecked':
-        // #133: the items to remove are in change.itemIds. Until then the
-        // store hides them itself while the undo toast runs.
+        for (const itemId of change.itemIds) {
+          of(itemId).removedIfChecked = true
+        }
         break
     }
   }
@@ -165,5 +168,7 @@ export function applyPending(
   if (!base && !options.tombstoned) base = pending.created ?? undefined
   if (!base) return null
 
-  return { ...base, ...pending.fields }
+  const merged = { ...base, ...pending.fields }
+  if (pending.removedIfChecked && merged.checked) return null
+  return merged
 }

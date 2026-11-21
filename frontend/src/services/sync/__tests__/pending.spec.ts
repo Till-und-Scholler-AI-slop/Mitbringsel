@@ -180,9 +180,56 @@ describe('remove', () => {
 })
 
 describe('removeChecked', () => {
-  it('has no effect yet', () => {
-    const changes = [queued({ kind: 'removeChecked', listId: LIST, itemIds: [ID] })]
-    expect(foldPending(changes, ME).size).toBe(0)
+  const removeChecked = (...itemIds: string[]): OutboxChange => ({
+    kind: 'removeChecked',
+    listId: LIST,
+    itemIds,
+  })
+
+  it('hides checked items named in the change', () => {
+    const pending = pendingOf(queued(removeChecked(ID)))
+    expect(applyPending(serverItem({ checked: true }), pending)).toBeNull()
+  })
+
+  it('shows an item that a later pending update unchecks', () => {
+    const pending = pendingOf(queued(removeChecked(ID), t0), queued(update({ checked: false }), t1))
+    expect(applyPending(serverItem({ checked: true }), pending)).toMatchObject({
+      id: ID,
+      checked: false,
+    })
+  })
+
+  it('shows an item that the server unchecked meanwhile', () => {
+    const pending = pendingOf(queued(removeChecked(ID)))
+    expect(applyPending(serverItem({ checked: false }), pending)).toEqual(
+      serverItem({ checked: false }),
+    )
+  })
+
+  it('leaves items not named in the change alone', () => {
+    const other = '55555555-5555-7555-8555-555555555555'
+    const folded = foldPending([queued(removeChecked(other))], ME)
+    expect(folded.has(ID)).toBe(false)
+    expect(folded.get(other)?.removedIfChecked).toBe(true)
+  })
+
+  it('hides an item checked only by a pending update', () => {
+    const pending = pendingOf(queued(update({ checked: true }), t0), queued(removeChecked(ID), t1))
+    expect(applyPending(serverItem({ checked: false }), pending)).toBeNull()
+  })
+
+  it('hides an item shown only by a pending create and checked by a pending update', () => {
+    const pending = pendingOf(
+      queued(create, t0),
+      queued(update({ checked: true }), t0),
+      queued(removeChecked(ID), t1),
+    )
+    expect(applyPending(undefined, pending)).toBeNull()
+  })
+
+  it('gives the same result when folded twice', () => {
+    const changes = [queued(removeChecked(ID), t0)]
+    expect(foldPending([...changes, ...changes], ME)).toEqual(foldPending(changes, ME))
   })
 })
 
@@ -193,8 +240,18 @@ describe('foldPending', () => {
       [queued(update({ name: 'Bread' })), queued({ kind: 'remove', itemId: other })],
       ME,
     )
-    expect(folded.get(ID)).toEqual({ created: null, fields: { name: 'Bread' }, removed: false })
-    expect(folded.get(other)).toEqual({ created: null, fields: {}, removed: true })
+    expect(folded.get(ID)).toEqual({
+      created: null,
+      fields: { name: 'Bread' },
+      removed: false,
+      removedIfChecked: false,
+    })
+    expect(folded.get(other)).toEqual({
+      created: null,
+      fields: {},
+      removed: true,
+      removedIfChecked: false,
+    })
   })
 
   it('gives the same result for the same changes twice', () => {
@@ -202,6 +259,7 @@ describe('foldPending', () => {
       queued(create, t0),
       queued(update({ name: 'Bread', checked: true }), t1),
       queued({ kind: 'remove', itemId: ID }, t1),
+      queued({ kind: 'removeChecked', listId: LIST, itemIds: [ID] }, t1),
     ]
     expect(foldPending([...changes, ...changes], ME)).toEqual(foldPending(changes, ME))
   })
@@ -227,7 +285,12 @@ describe('applyPending', () => {
 
   it('returns a new object also without pending fields', () => {
     const server = serverItem()
-    const item = applyPending(server, { created: null, fields: {}, removed: false })
+    const item = applyPending(server, {
+      created: null,
+      fields: {},
+      removed: false,
+      removedIfChecked: false,
+    })
     expect(item).toEqual(server)
     expect(item).not.toBe(server)
   })

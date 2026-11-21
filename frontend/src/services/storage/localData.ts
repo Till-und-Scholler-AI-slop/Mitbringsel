@@ -48,7 +48,12 @@ export interface LocalData {
   // Appends a change to the outbox and answers its sequence number, which
   // orders it after every change added before. null if it was not stored
   // (no IndexedDB, not the owner).
-  addOutbox(userId: string, change: OutboxChange, queuedAt: number): Promise<number | null>
+  addOutbox(
+    userId: string,
+    change: OutboxChange,
+    queuedAt: number,
+    hold?: string,
+  ): Promise<number | null>
   // The outbox in order, oldest first.
   readOutbox(userId: string): Promise<OutboxEntry[] | null>
   removeOutbox(userId: string, seq: number): Promise<void>
@@ -266,8 +271,11 @@ export function createLocalData(name = LOCAL_DATA_DB_NAME): LocalData {
     writeItems: (userId, listId, items) => write('items', userId, listId, items),
     removeItems: (userId, listId) => write('items', userId, listId, undefined),
 
-    addOutbox(userId, change, queuedAt) {
-      const value: StoredChange = plain({ change, queuedAt })
+    // Sequence numbers follow the call order of addOutbox: db() is cached,
+    // and onOutbox opens the transaction without any extra await before it,
+    // so IndexedDB assigns autoIncrement keys in call order. Keep it that way.
+    addOutbox(userId, change, queuedAt, hold) {
+      const value: StoredChange = plain(hold ? { change, queuedAt, hold } : { change, queuedAt })
       return onOutbox('add outbox', userId, 'readwrite', null, (outbox) => outbox.add(value))
     },
     readOutbox: (userId) =>

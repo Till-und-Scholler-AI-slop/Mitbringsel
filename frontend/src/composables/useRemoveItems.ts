@@ -1,7 +1,5 @@
 import { useI18n } from 'vue-i18n'
 
-import { useErrorText } from '@/composables/useErrorMessage'
-import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { useItemsStore, type PendingRemoval } from '@/stores/items'
 import { useToastsStore } from '@/stores/toasts'
 
@@ -14,33 +12,19 @@ import { useToastsStore } from '@/stores/toasts'
  * the toast also holds the removal back, as undo must work as long as it is
  * offered.
  *
- * Removing one item puts it into the outbox; a refusal reaches
- * useItemRejections. Removing checked items still sends directly (#133).
+ * Both go through the outbox; a refusal reaches useItemRejections.
  *
  * The removal belongs to the stores, not to the view: leaving the list
  * before the toast ends still commits it.
  */
 export function useRemoveItems() {
   const { t } = useI18n()
-  const errorText = useErrorText()
   const items = useItemsStore()
   const toasts = useToastsStore()
 
-  async function send(removal: PendingRemoval, failedText: string) {
-    try {
-      await removal.commit()
-    } catch (err) {
-      toasts.show({
-        kind: 'error',
-        text: failedText,
-        detail: errorText(err instanceof ApiError ? err.code : ERROR_CODE_UNKNOWN),
-      })
-    }
-  }
-
   // `fromKeyboard` moves the focus to "Undo" in the toast, as a keyboard
   // user would otherwise have to search for it.
-  function offerUndo(removal: PendingRemoval, fromKeyboard: boolean, commit: () => void) {
+  function offerUndo(removal: PendingRemoval, fromKeyboard: boolean) {
     const [only] = removal.items
     const count = removal.items.length
     toasts.show({
@@ -53,22 +37,20 @@ export function useRemoveItems() {
           : t('list.done.removed', { count }),
       actionLabel: t('list.done.undo'),
       focusAction: fromKeyboard,
-      onEnd: (reason) => (reason === 'action' ? removal.undo() : commit()),
+      onEnd: (reason) => (reason === 'action' ? removal.undo() : void removal.commit()),
     })
   }
 
   /** Removes the checked items of the list; nothing happens without any. */
   function removeChecked(listId: string, fromKeyboard = false) {
     const removal = items.startRemovingChecked(listId)
-    if (removal) {
-      offerUndo(removal, fromKeyboard, () => void send(removal, t('list.done.removeFailed')))
-    }
+    if (removal) offerUndo(removal, fromKeyboard)
   }
 
   /** Removes one item, open or checked; nothing happens if it is gone. */
   function removeItem(itemId: string, fromKeyboard = false) {
     const removal = items.startRemovingItem(itemId)
-    if (removal) offerUndo(removal, fromKeyboard, () => void removal.commit())
+    if (removal) offerUndo(removal, fromKeyboard)
   }
 
   return { removeChecked, removeItem }

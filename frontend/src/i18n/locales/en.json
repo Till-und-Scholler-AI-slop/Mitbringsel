@@ -234,7 +234,8 @@
       "create": "“{name}” could not be added.",
       "update": "The change to “{name}” was not saved.",
       "check": "The check mark on “{name}” was not saved.",
-      "remove": "“{name}” could not be deleted."
+      "remove": "“{name}” could not be deleted.",
+      "removeChecked": "The checked items could not be removed."
     },
     "row": {
       "edit": "Edit {name}",
@@ -258,8 +259,7 @@
       "removeLabel": "Remove {count} done item for everyone | Remove {count} done items for everyone",
       "removedOne": "“{name}” removed",
       "removed": "{count} item removed | {count} items removed",
-      "undo": "Undo",
-      "removeFailed": "The done items could not be removed."
+      "undo": "Undo"
     },
     "quickAdd": {
       "label": "Add item",

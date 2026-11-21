@@ -9,6 +9,7 @@ import { createClock, formatHLC } from '@/services/sync/hlc'
 import {
   createOutbox,
   ERROR_CODE_OUTBOX_EXPIRED,
+  type LockRunner,
   type OutboxChange,
   type OutboxEntry,
   type OutboxStorage,
@@ -1782,86 +1783,145 @@ describe('items store: removing checked items', () => {
     item('i3', 'Eier', 'l1', true),
   ]
 
-  it('hides the checked items at once and sends nothing yet', async () => {
-    const service = fakeService(shopping())
-    const { store } = setup(service)
+  it('hides checked items at once and enqueues a held removal behind pending writes', async () => {
+    const { store, outbox } = setup(fakeService(shopping()))
     await store.load('l1')
+    // Also include a pending-checked item and a pending-created + checked item.
+    await store.setChecked('i1', true)
+    await store.create('l1', { name: 'Käse' })
+    await store.setChecked('new-1', true)
 
     const removal = store.startRemovingChecked('l1')
 
-    expect(names(removal?.items ?? [])).toEqual(['Brot', 'Eier'])
+    expect(names(removal?.items ?? [])).toEqual(['Milch', 'Brot', 'Eier', 'Käse'])
     expect(store.checkedItems('l1')).toEqual([])
-    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
-    expect(names(store.openItems('l1'))).toEqual(['Milch'])
-    expect(service.removeChecked).not.toHaveBeenCalled()
+    expect(store.itemsOf('l1')).toEqual([])
+
+    const entries = outbox.entries()
+    expect(entries).toHaveLength(4)
+    expect(entries.map((e) => e.change.kind)).toEqual([
+      'update',
+      'create',
+      'update',
+      'removeChecked',
+    ])
+    const held = entries[3]!
+    expect(held.change).toEqual({
+      kind: 'removeChecked',
+      listId: 'l1',
+      itemIds: ['i1', 'i2', 'i3', 'new-1'],
+    })
+    expect(held.hold).toEqual(expect.any(String))
+    expect(outbox.released(held.hold!)).toBe(false)
   })
 
   it('answers null if no item is checked', async () => {
-    const { store } = setup(fakeService([item('i1', 'Milch')]))
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
 
     expect(store.startRemovingChecked('l1')).toBeNull()
+    expect(outbox.entries()).toEqual([])
   })
 
-  it('deletes the items for good on commit', async () => {
-    const service = fakeService(shopping())
-    const { store, events } = setup(service)
+  it('releases on commit and tombstones deleted items on answer', async () => {
+    const { store, events, outbox } = setup(fakeService(shopping()))
     await store.load('l1')
 
-    await store.startRemovingChecked('l1')?.commit()
+    const removal = store.startRemovingChecked('l1')
+    const [entry] = outbox.entries()
+    expect(() => outbox.answer({ kind: 'removeChecked', deleted: [] })).toThrow(/still held/)
+
+    await removal?.commit()
+    expect(outbox.released(entry!.hold!)).toBe(true)
+
+    outbox.answer({
+      kind: 'removeChecked',
+      deleted: [
+        { itemId: 'i2', serverSeq: 10 },
+        { itemId: 'i3', serverSeq: 11 },
+      ],
+    })
+    await flushPromises()
     // A late state of a deleted item must not bring it back.
     events.emit(changed(later(item('i2', 'Brot', 'l1', true), 20)))
 
-    expect(service.removeChecked).toHaveBeenCalledWith('l1', ['i2', 'i3'])
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
   })
 
   it('shows an item again that the server did not delete', async () => {
-    const service = fakeService(shopping())
-    service.removeChecked.mockResolvedValueOnce([{ itemId: 'i2', serverSeq: 10 }])
-    const { store } = setup(service)
+    const { store, events, outbox } = setup(fakeService(shopping()))
     await store.load('l1')
 
     await store.startRemovingChecked('l1')?.commit()
+    outbox.answer({ kind: 'removeChecked', deleted: [{ itemId: 'i2', serverSeq: 10 }] })
+    await flushPromises()
+    events.emit(changed(later(item('i2', 'Brot', 'l1', true), 20)))
 
     expect(names(store.checkedItems('l1'))).toEqual(['Eier'])
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Eier'])
   })
 
-  it('shows the items again on undo and sends nothing', async () => {
-    const service = fakeService(shopping())
-    const { store } = setup(service)
-    await store.load('l1')
+  it('shows the items again at once on undo without flicker and empties the outbox', async () => {
+    const fake = createFakeOutbox()
+    const staleRead = deferred<OutboxEntry[]>()
+    let reads = 0
+    const user = ref<string | null>(ANNA)
+    const store = defineItemsStore(
+      fakeService(shopping()),
+      () => user.value,
+      createFakeServerEvents(),
+      fakeStorage(),
+      {
+        openOutbox(options) {
+          const box = fake.open(options)
+          return {
+            ...box,
+            entries() {
+              reads++
+              // Read 1: initial refresh. Read 2: triggered by enqueueHeld (delayed
+              // so it resolves AFTER undo with the cancelled held entry).
+              if (reads === 2) return staleRead.promise
+              return box.entries()
+            },
+          }
+        },
+        clock: createClock('tab', () => NOW),
+      },
+    )()
 
+    await store.load('l1')
     const removal = store.startRemovingChecked('l1')
+    const [heldEntry] = fake.entries()
+    expect(heldEntry).toBeDefined()
+
     removal?.undo()
-    await removal?.commit()
-
+    // Items reappear synchronously before cancel/reads settle.
     expect(names(store.checkedItems('l1'))).toEqual(['Brot', 'Eier'])
-    expect(service.removeChecked).not.toHaveBeenCalled()
+
+    // Even when a stale read still delivers the undone held entry, nothing flickers.
+    staleRead.resolve([heldEntry!])
+    await flushPromises()
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot', 'Eier'])
+    expect(fake.entries()).toEqual([])
+
+    // Calling commit afterwards has no effect.
+    await removal?.commit()
+    expect(fake.entries()).toEqual([])
+    expect(fake.released(heldEntry!.hold!)).toBe(false)
   })
 
-  it('sends once, however often commit is called', async () => {
-    const service = fakeService(shopping())
-    const { store } = setup(service)
+  it('counts only the first call of commit or undo', async () => {
+    const { store, outbox } = setup(fakeService(shopping()))
     await store.load('l1')
 
     const removal = store.startRemovingChecked('l1')
+    const [entry] = outbox.entries()
     await Promise.all([removal?.commit(), removal?.commit()])
     removal?.undo()
 
-    expect(service.removeChecked).toHaveBeenCalledTimes(1)
+    expect(outbox.released(entry!.hold!)).toBe(true)
+    expect(outbox.entries()).toHaveLength(1)
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
-  })
-
-  it('shows the items again and throws if the request fails', async () => {
-    const service = fakeService(shopping())
-    service.removeChecked.mockRejectedValueOnce(new ApiError('INTERNAL', 500))
-    const { store } = setup(service)
-    await store.load('l1')
-
-    await expect(store.startRemovingChecked('l1')?.commit()).rejects.toThrow(ApiError)
-
-    expect(names(store.checkedItems('l1'))).toEqual(['Brot', 'Eier'])
   })
 
   it('shows an item that someone unchecks meanwhile among the open items', async () => {
@@ -1876,21 +1936,23 @@ describe('items store: removing checked items', () => {
   })
 
   it('leaves an item alone that is checked after the start', async () => {
-    const service = fakeService(shopping())
-    const { store } = setup(service)
+    const { store, outbox } = setup(fakeService(shopping()))
     await store.load('l1')
 
     const removal = store.startRemovingChecked('l1')
     await store.setChecked('i1', true)
     await removal?.commit()
 
-    expect(service.removeChecked).toHaveBeenCalledWith('l1', ['i2', 'i3'])
+    expect(outbox.changes()[0]).toEqual({
+      kind: 'removeChecked',
+      listId: 'l1',
+      itemIds: ['i2', 'i3'],
+    })
     expect(names(store.checkedItems('l1'))).toEqual(['Milch'])
   })
 
   it('takes the next removal without the items of the first', async () => {
-    const service = fakeService(shopping())
-    const { store } = setup(service)
+    const { store } = setup(fakeService(shopping()))
     await store.load('l1')
 
     store.startRemovingChecked('l1')
@@ -1910,40 +1972,160 @@ describe('items store: removing checked items', () => {
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
   })
 
-  it('sends many items in blocks and keeps what an earlier block deleted', async () => {
+  it('brings items back and reports on a 400 refusal', async () => {
+    const { store, outbox } = setup(fakeService(shopping()))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
+    await store.load('l1')
+
+    await store.startRemovingChecked('l1')?.commit()
+    outbox.reject(new ApiError('INVALID_REQUEST', 400))
+    await flushPromises()
+
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot', 'Eier'])
+    expect(rejections).toEqual([{ kind: 'removeChecked', code: 'INVALID_REQUEST' }])
+  })
+
+  it('silently drops LIST_NOT_FOUND without reporting', async () => {
+    const { store, outbox } = setup(fakeService(shopping()))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
+    await store.load('l1')
+
+    await store.startRemovingChecked('l1')?.commit()
+    outbox.reject(new ApiError('LIST_NOT_FOUND', 404))
+    await flushPromises()
+
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot', 'Eier'])
+    expect(rejections).toEqual([])
+  })
+
+  it('reports OUTBOX_EXPIRED and brings items back', async () => {
+    const { store, outbox } = setup(fakeService(shopping()))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
+    await store.load('l1')
+
+    await store.startRemovingChecked('l1')?.commit()
+    outbox.reject(new ApiError(ERROR_CODE_OUTBOX_EXPIRED))
+    await flushPromises()
+
+    expect(names(store.checkedItems('l1'))).toEqual(['Brot', 'Eier'])
+    expect(rejections).toEqual([{ kind: 'removeChecked', code: ERROR_CODE_OUTBOX_EXPIRED }])
+  })
+
+  it('splits more than 500 items into blocks under one hold and reports once on rejection', async () => {
     const many = Array.from({ length: MAX_REMOVE_CHECKED + 1 }, (_, n) =>
       item(`i${String(n).padStart(4, '0')}`, `Artikel ${n}`, 'l1', true),
     )
-    const service = fakeService(many)
-    service.removeChecked
-      .mockImplementationOnce((_listId: string, ids: string[]) =>
-        Promise.resolve(ids.map((itemId) => ({ itemId, serverSeq: 10 }))),
-      )
-      .mockRejectedValueOnce(new ApiError('INTERNAL', 500))
-    const { store } = setup(service)
+    const { store, outbox } = setup(fakeService(many))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
     await store.load('l1')
 
-    await expect(store.startRemovingChecked('l1')?.commit()).rejects.toThrow(ApiError)
+    await store.startRemovingChecked('l1')?.commit()
 
-    expect(service.removeChecked).toHaveBeenCalledTimes(2)
-    expect(service.removeChecked.mock.calls[0]?.[1]).toHaveLength(MAX_REMOVE_CHECKED)
-    expect(service.removeChecked.mock.calls[1]?.[1]).toEqual([many[MAX_REMOVE_CHECKED]?.id])
-    expect(names(store.itemsOf('l1'))).toEqual([`Artikel ${MAX_REMOVE_CHECKED}`])
+    const entries = outbox.entries()
+    expect(entries).toHaveLength(2)
+    expect(entries[0]!.hold).toBe(entries[1]!.hold)
+    expect(entries[0]!.change).toEqual({
+      kind: 'removeChecked',
+      listId: 'l1',
+      itemIds: many.slice(0, MAX_REMOVE_CHECKED).map((i) => i.id),
+    })
+    expect(entries[1]!.change).toEqual({
+      kind: 'removeChecked',
+      listId: 'l1',
+      itemIds: [many[MAX_REMOVE_CHECKED]!.id],
+    })
+
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
+
+    expect(store.checkedItems('l1')).toHaveLength(MAX_REMOVE_CHECKED + 1)
+    expect(rejections).toEqual([{ kind: 'removeChecked', code: 'FORBIDDEN' }])
   })
 
-  it("does not apply a removal of the previous user's items", async () => {
-    const service = fakeService(shopping())
-    const answer = deferred<{ itemId: string; serverSeq: number }[]>()
-    service.removeChecked.mockReturnValueOnce(answer.promise)
-    const { store, user } = setup(service)
+  it('keeps an answered block deleted when a later block is refused', async () => {
+    const many = Array.from({ length: MAX_REMOVE_CHECKED + 1 }, (_, n) =>
+      item(`i${String(n).padStart(4, '0')}`, `Artikel ${n}`, 'l1', true),
+    )
+    const { store, outbox } = setup(fakeService(many))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
     await store.load('l1')
 
-    const committing = store.startRemovingChecked('l1')?.commit()
+    await store.startRemovingChecked('l1')?.commit()
+    outbox.answer({
+      kind: 'removeChecked',
+      deleted: many.slice(0, MAX_REMOVE_CHECKED).map((i) => ({ itemId: i.id, serverSeq: 10 })),
+    })
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual([`Artikel ${MAX_REMOVE_CHECKED}`])
+    expect(rejections).toEqual([{ kind: 'removeChecked', code: 'FORBIDDEN' }])
+  })
+
+  it('hides the checked items in another tab sharing the outbox', async () => {
+    const shared = createFakeOutbox()
+    const service = fakeService(shopping())
+    const piniaA = createPinia()
+    const piniaB = createPinia()
+    const tabA = defineItemsStore(service, () => ANNA, createFakeServerEvents(), fakeStorage(), {
+      openOutbox: shared.open,
+    })(piniaA)
+    const tabB = defineItemsStore(service, () => ANNA, createFakeServerEvents(), fakeStorage(), {
+      openOutbox: shared.open,
+    })(piniaB)
+    await tabA.load('l1')
+    await tabB.load('l1')
+
+    tabA.startRemovingChecked('l1')
+    await flushPromises()
+
+    expect(names(tabB.itemsOf('l1'))).toEqual(['Milch'])
+    tabA.$dispose()
+    tabB.$dispose()
+  })
+
+  it('releases the hold on user switch and keeps local changes out of the next user', async () => {
+    const fake = createFakeOutbox()
+    const storedGate = deferred<void>()
+    let holdId = ''
+    const user = ref<string | null>(ANNA)
+    const store = defineItemsStore(
+      fakeService(shopping()),
+      () => user.value,
+      createFakeServerEvents(),
+      fakeStorage(),
+      {
+        openOutbox(options) {
+          const box = fake.open(options)
+          return {
+            ...box,
+            enqueueHeld(changes) {
+              const held = box.enqueueHeld(changes)
+              holdId = held.holdId
+              return { ...held, stored: storedGate.promise }
+            },
+          }
+        },
+      },
+    )()
+
+    await store.load('l1')
+    store.startRemovingChecked('l1')
+    expect(fake.released(holdId)).toBe(false)
+
     user.value = BEN
     await flushPromises()
+    expect(fake.released(holdId)).toBe(true)
+
     await store.load('l1')
-    answer.resolve([{ itemId: 'i2', serverSeq: 10 }])
-    await committing
+    storedGate.resolve()
+    await flushPromises()
 
     expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot', 'Eier'])
   })
@@ -2376,8 +2558,8 @@ describe('items store: storage on the device', () => {
       return { service, store, events, storage, outbox }
     }
 
-    it('keeps the items of a pending removal until it is committed', async () => {
-      const { store, events, storage } = await loadedWithChecked()
+    it('keeps the items of a pending removal until the server confirms them', async () => {
+      const { store, events, storage, outbox } = await loadedWithChecked()
 
       const removal = store.startRemovingChecked('l1')
       // Another change makes the store write while the items are hidden.
@@ -2392,6 +2574,21 @@ describe('items store: storage on the device', () => {
       ])
 
       await removal?.commit()
+      await flushPromises()
+      // Still stored while the outbox has not received the server answer yet.
+      expect(storedOf(storage)).toEqual([
+        ['Milch', true],
+        ['Roggenbrot', false],
+        ['Eier', true],
+      ])
+
+      outbox.answer({
+        kind: 'removeChecked',
+        deleted: [
+          { itemId: 'i1', serverSeq: 10 },
+          { itemId: 'i3', serverSeq: 11 },
+        ],
+      })
       await flushPromises()
 
       expect(storedOf(storage)).toEqual([['Roggenbrot', false]])
@@ -2452,9 +2649,12 @@ describe('items store: real outbox integration', () => {
     let seq = 0
     let entries: { userId: string; entry: OutboxEntry }[] = []
     return {
-      addOutbox(userId, change, queuedAt) {
+      addOutbox(userId, change, queuedAt, hold) {
         const nextSeq = ++seq
-        entries.push({ userId, entry: { seq: nextSeq, change, queuedAt } })
+        const entry: OutboxEntry = hold
+          ? { seq: nextSeq, change, queuedAt, hold }
+          : { seq: nextSeq, change, queuedAt }
+        entries.push({ userId, entry })
         return Promise.resolve(nextSeq)
       },
       readOutbox(userId) {
@@ -2464,6 +2664,19 @@ describe('items store: real outbox integration', () => {
         entries = entries.filter((e) => !(e.userId === userId && e.entry.seq === targetSeq))
         return Promise.resolve()
       },
+    }
+  }
+
+  // Like navigator.locks: one holder per name, others wait in line.
+  function fakeLocks(): LockRunner {
+    const tails = new Map<string, Promise<unknown>>()
+    return <T>(name: string, fn: () => Promise<T>) => {
+      const run = (tails.get(name) ?? Promise.resolve()).then(fn)
+      tails.set(
+        name,
+        run.catch(() => {}),
+      )
+      return run
     }
   }
 
@@ -2528,6 +2741,119 @@ describe('items store: real outbox integration', () => {
       expect(rejections).toEqual([{ kind: 'update', name: 'Milch', code: 'ITEM_NAME_INVALID' }])
     } finally {
       store.$dispose()
+    }
+  })
+
+  it('sends a pending check before removeChecked through the real outbox', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const calls: string[] = []
+    const checkAnswer = deferred<Item>()
+    service.update.mockImplementationOnce(() => {
+      calls.push('update')
+      return checkAnswer.promise
+    })
+    service.removeChecked.mockImplementationOnce((_listId: string, ids: string[]) => {
+      calls.push('removeChecked')
+      return Promise.resolve(ids.map((itemId) => ({ itemId, serverSeq: 10 })))
+    })
+    const outboxStorage = ramOutboxStorage()
+    const locks = fakeLocks()
+    const store = defineItemsStore(service, () => ANNA, createFakeServerEvents(), fakeStorage(), {
+      openOutbox: (options) =>
+        createOutbox({ ...options, storage: outboxStorage, items: service, locks }),
+      clock: createClock('tab', () => NOW),
+    })()
+
+    try {
+      await store.load('l1')
+      await store.setChecked('i1', true)
+      const removal = store.startRemovingChecked('l1')
+      expect(names(removal?.items ?? [])).toEqual(['Milch'])
+      expect(store.itemsOf('l1')).toEqual([])
+
+      await removal?.commit()
+      await flushPromises()
+      expect(calls).toEqual(['update'])
+
+      checkAnswer.resolve(later(item('i1', 'Milch', 'l1', true), 2))
+      await vi.waitFor(() => expect(calls).toEqual(['update', 'removeChecked']))
+      await flushPromises()
+
+      expect(service.removeChecked).toHaveBeenCalledWith('l1', ['i1'])
+      expect(store.itemsOf('l1')).toEqual([])
+    } finally {
+      store.$dispose()
+    }
+  })
+
+  it('sends a held removeChecked from a new tab after the first tab closes without commit', async () => {
+    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot', 'l1', true)])
+    const outboxStorage = ramOutboxStorage()
+    const locks = fakeLocks()
+    const makeStore = () =>
+      defineItemsStore(service, () => ANNA, createFakeServerEvents(), fakeStorage(), {
+        openOutbox: (options) =>
+          createOutbox({ ...options, storage: outboxStorage, items: service, locks }),
+        clock: createClock('tab', () => NOW),
+      })(createPinia())
+
+    const tabA = makeStore()
+    let tabB: ReturnType<typeof makeStore> | null = null
+    try {
+      await tabA.load('l1')
+      tabA.startRemovingChecked('l1')
+      await vi.waitFor(async () => expect(await outboxStorage.readOutbox(ANNA)).toHaveLength(1))
+      await flushPromises()
+      expect(service.removeChecked).not.toHaveBeenCalled()
+
+      // Closing the tab releases the hold lock without sending from tab A.
+      tabA.$dispose()
+      await flushPromises()
+      expect(service.removeChecked).not.toHaveBeenCalled()
+
+      tabB = makeStore()
+      await vi.waitFor(() => expect(service.removeChecked).toHaveBeenCalledWith('l1', ['i2']))
+      expect(await outboxStorage.readOutbox(ANNA)).toEqual([])
+    } finally {
+      tabA.$dispose()
+      tabB?.$dispose()
+    }
+  })
+
+  it('sends nothing on undo through the real outbox, even with a second sender', async () => {
+    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot', 'l1', true)])
+    const outboxStorage = ramOutboxStorage()
+    const locks = fakeLocks()
+    const store = defineItemsStore(service, () => ANNA, createFakeServerEvents(), fakeStorage(), {
+      openOutbox: (options) =>
+        createOutbox({ ...options, storage: outboxStorage, items: service, locks }),
+      clock: createClock('tab', () => NOW),
+    })(createPinia())
+    const otherTab = createOutbox({
+      storage: outboxStorage,
+      items: service,
+      userId: () => ANNA,
+      locks,
+    })
+
+    try {
+      await store.load('l1')
+      const removal = store.startRemovingChecked('l1')
+      await vi.waitFor(async () => expect(await outboxStorage.readOutbox(ANNA)).toHaveLength(1))
+      otherTab.trigger()
+      await flushPromises()
+      expect(service.removeChecked).not.toHaveBeenCalled()
+
+      removal?.undo()
+      await vi.waitFor(async () => expect(await outboxStorage.readOutbox(ANNA)).toEqual([]))
+      otherTab.trigger()
+      await flushPromises()
+
+      expect(service.removeChecked).not.toHaveBeenCalled()
+      expect(names(store.checkedItems('l1'))).toEqual(['Brot'])
+    } finally {
+      store.$dispose()
+      otherTab.stop()
     }
   })
 })

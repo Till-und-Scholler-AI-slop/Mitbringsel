@@ -7,9 +7,9 @@ import { useToastsStore } from '@/stores/toasts'
 
 /**
  * Shows an error toast whenever the server refuses a pending item change of
- * this tab (create, edit, check, delete), naming the item and the reason.
- * Mounted once in App.vue so rejections are reported even after leaving the
- * list.
+ * this tab (create, edit, check, delete, remove checked), naming the item
+ * (when there is one) and the reason. Mounted once in App.vue so rejections
+ * are reported even after leaving the list.
  */
 export function useItemRejections(): void {
   const { t } = useI18n()
@@ -17,11 +17,14 @@ export function useItemRejections(): void {
   const items = useItemsStore()
   const toasts = useToastsStore()
 
-  const stop = items.onRejected(({ kind, name, code }) =>
+  const stop = items.onRejected((rejection) =>
     toasts.show({
       kind: 'error',
-      text: t(`list.rejected.${kind}`, { name }),
-      detail: errorText(code),
+      text:
+        rejection.kind === 'removeChecked'
+          ? t('list.rejected.removeChecked')
+          : t(`list.rejected.${rejection.kind}`, { name: rejection.name }),
+      detail: errorText(rejection.code),
     }),
   )
   onScopeDispose(stop)

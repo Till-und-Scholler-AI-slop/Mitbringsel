@@ -234,7 +234,8 @@
       "create": "„{name}“ konnte nicht hinzugefügt werden.",
       "update": "Die Änderung an „{name}“ wurde nicht gespeichert.",
       "check": "Der Haken bei „{name}“ wurde nicht gespeichert.",
-      "remove": "„{name}“ konnte nicht gelöscht werden."
+      "remove": "„{name}“ konnte nicht gelöscht werden.",
+      "removeChecked": "Die erledigten Artikel konnten nicht entfernt werden."
     },
     "row": {
       "edit": "{name} bearbeiten",
@@ -258,8 +259,7 @@
       "removeLabel": "{count} erledigten Artikel für alle entfernen | {count} erledigte Artikel für alle entfernen",
       "removedOne": "„{name}“ entfernt",
       "removed": "{count} Artikel entfernt",
-      "undo": "Rückgängig",
-      "removeFailed": "Die erledigten Artikel konnten nicht entfernt werden."
+      "undo": "Rückgängig"
     },
     "quickAdd": {
       "label": "Artikel hinzufügen",
