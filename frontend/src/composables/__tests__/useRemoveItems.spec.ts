@@ -21,16 +21,27 @@ const itemsService = vi.hoisted(() => ({
   removeChecked: vi.fn<ItemsService['removeChecked']>(),
 }))
 
-// vi.hoisted runs before the imports, so the fake has to be imported by hand.
+// vi.hoisted runs before the imports, so the fakes have to be imported by hand.
 const serverEvents = await vi.hoisted(async () =>
   (await import('@/services/sync/__tests__/fakeServerEvents')).createFakeServerEvents(),
+)
+const outbox = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeOutbox')).createFakeOutbox(),
 )
 
 vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
   return {
     ...original,
-    useItemsStore: original.defineItemsStore(itemsService, () => 'user-1', serverEvents),
+    useItemsStore: original.defineItemsStore(
+      itemsService,
+      () => 'user-1',
+      serverEvents,
+      undefined,
+      {
+        openOutbox: outbox.open,
+      },
+    ),
   }
 })
 
@@ -80,6 +91,8 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.clearAllMocks()
   serverEvents.clear()
+  outbox.clear()
+  outbox.auto(itemsService)
   itemsService.removeChecked.mockImplementation((_listId, ids) =>
     Promise.resolve(ids.map((itemId) => ({ itemId, serverSeq: 10 }))),
   )
@@ -219,8 +232,8 @@ describe('useRemoveItems: one item', () => {
     expect(items.itemsOf('l1')).toEqual([])
   })
 
-  it('names the item in the error toast if deleting fails', async () => {
-    itemsService.remove.mockRejectedValueOnce(new ApiError('NETWORK'))
+  it('brings the item back when the server refuses', async () => {
+    itemsService.remove.mockRejectedValueOnce(new ApiError('FORBIDDEN', 403))
     const { removeItem, items, toasts } = setup()
     await loadList(item('i1', 'Milch', false))
 
@@ -229,9 +242,6 @@ describe('useRemoveItems: one item', () => {
     await flushPromises()
 
     expect(names(items.itemsOf('l1'))).toEqual(['Milch'])
-    expect(toasts.toasts[0]).toMatchObject({
-      kind: 'error',
-      text: '„Milch“ konnte nicht gelöscht werden.',
-    })
+    expect(toasts.toasts).toEqual([])
   })
 })

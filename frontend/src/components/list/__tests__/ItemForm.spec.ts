@@ -3,7 +3,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { createAppI18n } from '@/i18n'
-import { ApiError } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
 import type { Item } from '@/types/api'
 
@@ -21,18 +20,29 @@ const itemsService = vi.hoisted(() => ({
 const serverEvents = await vi.hoisted(async () =>
   (await import('@/services/sync/__tests__/fakeServerEvents')).createFakeServerEvents(),
 )
+const outbox = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeOutbox')).createFakeOutbox(),
+)
 
 vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
   return {
     ...original,
-    useItemsStore: original.defineItemsStore(itemsService, () => 'user-1', serverEvents),
+    useItemsStore: original.defineItemsStore(
+      itemsService,
+      () => 'user-1',
+      serverEvents,
+      undefined,
+      {
+        openOutbox: outbox.open,
+      },
+    ),
   }
 })
 
-function item(name: string): Item {
+function item(id: string, name: string): Item {
   return {
-    id: 'i1',
+    id,
     listId: 'l1',
     name,
     quantity: null,
@@ -63,7 +73,11 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   serverEvents.clear()
-  itemsService.create.mockImplementation((_listId, request) => Promise.resolve(item(request.name)))
+  outbox.clear()
+  outbox.auto(itemsService)
+  itemsService.create.mockImplementation((_listId, request) =>
+    Promise.resolve(item(request.id!, request.name)),
+  )
 })
 
 describe('ItemForm', () => {
@@ -83,16 +97,12 @@ describe('ItemForm', () => {
     expect(itemsService.create).not.toHaveBeenCalled()
   })
 
-  it('emits close only after saving succeeds', async () => {
-    itemsService.create.mockRejectedValueOnce(new ApiError('NETWORK'))
+  it('emits close after saving', async () => {
     const wrapper = mountForm({ initialName: 'Brot' })
 
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(wrapper.emitted('close')).toBeUndefined()
 
-    await wrapper.get('form').trigger('submit')
-    await flushPromises()
     expect(wrapper.emitted('close')).toEqual([[]])
   })
 
@@ -100,7 +110,7 @@ describe('ItemForm', () => {
     [1, false],
     [0, true],
   ])('emits remove with keyboard flag (detail %s -> %s)', (detail, fromKeyboard) => {
-    const wrapper = mountForm({ item: item('Brot'), creatorName: 'Lena' })
+    const wrapper = mountForm({ item: item('i1', 'Brot'), creatorName: 'Lena' })
 
     wrapper.get('.remove').element.dispatchEvent(new MouseEvent('click', { detail }))
 

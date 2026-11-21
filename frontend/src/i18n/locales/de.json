@@ -222,7 +222,12 @@
       "title": "Noch nichts auf der Liste",
       "description": "Hier erscheint alles, was ihr einkaufen wollt."
     },
-    "checkFailed": "Das Abhaken hat nicht geklappt.",
+    "rejected": {
+      "create": "„{name}“ konnte nicht hinzugefügt werden.",
+      "update": "Die Änderung an „{name}“ wurde nicht gespeichert.",
+      "check": "Der Haken bei „{name}“ wurde nicht gespeichert.",
+      "remove": "„{name}“ konnte nicht gelöscht werden."
+    },
     "row": {
       "edit": "{name} bearbeiten",
       "editHint": "Bearbeiten",
@@ -252,8 +257,7 @@
       "label": "Artikel hinzufügen",
       "placeholder": "Was brauchen wir?",
       "enterHint": "Enter ↵",
-      "details": "Mit Details hinzufügen",
-      "failed": "„{name}“ konnte nicht hinzugefügt werden"
+      "details": "Mit Details hinzufügen"
     },
     "itemForm": {
       "newTitle": "Neuer Artikel",
@@ -275,7 +279,6 @@
       "by": "Von {name} · {list}",
       "save": "Speichern",
       "remove": "Löschen",
-      "removeFailed": "„{name}“ konnte nicht gelöscht werden.",
       "deletedMeanwhile": "„{name}“ wurde gelöscht"
     },
     "noLists": {

@@ -3,10 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
-import { useErrorText } from '@/composables/useErrorMessage'
-import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { useItemsStore } from '@/stores/items'
-import { useToastsStore } from '@/stores/toasts'
 
 // The longest item name the API takes (api/openapi.yaml, CreateItemRequest).
 const MAX_NAME_LENGTH = 100
@@ -22,34 +19,21 @@ const props = withDefaults(defineProps<{ listId: string; opensDialog?: boolean }
 const emit = defineEmits<{ details: [name: string] }>()
 
 const { t } = useI18n()
-const errorText = useErrorText()
 const items = useItemsStore()
-const toasts = useToastsStore()
 const name = ref('')
 
 // The field empties at once, so the next item can be typed while this one
-// is on its way; a slow shop network should not hold the user up. The item
-// shows when the server answers.
+// is on its way; the item shows at once.
 function openDetails() {
   emit('details', name.value.trim())
   name.value = ''
 }
 
-async function add() {
+function add() {
   const trimmed = name.value.trim()
   if (!trimmed) return
   name.value = ''
-  try {
-    await items.create(props.listId, { name: trimmed })
-  } catch (err) {
-    // Nothing is lost: the name goes back, unless the user typed on.
-    if (!name.value) name.value = trimmed
-    toasts.show({
-      kind: 'error',
-      text: t('list.quickAdd.failed', { name: trimmed }),
-      detail: errorText(err instanceof ApiError ? err.code : ERROR_CODE_UNKNOWN),
-    })
-  }
+  void items.create(props.listId, { name: trimmed })
 }
 </script>
 

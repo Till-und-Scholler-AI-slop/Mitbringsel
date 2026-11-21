@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, ref } from 'vue'
 
 import { createAppI18n } from '@/i18n'
-import { ApiError } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
 import { ITEM_NAME_MAX_LENGTH, ITEM_NOTE_MAX_LENGTH, ITEM_QUANTITY_MAX } from '@/services/itemForm'
 import type { Item } from '@/types/api'
@@ -23,12 +22,23 @@ const itemsService = vi.hoisted(() => ({
 const serverEvents = await vi.hoisted(async () =>
   (await import('@/services/sync/__tests__/fakeServerEvents')).createFakeServerEvents(),
 )
+const outbox = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeOutbox')).createFakeOutbox(),
+)
 
 vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
   return {
     ...original,
-    useItemsStore: original.defineItemsStore(itemsService, () => 'user-1', serverEvents),
+    useItemsStore: original.defineItemsStore(
+      itemsService,
+      () => 'user-1',
+      serverEvents,
+      undefined,
+      {
+        openOutbox: outbox.open,
+      },
+    ),
   }
 })
 
@@ -85,9 +95,17 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   serverEvents.clear()
+  outbox.clear()
+  outbox.auto(itemsService)
   itemsService.create.mockImplementation((_listId, req) =>
     Promise.resolve(
-      makeItem({ name: req.name, quantity: req.quantity, unit: req.unit, note: req.note }),
+      makeItem({
+        id: req.id!,
+        name: req.name,
+        quantity: req.quantity,
+        unit: req.unit,
+        note: req.note,
+      }),
     ),
   )
   itemsService.update.mockImplementation((_id, change) =>
@@ -150,32 +168,6 @@ describe('useItemForm', () => {
     expect(form.noteError.value).not.toBeNull()
   })
 
-  it.each([
-    ['ITEM_NAME_INVALID', 'nameError'],
-    ['ITEM_QUANTITY_INVALID', 'quantityError'],
-    ['ITEM_NOTE_INVALID', 'noteError'],
-  ] as const)('maps %s to %s and clears it when any field changes', async (code, target) => {
-    itemsService.create.mockRejectedValueOnce(new ApiError(code, 400))
-    const { form } = setupForm({ initialName: 'Brot' })
-
-    expect(await form.submit()).toBe(false)
-    expect(form[target].value).not.toBeNull()
-    expect(form.formError.value).toBeNull()
-
-    form.name.value = 'Vollkornbrot'
-    await flushPromises()
-    expect(form[target].value).toBeNull()
-  })
-
-  it('puts non-field server errors in formError', async () => {
-    itemsService.create.mockRejectedValueOnce(new ApiError('NETWORK'))
-    const { form } = setupForm({ initialName: 'Brot', locale: 'en' })
-
-    expect(await form.submit()).toBe(false)
-    expect(form.formError.value).not.toBeNull()
-    expect(form.nameError.value).toBeNull()
-  })
-
   it('sends only changed fields on edit, clears unit with quantity, and skips no-op saves', async () => {
     const { form, item } = setupForm({ item: makeItem() })
 
@@ -188,18 +180,26 @@ describe('useItemForm', () => {
     form.note.value = '   '
 
     expect(await form.submit()).toBe(true)
-    expect(itemsService.update).toHaveBeenCalledWith('i1', {
-      name: 'Cherrytomaten',
-      note: null,
-    })
+    expect(itemsService.update).toHaveBeenCalledWith(
+      'i1',
+      expect.objectContaining({
+        name: 'Cherrytomaten',
+        note: null,
+        clock: expect.any(String),
+      }),
+    )
 
     itemsService.update.mockClear()
     const cleared = setupForm({ item: makeItem() }).form
     cleared.quantity.value = ''
     expect(await cleared.submit()).toBe(true)
-    expect(itemsService.update).toHaveBeenCalledWith('i1', {
-      quantity: null,
-      unit: null,
-    })
+    expect(itemsService.update).toHaveBeenCalledWith(
+      'i1',
+      expect.objectContaining({
+        quantity: null,
+        unit: null,
+        clock: expect.any(String),
+      }),
+    )
   })
 })

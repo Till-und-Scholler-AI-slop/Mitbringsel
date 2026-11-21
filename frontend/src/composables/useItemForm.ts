@@ -2,7 +2,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useErrorText } from '@/composables/useErrorMessage'
-import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { isItemNoteTooLong, parseQuantity, validateItemName } from '@/services/itemForm'
 import { useItemsStore } from '@/stores/items'
 import type { Item, Unit, UpdateItemRequest } from '@/types/api'
@@ -13,9 +12,8 @@ const DEFAULT_UNIT: Unit = 'piece'
 // More digits than this are noise (as in useQuantityText).
 const MAX_FRACTION_DIGITS = 3
 
-// Errors of the server that belong to one field; any other is shown above
-// the buttons.
-const FIELD_ERRORS = {
+// The API code's text names the limit; the client checks the same limits.
+const LIMIT_ERRORS = {
   name: 'ITEM_NAME_INVALID',
   quantity: 'ITEM_QUANTITY_INVALID',
   note: 'ITEM_NOTE_INVALID',
@@ -49,8 +47,6 @@ export function useItemForm(options: UseItemFormOptions) {
   // An empty name is only an error once the user tried to save.
   const tried = ref(false)
   const submitting = ref(false)
-  // The error code of the last failed request; null while there is none.
-  const errorCode = ref<string | null>(null)
 
   // The fields as they were filled at the opening. Saving an edit sends only
   // what the user changed from them: a field another member changes meanwhile
@@ -84,46 +80,30 @@ export function useItemForm(options: UseItemFormOptions) {
       unit.value = opened.unit
       note.value = opened.note
       tried.value = false
-      errorCode.value = null
     },
     { immediate: true },
   )
-
-  // A server error is about what was sent; it goes once the user changes it.
-  watch([name, quantity, unit, note], () => {
-    errorCode.value = null
-  })
 
   const nameProblem = computed(() => validateItemName(name.value))
   const parsedQuantity = computed(() => parseQuantity(quantity.value))
   const noteTooLong = computed(() => isItemNoteTooLong(note.value))
 
-  const serverError = (field: keyof typeof FIELD_ERRORS) =>
-    errorCode.value === FIELD_ERRORS[field] ? errorText(errorCode.value) : null
-
   // "Too long" and a number that does not parse show while typing.
   const nameError = computed(() => {
-    if (nameProblem.value === 'tooLong') return errorText(FIELD_ERRORS.name)
+    if (nameProblem.value === 'tooLong') return errorText(LIMIT_ERRORS.name)
     if (nameProblem.value === 'empty' && tried.value) return t('list.itemForm.nameEmpty')
-    return serverError('name')
+    return null
   })
   const quantityError = computed(() => {
     const parsed = parsedQuantity.value
     if (!parsed.ok) {
       return parsed.problem === 'invalid'
         ? t('list.itemForm.quantityInvalid')
-        : errorText(FIELD_ERRORS.quantity)
+        : errorText(LIMIT_ERRORS.quantity)
     }
-    return serverError('quantity')
+    return null
   })
-  const noteError = computed(() =>
-    noteTooLong.value ? errorText(FIELD_ERRORS.note) : serverError('note'),
-  )
-  const formError = computed(() => {
-    const code = errorCode.value
-    if (code === null || Object.values<string>(FIELD_ERRORS).includes(code)) return null
-    return errorText(code)
-  })
+  const noteError = computed(() => (noteTooLong.value ? errorText(LIMIT_ERRORS.note) : null))
 
   const invalid = computed(
     () => nameProblem.value !== null || !parsedQuantity.value.ok || noteTooLong.value,
@@ -172,9 +152,6 @@ export function useItemForm(options: UseItemFormOptions) {
     try {
       await save(parsed.value)
       return true
-    } catch (err) {
-      errorCode.value = err instanceof ApiError ? err.code : ERROR_CODE_UNKNOWN
-      return false
     } finally {
       submitting.value = false
     }
@@ -188,7 +165,6 @@ export function useItemForm(options: UseItemFormOptions) {
     nameError,
     quantityError,
     noteError,
-    formError,
     submitting,
     submit,
   }

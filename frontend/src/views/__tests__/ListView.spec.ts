@@ -42,9 +42,12 @@ const itemsService = vi.hoisted(() => ({
   removeChecked: vi.fn<ItemsService['removeChecked']>(),
 }))
 
-// vi.hoisted runs before the imports, so the fake has to be imported by hand.
+// vi.hoisted runs before the imports, so the fakes have to be imported by hand.
 const serverEvents = await vi.hoisted(async () =>
   (await import('@/services/sync/__tests__/fakeServerEvents')).createFakeServerEvents(),
+)
+const outbox = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeOutbox')).createFakeOutbox(),
 )
 
 vi.mock('@/stores/groups', async (importOriginal) => {
@@ -72,7 +75,15 @@ vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
   return {
     ...original,
-    useItemsStore: original.defineItemsStore(itemsService, () => 'user-1', serverEvents),
+    useItemsStore: original.defineItemsStore(
+      itemsService,
+      () => 'user-1',
+      serverEvents,
+      undefined,
+      {
+        openOutbox: outbox.open,
+      },
+    ),
   }
 })
 
@@ -137,6 +148,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   // The stores of the test before are gone with their Pinia; their handlers are not.
   serverEvents.clear()
+  outbox.clear()
+  outbox.auto(itemsService)
   localStorage.clear()
   groupsService.list.mockResolvedValue([GROUP])
   listsService.list.mockResolvedValue([list('l1', 'Supermarkt'), list('l2', 'Baumarkt')])
@@ -698,7 +711,10 @@ describe('ListView: items', () => {
 
     await wrapper.findAll('.open li .toggle')[0]!.trigger('click')
 
-    expect(itemsService.update).toHaveBeenCalledWith('i1', { checked: true })
+    expect(itemsService.update).toHaveBeenCalledWith('i1', {
+      checked: true,
+      clock: expect.any(String),
+    })
     expect(openNames(wrapper)).toEqual(['Brot'])
     expect(doneNames(wrapper)).toEqual(['Milch', 'Eier'])
     wrapper.unmount()
@@ -711,41 +727,23 @@ describe('ListView: items', () => {
 
     await wrapper.get('.done-items li button').trigger('click')
 
-    expect(itemsService.update).toHaveBeenCalledWith('i2', { checked: false })
+    expect(itemsService.update).toHaveBeenCalledWith('i2', {
+      checked: false,
+      clock: expect.any(String),
+    })
     expect(openNames(wrapper)).toEqual(['Milch', 'Eier', 'Brot'])
     wrapper.unmount()
   })
 
-  it('puts the item back and says so when checking fails', async () => {
+  it('puts the item back when the server refuses the check', async () => {
     itemsService.list.mockResolvedValue(makeItems())
-    itemsService.update.mockRejectedValue(new ApiError('NETWORK'))
+    itemsService.update.mockRejectedValueOnce(new ApiError('FORBIDDEN', 403))
     const { wrapper } = await mountView()
 
     await wrapper.findAll('.open li .toggle')[0]!.trigger('click')
     await flushPromises()
 
     expect(openNames(wrapper)).toEqual(['Milch', 'Brot'])
-    expect(wrapper.get('[role="alert"]').text()).toContain('Checking the item did not work.')
-    expect(wrapper.get('[role="alert"]').text()).toContain('The server cannot be reached.')
-    wrapper.unmount()
-  })
-
-  it('takes the message away after the next check that works', async () => {
-    itemsService.list.mockResolvedValue(makeItems())
-    itemsService.update.mockRejectedValueOnce(new ApiError('NETWORK'))
-    const { wrapper } = await mountView()
-    await wrapper.findAll('.open li .toggle')[0]!.trigger('click')
-    await flushPromises()
-
-    itemsService.update.mockResolvedValueOnce({
-      ...makeItems()[2]!,
-      checked: true,
-      checkedBy: 'user-1',
-    })
-    await wrapper.findAll('.open li .toggle')[1]!.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })
@@ -873,14 +871,21 @@ describe('ListView: removing done items', () => {
 
 describe('ListView: quick add', () => {
   it('adds an item to the open list', async () => {
-    itemsService.create.mockResolvedValue(item('i9', 'Hafermilch'))
+    itemsService.create.mockImplementation((_l, r) => Promise.resolve(item(r.id!, r.name)))
     const { wrapper } = await mountView()
 
     await wrapper.get('.add-bar input').setValue('Hafermilch')
     await wrapper.get('form.add-bar').trigger('submit')
     await flushPromises()
 
-    expect(itemsService.create).toHaveBeenCalledWith('l1', { name: 'Hafermilch' })
+    expect(itemsService.create).toHaveBeenCalledWith(
+      'l1',
+      expect.objectContaining({
+        id: expect.any(String),
+        name: 'Hafermilch',
+        clock: expect.any(String),
+      }),
+    )
     expect(openNames(wrapper)).toEqual(['Hafermilch'])
     expect(wrapper.get('.frame').classes()).toContain('frame--bottom-bar')
     wrapper.unmount()
@@ -896,7 +901,9 @@ describe('ListView: quick add', () => {
   })
 
   it('adds an item with details from the form', async () => {
-    itemsService.create.mockResolvedValue(item('i9', 'Tomaten', { quantity: 6, unit: 'piece' }))
+    itemsService.create.mockImplementation((_l, r) =>
+      Promise.resolve(item(r.id!, r.name, { quantity: r.quantity ?? null, unit: r.unit ?? null })),
+    )
     const { wrapper } = await mountView()
 
     await wrapper.get('.add-bar input').setValue('Tomaten')
@@ -907,12 +914,17 @@ describe('ListView: quick add', () => {
     await form.trigger('submit')
     await flushPromises()
 
-    expect(itemsService.create).toHaveBeenCalledWith('l1', {
-      name: 'Tomaten',
-      quantity: 6,
-      unit: 'piece',
-      note: null,
-    })
+    expect(itemsService.create).toHaveBeenCalledWith(
+      'l1',
+      expect.objectContaining({
+        id: expect.any(String),
+        name: 'Tomaten',
+        quantity: 6,
+        unit: 'piece',
+        note: null,
+        clock: expect.any(String),
+      }),
+    )
     expect(openNames(wrapper)).toEqual(['Tomaten'])
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
     wrapper.unmount()
@@ -934,7 +946,10 @@ describe('ListView: editing items', () => {
     await form.trigger('submit')
     await flushPromises()
 
-    expect(itemsService.update).toHaveBeenCalledWith('i1', { name: 'Hafermilch' })
+    expect(itemsService.update).toHaveBeenCalledWith('i1', {
+      name: 'Hafermilch',
+      clock: expect.any(String),
+    })
     expect(openNames(wrapper)).toEqual(['Hafermilch', 'Brot'])
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
     wrapper.unmount()
@@ -1025,7 +1040,10 @@ describe('ListView: item panel on a wide screen', () => {
     await wrapper.get('#item-panel form').trigger('submit')
     await flushPromises()
 
-    expect(itemsService.update).toHaveBeenCalledWith('i1', { name: 'Hafermilch' })
+    expect(itemsService.update).toHaveBeenCalledWith('i1', {
+      name: 'Hafermilch',
+      clock: expect.any(String),
+    })
     expect(panelOf(wrapper).exists()).toBe(false)
     expect(wrapper.find('.editing').exists()).toBe(false)
     // Back where the user was.
@@ -1120,24 +1138,6 @@ describe('ListView: switching lists', () => {
     expect(openNames(wrapper)).toEqual(['Schrauben'])
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
     expect(wrapper.find('.toast').exists()).toBe(false)
-    wrapper.unmount()
-  })
-
-  it('clears a check error on switch', async () => {
-    itemsService.list.mockImplementation(async (listId) =>
-      listId === 'l1' ? [item('i1', 'Milch')] : [item('i2', 'Schrauben', { listId: 'l2' })],
-    )
-    itemsService.update.mockRejectedValueOnce(new ApiError('NETWORK'))
-    const { wrapper } = await mountView()
-
-    await wrapper.get('.open li .toggle').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toContain('Checking the item did not work.')
-
-    await wrapper.findAll('.chip--list')[1]!.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

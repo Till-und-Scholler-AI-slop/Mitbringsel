@@ -15,7 +15,6 @@ import QuickAddBar from '@/components/list/QuickAddBar.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useRemoveItems } from '@/composables/useRemoveItems'
-import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
@@ -25,8 +24,8 @@ import type { GroupMember, Item, List } from '@/types/api'
 
 // The items of the open list: quick-add bar, open and done items, and the
 // item form to add details or edit: a dialog, or on a wide screen a panel
-// next to the list. Switching lists closes the form and resets check errors
-// while keeping typed quick-add text and the folded state.
+// next to the list. Switching lists closes the form while keeping typed
+// quick-add text and the folded state.
 const props = defineProps<{ list: List; members: GroupMember[] }>()
 
 const { t } = useI18n()
@@ -54,10 +53,6 @@ const newItemKey = ref(0)
 const editingId = ref<string | null>(null)
 let editingName = ''
 const editing = computed(() => (editingId.value ? items.byId(editingId.value) : undefined))
-// The error of the last tap on a checkbox that failed; the tap itself has
-// been undone by the store.
-const checkErrorCode = ref<string | null>(null)
-const checkError = useErrorMessage(checkErrorCode)
 const itemsError = useErrorMessage(() => items.errorCodeOf(props.list.id))
 
 const open = computed(() => items.openItems(props.list.id))
@@ -89,13 +84,8 @@ function recentOf(item: Item) {
   return { name: props.members.find((m) => m.userId === id)?.displayName ?? null }
 }
 
-async function toggle(item: Item) {
-  try {
-    await items.setChecked(item.id, !item.checked)
-    checkErrorCode.value = null
-  } catch (err) {
-    checkErrorCode.value = err instanceof ApiError ? err.code : ERROR_CODE_UNKNOWN
-  }
+function toggle(item: Item) {
+  void items.setChecked(item.id, !item.checked)
 }
 
 // Who added the item; null if unknown (left the household).
@@ -153,7 +143,6 @@ function removeEditing(fromKeyboard: boolean) {
 watch(
   () => props.list.id,
   () => {
-    checkErrorCode.value = null
     newItemOpen.value = false
     editingId.value = null
   },
@@ -189,11 +178,6 @@ watch(editing, (now, before) => {
 
     <p v-if="list.archivedAt" class="archived">
       <BaseIcon name="archive" :size="18" /> {{ t('list.archivedBadge') }}
-    </p>
-
-    <p v-if="checkErrorCode" class="failed failed--inline" role="alert">
-      <span class="failed-title">{{ t('list.checkFailed') }}</span>
-      {{ checkError }}
     </p>
 
     <p v-if="itemsLoading" class="loading" role="status">
@@ -343,10 +327,6 @@ watch(editing, (now, before) => {
 
 .failed p {
   margin: 0;
-}
-
-.failed--inline {
-  gap: var(--space-1);
 }
 
 .failed-title {
