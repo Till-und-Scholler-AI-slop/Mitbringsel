@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#1F7A3A" />
+  <g transform="translate(256 256) scale(0.84) translate(-256 -256) rotate(-4 256 256)">
+    <rect x="60" y="120" width="392" height="300" rx="150" fill="#16181D" />
+    <rect x="60" y="100" width="392" height="300" rx="150" fill="#FF7A59" />
+    <path
+      d="M164 172H210L256 266L302 172H348V328H308V242L266 328H246L204 242V328H164Z"
+      fill="#16181D"
+    />
+  </g>
+</svg>
