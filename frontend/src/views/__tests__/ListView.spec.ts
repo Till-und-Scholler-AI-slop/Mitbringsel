@@ -1177,3 +1177,34 @@ describe('ListView: switching lists', () => {
     wrapper.unmount()
   })
 })
+
+describe('ListView: pending indicator', () => {
+  it('shows a clock icon only on items with unsynced changes and removes it once synced', async () => {
+    itemsService.list.mockResolvedValue([item('i1', 'Milch')])
+    let createdId = ''
+    let finishCreate: (created: Item) => void = () => undefined
+    itemsService.create.mockImplementation((_listId, req) => {
+      createdId = req.id ?? 'i2'
+      return new Promise((resolve) => {
+        finishCreate = resolve
+      })
+    })
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.add-bar input').setValue('Olivenöl')
+    await wrapper.get('form.add-bar').trigger('submit')
+    await flushPromises()
+
+    const rows = wrapper.findAll('.open li')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]!.find('.pending').exists()).toBe(false)
+    expect(rows[1]!.get('.name').text()).toBe('Olivenöl')
+    expect(rows[1]!.get('.pending').attributes('aria-label')).toBe('Not synced yet')
+
+    finishCreate(item(createdId, 'Olivenöl', { createdAt: '2026-01-02T10:00:00Z', serverSeq: 2 }))
+    await flushPromises()
+
+    expect(wrapper.find('.open .pending').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

@@ -39,8 +39,11 @@ const { authService, groupsService, listsService } = vi.hoisted(() => ({
   },
 }))
 
-// A signed-in user would start the real live socket; the chip stays hidden.
-vi.mock('@/stores/sync', () => ({ useSyncStore: () => ({ indicator: 'hidden' }) }))
+// A signed-in user would start the real live socket and outbox; the chip stays hidden by default.
+const syncState = vi.hoisted(() => ({ indicator: 'hidden' as 'hidden' | 'synced' | 'offline' }))
+const itemsState = vi.hoisted(() => ({ pendingCount: 0 }))
+vi.mock('@/stores/sync', () => ({ useSyncStore: () => syncState }))
+vi.mock('@/stores/items', () => ({ useItemsStore: () => itemsState }))
 vi.mock('@/stores/auth', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/auth')>()
   return { ...original, useAuthStore: original.defineAuthStore(authService, null) }
@@ -87,6 +90,8 @@ function list(id: string, name: string, archivedAt: string | null = null): List 
 beforeEach(async () => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  syncState.indicator = 'hidden'
+  itemsState.pendingCount = 0
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
     this.setAttribute('open', '')
   }
@@ -311,5 +316,18 @@ describe('AppSidebar', () => {
       'Right-click or press Context Menu (Shift+F10) to edit, archive or delete',
     )
     wrapper.unmount()
+  })
+
+  it('names the open household in the pending sync hint, and stays neutral on the start page', async () => {
+    syncState.indicator = 'synced'
+    itemsState.pendingCount = 1
+
+    const inHousehold = await mountSidebar({ groupId: 'g1', listId: 'l1' })
+    expect(inHousehold.wrapper.get('.sync .hint').text()).toBe('Sending to WG Kaiserstraße …')
+    inHousehold.wrapper.unmount()
+
+    const onStart = await mountSidebar()
+    expect(onStart.wrapper.get('.sync .hint').text()).toBe('Sending changes …')
+    onStart.wrapper.unmount()
   })
 })

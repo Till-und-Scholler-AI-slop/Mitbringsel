@@ -49,8 +49,9 @@ vi.mock('@/stores/groupInvites', async (importOriginal) => {
     useGroupInvitesStore: original.defineGroupInvitesStore(invitesService, () => 'user-1'),
   }
 })
-// A signed-in user would start the real live socket; the chip stays hidden.
+// A signed-in user would start the real live socket and outbox; the chip stays hidden.
 vi.mock('@/stores/sync', () => ({ useSyncStore: () => ({ indicator: 'hidden' }) }))
+vi.mock('@/stores/items', () => ({ useItemsStore: () => ({ pendingCount: 0 }) }))
 vi.mock('@/stores/groups', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/groups')>()
   return { ...original, useGroupsStore: original.defineGroupsStore(service, () => 'user-1') }

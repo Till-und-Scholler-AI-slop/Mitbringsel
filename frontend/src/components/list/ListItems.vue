@@ -209,6 +209,7 @@ watch(editing, (now, before) => {
           :person="personOf(item)"
           :recent="recentOf(item)"
           :editing="panelMode && editingId === item.id"
+          :pending="items.isPending(item.id)"
           :opens-dialog="!panelMode"
           @toggle="toggle(item)"
           @edit="startEdit(item)"
