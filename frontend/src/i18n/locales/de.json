@@ -82,6 +82,12 @@
     "members": "Mitglieder",
     "someMembers": "Einige Mitglieder",
     "more": "+ {count} weitere",
+    "validUntil": "Link gültig bis {date} · {remaining}",
+    "remaining": {
+      "day": "noch {count} Tag | noch {count} Tage",
+      "hour": "noch {count} Stunde | noch {count} Stunden",
+      "minute": "noch {count} Minute | noch {count} Minuten"
+    },
     "join": "Beitreten",
     "joinWithGoogle": "Mit Google beitreten",
     "signInNote": "Nach der Anmeldung kommst du hierher zurück und kannst beitreten.",
