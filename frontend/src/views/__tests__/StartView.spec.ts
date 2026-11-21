@@ -8,6 +8,7 @@ import { ApiError } from '@/services/api/client'
 import type { AuthService } from '@/services/api/auth'
 import type { GroupsService } from '@/services/api/groups'
 import type { ListsService } from '@/services/api/lists'
+import { localData } from '@/services/storage/localData'
 import { useAuthStore } from '@/stores/auth'
 import type { Group, List, MeResponse } from '@/types/api'
 
@@ -267,6 +268,39 @@ describe('StartView', () => {
 
     await wrapper.get('.toggle').trigger('click')
     await wrapper.get('.panel button').trigger('click')
+    await flushPromises()
+
+    expect(authService.logout).toHaveBeenCalledTimes(1)
+    expect(router.currentRoute.value.name).toBe('login')
+    wrapper.unmount()
+  })
+
+  it('asks before logging out when the outbox has pending changes', async () => {
+    vi.spyOn(localData, 'readOutbox').mockResolvedValue([
+      { seq: 1, queuedAt: 1, change: { kind: 'remove', itemId: 'i1' } },
+    ])
+    const { wrapper, router } = await mountView()
+
+    await wrapper.get('.bar .toggle').trigger('click')
+    await wrapper.get('.bar .panel button').trigger('click')
+    await flushPromises()
+
+    expect(authService.logout).not.toHaveBeenCalled()
+    const dialog = wrapper.get('dialog[open]')
+    expect(dialog.get('h2').text()).toBe('Sign out?')
+    expect(dialog.get('.message-text').text()).toBe(
+      '1 change has not reached the server yet. If you sign out now, it will be lost.',
+    )
+
+    await dialog.get('.cancel').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(authService.logout).not.toHaveBeenCalled()
+
+    await wrapper.get('.bar .toggle').trigger('click')
+    await wrapper.get('.bar .panel button').trigger('click')
+    await flushPromises()
+    await wrapper.get('dialog[open] .confirm').trigger('click')
     await flushPromises()
 
     expect(authService.logout).toHaveBeenCalledTimes(1)

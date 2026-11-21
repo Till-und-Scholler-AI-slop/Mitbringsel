@@ -41,7 +41,7 @@ Damit die App offline startet ([ADR 0006](adr/0006-offline-phase-6.md)), speiche
 - **Antwortet `/me`**, ersetzt die Antwort das Profil (`fromCache` wird `false`). Bei `401` greift der übliche Weg über die abgelaufene Sitzung; die lokalen Daten bleiben, damit derselbe Nutzer nach dem Anmelden weitermacht. Bei einem Netzfehler oder `5xx` bleibt der Nutzer angemeldet, und der Store fragt `/me` erneut, sobald der Socket `ready` meldet.
 - **Ohne gespeichertes Profil** wartet der Start wie zuvor auf `/me`.
 - **Nur beim Start:** Nach einem Logout oder einer abgelaufenen Sitzung meldet das gespeicherte Profil niemanden an.
-- **Ein bewusster Logout** löscht alle lokalen Daten, das Gerät kann geteilt sein. Eine Antwort von `/me`, die erst danach eintrifft, verwirft der Store.
+- **Ein bewusster Logout** löscht alle lokalen Daten, das Gerät kann geteilt sein. Liegen noch ungesendete Änderungen in der Outbox, fragt die App vorher nach, ob der Nutzer sie verwerfen will. Eine Antwort von `/me`, die erst danach eintrifft, verwirft der Store.
 
 ## Sessions und Sicherheit
 
