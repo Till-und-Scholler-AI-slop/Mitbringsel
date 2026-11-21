@@ -148,6 +148,31 @@ describe('MemberActionsDialog', () => {
     wrapper.unmount()
   })
 
+  it('disables back while removing is in flight and re-enables it afterwards', async () => {
+    let rejectRemove!: (err: Error) => void
+    service.removeMember.mockImplementation(
+      () =>
+        new Promise<void>((_, reject) => {
+          rejectRemove = reject
+        }),
+    )
+    const wrapper = mountDialog('admin', 'member')
+
+    await wrapper.get('.action').trigger('click')
+    await wrapper.get('.remove').trigger('click')
+
+    expect(wrapper.get('.back').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.remove').attributes('aria-busy')).toBe('true')
+
+    rejectRemove(new ApiError('NETWORK'))
+    await flushPromises()
+
+    expect(wrapper.get('.back').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('.confirm').exists()).toBe(true)
+    expect(wrapper.props('open')).toBe(true)
+    wrapper.unmount()
+  })
+
   it('shows the message of a server error and stays open', async () => {
     service.setMemberRole.mockRejectedValue(new ApiError('FORBIDDEN', 403))
     const wrapper = mountDialog('owner', 'member')

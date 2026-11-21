@@ -106,7 +106,12 @@ async function run(action: MemberAction) {
           {{ t('settings.member.confirm.body', { name: member.displayName, group: group.name }) }}
         </p>
         <div class="buttons">
-          <BaseButton variant="secondary" class="back" @click="confirmingRemove = false">
+          <BaseButton
+            variant="secondary"
+            class="back"
+            :disabled="busy"
+            @click="confirmingRemove = false"
+          >
             {{ t('settings.member.confirm.back') }}
           </BaseButton>
           <BaseButton variant="danger-solid" class="remove" :loading="busy" @click="run('remove')">
