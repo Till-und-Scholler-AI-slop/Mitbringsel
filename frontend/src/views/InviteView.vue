@@ -323,22 +323,13 @@ async function retry() {
   font-weight: var(--font-weight-semibold);
 }
 
-/* Desktop: header and content side by side. The header starts at 420 px,
-   the content takes the rest; in a narrow window (up to about 880 px) the
-   content wraps below. */
+/* Narrow desktop (48rem to 55rem): desktop header stacked above content, full
+   width with rounded bottom corners like on the phone, so it does not look
+   squeezed. */
 @media (min-width: 48rem) {
-  .invite {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
   .bar {
-    flex: 1 1 26.25rem;
-    min-width: 0;
-    justify-content: space-between;
     gap: var(--space-12);
     padding: var(--space-12) var(--space-14);
-    border-radius: 0 2.5rem 2.5rem 0;
   }
 
   .bar .logo--phone {
@@ -372,10 +363,8 @@ async function retry() {
   }
 
   .content {
-    flex: 999 1 28.75rem;
     justify-content: center;
     gap: var(--space-5);
-    min-width: 0;
     max-width: none;
     margin: 0;
     padding: var(--space-12) var(--space-8);
@@ -390,6 +379,28 @@ async function retry() {
 
   .spacer {
     display: none;
+  }
+}
+
+/* Wide desktop: header (26.25rem) and content (28.75rem) side by side
+   (design "markt2-einladung-desktop-*"). 55rem is the exact sum of both flex
+   bases (no gap or margin), so layout direction and corner radius always
+   switch together. */
+@media (min-width: 55rem) {
+  .invite {
+    flex-direction: row;
+  }
+
+  .bar {
+    flex: 1 1 26.25rem;
+    min-width: 0;
+    justify-content: space-between;
+    border-radius: 0 2.5rem 2.5rem 0;
+  }
+
+  .content {
+    flex: 999 1 28.75rem;
+    min-width: 0;
   }
 }
 
