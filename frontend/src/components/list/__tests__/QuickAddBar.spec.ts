@@ -3,9 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { createAppI18n } from '@/i18n'
-import { ApiError } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
-import { useToastsStore } from '@/stores/toasts'
 import type { Item } from '@/types/api'
 
 import QuickAddBar from '../QuickAddBar.vue'
@@ -19,22 +17,33 @@ const itemsService = vi.hoisted(() => ({
   removeChecked: vi.fn<ItemsService['removeChecked']>(),
 }))
 
-// vi.hoisted runs before the imports, so the fake has to be imported by hand.
+// vi.hoisted runs before the imports, so the fakes have to be imported by hand.
 const serverEvents = await vi.hoisted(async () =>
   (await import('@/services/sync/__tests__/fakeServerEvents')).createFakeServerEvents(),
+)
+const outbox = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeOutbox')).createFakeOutbox(),
 )
 
 vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
   return {
     ...original,
-    useItemsStore: original.defineItemsStore(itemsService, () => 'user-1', serverEvents),
+    useItemsStore: original.defineItemsStore(
+      itemsService,
+      () => 'user-1',
+      serverEvents,
+      undefined,
+      {
+        openOutbox: outbox.open,
+      },
+    ),
   }
 })
 
-function item(name: string): Item {
+function item(id: string, name: string): Item {
   return {
-    id: 'i1',
+    id,
     listId: 'l1',
     name,
     quantity: null,
@@ -68,7 +77,11 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   serverEvents.clear()
-  itemsService.create.mockImplementation((_listId, request) => Promise.resolve(item(request.name)))
+  outbox.clear()
+  outbox.auto(itemsService)
+  itemsService.create.mockImplementation((_listId, request) =>
+    Promise.resolve(item(request.id!, request.name)),
+  )
 })
 
 describe('QuickAddBar', () => {
@@ -82,12 +95,20 @@ describe('QuickAddBar', () => {
     wrapper.unmount()
   })
 
-  it('adds the trimmed name and empties the field at once', async () => {
+  it('adds the trimmed name through the outbox and empties the field at once', async () => {
     const wrapper = mountBar()
 
     await type(wrapper, '  Hafermilch ')
+    await flushPromises()
 
-    expect(itemsService.create).toHaveBeenCalledWith('l1', { name: 'Hafermilch' })
+    expect(itemsService.create).toHaveBeenCalledWith(
+      'l1',
+      expect.objectContaining({
+        id: expect.any(String),
+        name: 'Hafermilch',
+        clock: expect.any(String),
+      }),
+    )
     expect(wrapper.get('input').element.value).toBe('')
     wrapper.unmount()
   })
@@ -109,39 +130,6 @@ describe('QuickAddBar', () => {
     await type(wrapper, '   ')
 
     expect(itemsService.create).not.toHaveBeenCalled()
-    wrapper.unmount()
-  })
-
-  it('puts the name back and says so if adding fails', async () => {
-    itemsService.create.mockRejectedValueOnce(new ApiError('NETWORK'))
-    const wrapper = mountBar('de')
-
-    await type(wrapper, 'Hafermilch')
-    await flushPromises()
-
-    expect(wrapper.get('input').element.value).toBe('Hafermilch')
-    expect(useToastsStore().toasts).toMatchObject([
-      {
-        kind: 'error',
-        text: '„Hafermilch“ konnte nicht hinzugefügt werden',
-        detail: expect.any(String),
-      },
-    ])
-    wrapper.unmount()
-  })
-
-  it('does not overwrite what the user typed meanwhile', async () => {
-    let fail: (err: unknown) => void = () => undefined
-    itemsService.create.mockReturnValueOnce(new Promise((_resolve, reject) => (fail = reject)))
-    const wrapper = mountBar()
-
-    await type(wrapper, 'Hafermilch')
-    await wrapper.get('input').setValue('Brot')
-    fail(new ApiError('NETWORK'))
-    await flushPromises()
-
-    expect(wrapper.get('input').element.value).toBe('Brot')
-    expect(useToastsStore().toasts).toHaveLength(1)
     wrapper.unmount()
   })
 

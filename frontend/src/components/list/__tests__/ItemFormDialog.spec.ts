@@ -3,7 +3,6 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { createAppI18n } from '@/i18n'
-import { ApiError } from '@/services/api/client'
 import type { ItemsService } from '@/services/api/items'
 import type { Item } from '@/types/api'
 
@@ -18,22 +17,33 @@ const itemsService = vi.hoisted(() => ({
   removeChecked: vi.fn<ItemsService['removeChecked']>(),
 }))
 
-// vi.hoisted runs before the imports, so the fake has to be imported by hand.
+// vi.hoisted runs before the imports, so the fakes have to be imported by hand.
 const serverEvents = await vi.hoisted(async () =>
   (await import('@/services/sync/__tests__/fakeServerEvents')).createFakeServerEvents(),
+)
+const outbox = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeOutbox')).createFakeOutbox(),
 )
 
 vi.mock('@/stores/items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/items')>()
   return {
     ...original,
-    useItemsStore: original.defineItemsStore(itemsService, () => 'user-1', serverEvents),
+    useItemsStore: original.defineItemsStore(
+      itemsService,
+      () => 'user-1',
+      serverEvents,
+      undefined,
+      {
+        openOutbox: outbox.open,
+      },
+    ),
   }
 })
 
-function item(name: string): Item {
+function item(id: string, name: string): Item {
   return {
-    id: 'i1',
+    id,
     listId: 'l1',
     name,
     quantity: null,
@@ -79,7 +89,11 @@ beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   serverEvents.clear()
-  itemsService.create.mockImplementation((_listId, request) => Promise.resolve(item(request.name)))
+  outbox.clear()
+  outbox.auto(itemsService)
+  itemsService.create.mockImplementation((_listId, request) =>
+    Promise.resolve(item(request.id!, request.name)),
+  )
   // jsdom has no modal <dialog>.
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
     this.setAttribute('open', '')
@@ -111,12 +125,17 @@ describe('ItemFormDialog: new item', () => {
     await submit()
     await flushPromises()
 
-    expect(itemsService.create).toHaveBeenCalledWith('l1', {
-      name: 'Tomaten',
-      quantity: 2.5,
-      unit: 'kg',
-      note: 'die kleinen',
-    })
+    expect(itemsService.create).toHaveBeenCalledWith(
+      'l1',
+      expect.objectContaining({
+        id: expect.any(String),
+        name: 'Tomaten',
+        quantity: 2.5,
+        unit: 'kg',
+        note: 'die kleinen',
+        clock: expect.any(String),
+      }),
+    )
     expect(wrapper.props('open')).toBe(false)
     wrapper.unmount()
   })
@@ -127,12 +146,17 @@ describe('ItemFormDialog: new item', () => {
     await submit()
     await flushPromises()
 
-    expect(itemsService.create).toHaveBeenCalledWith('l1', {
-      name: 'Brot',
-      quantity: null,
-      unit: null,
-      note: null,
-    })
+    expect(itemsService.create).toHaveBeenCalledWith(
+      'l1',
+      expect.objectContaining({
+        id: expect.any(String),
+        name: 'Brot',
+        quantity: null,
+        unit: null,
+        note: null,
+        clock: expect.any(String),
+      }),
+    )
     wrapper.unmount()
   })
 
@@ -158,30 +182,6 @@ describe('ItemFormDialog: new item', () => {
     wrapper.unmount()
   })
 
-  it('shows an error of the server at its field', async () => {
-    itemsService.create.mockRejectedValueOnce(new ApiError('ITEM_NAME_INVALID', 400))
-    wrapper = mountDialog('Brot')
-
-    await submit()
-    await flushPromises()
-
-    expect(field('Name').attributes('aria-invalid')).toBe('true')
-    expect(wrapper.props('open')).toBe(true)
-    wrapper.unmount()
-  })
-
-  it('shows any other error above the buttons and stays open', async () => {
-    itemsService.create.mockRejectedValueOnce(new ApiError('NETWORK'))
-    wrapper = mountDialog('Brot', 'en')
-
-    await submit()
-    await flushPromises()
-
-    expect(wrapper.get('.failed').text()).not.toBe('')
-    expect(wrapper.props('open')).toBe(true)
-    wrapper.unmount()
-  })
-
   it('starts afresh when opened again', async () => {
     wrapper = mountDialog('Brot')
     await field('Menge').setValue('3')
@@ -197,7 +197,7 @@ describe('ItemFormDialog: new item', () => {
 
 describe('ItemFormDialog: editing', () => {
   const tomatoes = (): Item => ({
-    ...item('Tomaten'),
+    ...item('i1', 'Tomaten'),
     quantity: 2.5,
     unit: 'kg',
     note: 'die kleinen',
@@ -239,7 +239,10 @@ describe('ItemFormDialog: editing', () => {
     await submit()
     await flushPromises()
 
-    expect(itemsService.update).toHaveBeenCalledWith('i1', { note: 'die großen' })
+    expect(itemsService.update).toHaveBeenCalledWith('i1', {
+      note: 'die großen',
+      clock: expect.any(String),
+    })
     expect(wrapper.props('open')).toBe(false)
     wrapper.unmount()
   })
@@ -251,7 +254,11 @@ describe('ItemFormDialog: editing', () => {
     await submit()
     await flushPromises()
 
-    expect(itemsService.update).toHaveBeenCalledWith('i1', { quantity: null, unit: null })
+    expect(itemsService.update).toHaveBeenCalledWith('i1', {
+      quantity: null,
+      unit: null,
+      clock: expect.any(String),
+    })
     wrapper.unmount()
   })
 
@@ -275,7 +282,10 @@ describe('ItemFormDialog: editing', () => {
     await flushPromises()
 
     expect((field('Notiz').element as HTMLTextAreaElement).value).toBe('die kleinen')
-    expect(itemsService.update).toHaveBeenCalledWith('i1', { name: 'Cherrytomaten' })
+    expect(itemsService.update).toHaveBeenCalledWith('i1', {
+      name: 'Cherrytomaten',
+      clock: expect.any(String),
+    })
     wrapper.unmount()
   })
 

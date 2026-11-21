@@ -4,15 +4,24 @@ import { createPinia, setActivePinia } from 'pinia'
 import { ref } from 'vue'
 
 import { ApiError } from '@/services/api/client'
-import type { ItemsService } from '@/services/api/items'
+import { MAX_REMOVE_CHECKED, type ItemsService } from '@/services/api/items'
+import { createClock, formatHLC } from '@/services/sync/hlc'
+import {
+  createOutbox,
+  ERROR_CODE_OUTBOX_EXPIRED,
+  type OutboxChange,
+  type OutboxEntry,
+  type OutboxStorage,
+} from '@/services/sync/outbox'
+import { createFakeOutbox, type FakeOutbox } from '@/services/sync/__tests__/fakeOutbox'
 import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
-import { MAX_REMOVE_CHECKED } from '@/services/api/items'
-import type { GroupItemList, Item, ServerMessage } from '@/types/api'
+import type { CreateItemRequest, GroupItemList, Item, ServerMessage } from '@/types/api'
 
-import { defineItemsStore, type ItemsLocal } from '../items'
+import { defineItemsStore, type ItemRejection, type ItemsLocal } from '../items'
 
 const ANNA = '0190a8c4-0000-7000-8000-00000000000a'
 const BEN = '0190a8c4-0000-7000-8000-00000000000b'
+const NOW = Date.parse('2026-02-01T12:00:00Z')
 const CHECKED_AT = '2026-02-01T10:00:00Z'
 const CREATED_LATER = '2026-01-02T10:00:00Z'
 
@@ -49,8 +58,11 @@ function fakeService(
       Promise.resolve({ listIds: [...new Set(initial.map((i) => i.listId))], items: initial }),
     ),
     // Created later than the items above, so it sorts after them.
-    create: vi.fn((listId: string, request: { name: string }) =>
-      Promise.resolve({ ...item('i-new', request.name, listId), createdAt: CREATED_LATER }),
+    create: vi.fn((listId: string, request: CreateItemRequest) =>
+      Promise.resolve({
+        ...item(request.id ?? 'i-new', request.name, listId),
+        createdAt: CREATED_LATER,
+      }),
     ),
     update: vi.fn((id: string, change: Record<string, unknown>) => {
       const stored = initial.find((i) => i.id === id) ?? item(id, 'x')
@@ -105,17 +117,23 @@ function fakeStorage(stored: Record<string, Item[]> = {}) {
 
 /**
  * The signed-in user as a ref, so tests can switch the user, the server
- * events, so tests can send them, and the storage of the device.
+ * events, the device storage and the fake outbox.
  */
 function setup(
   service: ItemsService,
   userId: string | null = ANNA,
   storage: ItemsLocal = fakeStorage(),
+  outbox: FakeOutbox = createFakeOutbox(),
 ) {
+  let n = 0
   const user = ref(userId)
   const events = createFakeServerEvents()
-  const store = defineItemsStore(service, () => user.value, events, storage)()
-  return { store, user, events }
+  const store = defineItemsStore(service, () => user.value, events, storage, {
+    openOutbox: outbox.open,
+    clock: createClock('tab', () => NOW),
+    newId: () => `new-${++n}`,
+  })()
+  return { store, user, events, outbox }
 }
 
 // Messages as another member's change makes the server send them.
@@ -314,18 +332,18 @@ describe('items store: reset', () => {
     expect(store.errorCodeOf('l1')).toBeNull()
   })
 
-  it('does not bring back a check that was still running at the reset', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store, user } = setup(service)
+  it('does not bring back a check that was still pending at the reset', async () => {
+    const { store, user, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
+    const [entry] = outbox.entries()
     user.value = null
     await Promise.resolve()
-    answer.resolve(item('i1', 'Milch', 'l1', true))
-    await checking
+    outbox.opened[0]!.options.onSent(entry!, {
+      kind: 'update',
+      item: item('i1', 'Milch', 'l1', true),
+    })
 
     expect(store.itemsOf('l1')).toEqual([])
   })
@@ -368,42 +386,161 @@ describe('items store: reset', () => {
   })
 
   it('ignores a create that answers after the reset', async () => {
-    const service = fakeService()
-    const answer = deferred<Item>()
-    service.create.mockReturnValueOnce(answer.promise)
-    const { store, user } = setup(service)
+    const { store, user, outbox } = setup(fakeService())
+    await store.load('l1')
 
-    const creating = store.create('l1', { name: 'Brot' })
+    await store.create('l1', { name: 'Brot' })
+    const [entry] = outbox.entries()
     user.value = null
     await Promise.resolve()
-    answer.resolve(item('i1', 'Brot'))
-    await creating
+    outbox.opened[0]!.options.onSent(entry!, { kind: 'create', item: item('new-1', 'Brot') })
 
     expect(store.itemsOf('l1')).toEqual([])
     expect(store.statusOf('l1')).toBe('idle')
   })
 })
 
-describe('items store: create', () => {
-  it('adds a created item in the order of the server and returns it', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const { store } = setup(service)
+describe('items store: outbox lifecycle', () => {
+  it('opens an outbox with a signed-in user, reads it and triggers once', async () => {
+    const outbox = createFakeOutbox()
+    outbox.fromOtherTab({
+      kind: 'create',
+      listId: 'l1',
+      item: { id: 'i-old', name: 'Kaffee', clock: formatHLC(NOW, 0, 'other') },
+    })
+    const { store } = setup(fakeService(), ANNA, fakeStorage(), outbox)
     await store.load('l1')
 
-    const created = await store.create('l1', { name: 'Brot', quantity: 1, unit: 'pack' })
-
-    expect(service.create).toHaveBeenCalledWith('l1', { name: 'Brot', quantity: 1, unit: 'pack' })
-    expect(created.id).toBe('i-new')
-    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+    expect(outbox.opened).toHaveLength(1)
+    expect(outbox.opened[0]?.stopped).toBe(false)
+    expect(outbox.opened[0]?.options.userId()).toBe(ANNA)
+    expect(outbox.triggers).toBe(1)
+    expect(names(store.itemsOf('l1'))).toEqual(['Kaffee'])
   })
 
-  it('does not list an item twice when the server answers a repeated request', async () => {
+  it('does not open an outbox without a signed-in user', () => {
+    const { outbox } = setup(fakeService(), null)
+
+    expect(outbox.opened).toEqual([])
+    expect(outbox.triggers).toBe(0)
+  })
+
+  it('stops the old outbox and opens a new one when the user changes', async () => {
+    const { user, outbox } = setup(fakeService(), ANNA)
+
+    user.value = BEN
+    await flushPromises()
+
+    expect(outbox.opened).toHaveLength(2)
+    expect(outbox.opened[0]?.stopped).toBe(true)
+    expect(outbox.opened[0]?.options.userId()).toBeNull()
+    expect(outbox.opened[1]?.stopped).toBe(false)
+    expect(outbox.opened[1]?.options.userId()).toBe(BEN)
+    expect(outbox.triggers).toBe(2)
+  })
+
+  it('stops the outbox when the store is disposed', () => {
+    const { store, outbox } = setup(fakeService())
+
+    store.$dispose()
+
+    expect(outbox.opened[0]?.stopped).toBe(true)
+  })
+
+  it('ignores answers and rejections of an old outbox after a user switch', async () => {
     const service = fakeService([item('i1', 'Milch')])
-    service.create.mockResolvedValue(item('i1', 'Milch'))
-    const { store } = setup(service)
+    const { store, user, outbox } = setup(service, ANNA)
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
+    await store.load('l1')
+    await store.create('l1', { name: 'Brot' })
+    const [entry] = outbox.entries()
+
+    user.value = BEN
+    await flushPromises()
     await store.load('l1')
 
-    await store.create('l1', { id: 'i1', name: 'Milch' })
+    outbox.opened[0]!.options.onSent(entry!, { kind: 'create', item: item('new-1', 'Brot') })
+    outbox.opened[0]!.options.onRejected(entry!, new ApiError('FORBIDDEN', 403))
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+    expect(rejections).toEqual([])
+  })
+
+  it('drops pending changes of the previous user on logout and user switch', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const { store, user } = setup(service, ANNA)
+    await store.load('l1')
+    await store.create('l1', { name: 'Brot' })
+    await store.setChecked('i1', true)
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+
+    user.value = BEN
+    await flushPromises()
+    await store.load('l1')
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+    expect(store.byId('i1')?.checked).toBe(false)
+  })
+})
+
+describe('items store: create', () => {
+  it('enqueues with client ID and clock, shows at once and replaces with the answer', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    await store.create('l1', { name: 'Brot', quantity: 1, unit: 'pack' })
+
+    expect(outbox.changes()).toEqual([
+      {
+        kind: 'create',
+        listId: 'l1',
+        item: {
+          id: 'new-1',
+          name: 'Brot',
+          quantity: 1,
+          unit: 'pack',
+          clock: formatHLC(NOW, 0, 'tab'),
+        },
+      },
+    ])
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+    expect(store.byId('new-1')).toMatchObject({
+      id: 'new-1',
+      name: 'Brot',
+      quantity: 1,
+      unit: 'pack',
+      createdBy: ANNA,
+      serverSeq: 0,
+    })
+
+    outbox.answer({
+      kind: 'create',
+      item: {
+        ...item('new-1', 'Brot'),
+        quantity: 1,
+        unit: 'pack',
+        createdAt: CREATED_LATER,
+        serverSeq: 2,
+      },
+    })
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+    expect(store.byId('new-1')?.serverSeq).toBe(2)
+  })
+
+  it('does not list an item twice when the event arrives before the answer', async () => {
+    const { store, events, outbox } = setup(fakeService())
+    await store.load('l1')
+
+    await store.create('l1', { name: 'Milch' })
+    const created = later(item('new-1', 'Milch'), 2)
+    events.emit(changed(created))
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+
+    outbox.answer({ kind: 'create', item: created })
+    await flushPromises()
 
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
   })
@@ -413,11 +550,15 @@ describe('items store: create', () => {
       item('i1', 'Milch'),
       { ...item('i3', 'Eier'), createdAt: '2026-01-01T12:00:00Z' },
     ])
-    service.create.mockResolvedValue({ ...item('i2', 'Brot'), createdAt: '2026-01-01T11:00:00Z' })
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
     await store.load('l1')
 
     await store.create('l1', { name: 'Brot' })
+    outbox.answer({
+      kind: 'create',
+      item: { ...item('new-1', 'Brot'), createdAt: '2026-01-01T11:00:00Z', serverSeq: 2 },
+    })
+    await flushPromises()
 
     expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot', 'Eier'])
   })
@@ -425,200 +566,166 @@ describe('items store: create', () => {
   it('sorts by the moment, not by the text of the date', async () => {
     // The server drops trailing zeros of the fraction. As text, "…:00.5Z" sorts
     // before "…:00Z" ('.' comes before 'Z'), but it is half a second later.
-    const service = fakeService([item('i1', 'Milch')])
-    service.create.mockResolvedValue({ ...item('i2', 'Brot'), createdAt: '2026-01-01T10:00:00.5Z' })
-    const { store } = setup(service)
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
 
     await store.create('l1', { name: 'Brot' })
+    outbox.answer({
+      kind: 'create',
+      item: { ...item('new-1', 'Brot'), createdAt: '2026-01-01T10:00:00.5Z', serverSeq: 2 },
+    })
+    await flushPromises()
 
     expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
   })
 
-  it('does not add an item when creating fails', async () => {
-    const service = fakeService()
-    service.create.mockRejectedValueOnce(new ApiError('ITEM_NAME_INVALID', 400))
-    const { store } = setup(service)
+  it('shows a created item only in lists the store holds', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
 
-    await expect(store.create('l1', { name: '' })).rejects.toMatchObject({
-      code: 'ITEM_NAME_INVALID',
-    })
+    await store.create('l1', { name: 'Brot' })
+
+    expect(outbox.changes()).toHaveLength(1)
     expect(store.itemsOf('l1')).toEqual([])
+    expect(store.statusOf('l1')).toBe('idle')
+
+    await store.load('l1')
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+  })
+
+  it('neither loses nor tombstones a pending create when the list reloads', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const { store, outbox } = setup(service)
+    await store.load('l1')
+
+    await store.create('l1', { name: 'Brot' })
+    await store.load('l1')
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+
+    outbox.answer({
+      kind: 'create',
+      item: { ...item('new-1', 'Brot'), createdAt: CREATED_LATER, serverSeq: 2 },
+    })
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Brot'])
+    expect(store.byId('new-1')?.serverSeq).toBe(2)
   })
 })
 
 describe('items store: update', () => {
-  it('takes the changed item from the answer of the server', async () => {
-    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
-    const { store } = setup(service)
+  it('shows the change at once, enqueues with a clock and takes the answer', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Brot')]))
     await store.load('l1')
 
     await store.update('i2', { name: 'Vollkornbrot', quantity: 2 })
 
-    expect(service.update).toHaveBeenCalledWith('i2', { name: 'Vollkornbrot', quantity: 2 })
+    expect(outbox.changes()).toEqual([
+      {
+        kind: 'update',
+        itemId: 'i2',
+        change: { name: 'Vollkornbrot', quantity: 2, clock: formatHLC(NOW, 0, 'tab') },
+      },
+    ])
     expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Vollkornbrot'])
     expect(store.byId('i2')?.quantity).toBe(2)
-  })
 
-  it('shows nothing early: the item stays until the server answers', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store } = setup(service)
-    await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
-
-    const updating = store.update('i1', { name: 'Hafermilch' })
-    await Promise.resolve()
-
-    expect(store.byId('i1')?.name).toBe('Milch')
-    answer.resolve(item('i1', 'Hafermilch'))
-    await updating
-    expect(store.byId('i1')?.name).toBe('Hafermilch')
-  })
-
-  it('keeps the item when updating fails', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    service.update.mockRejectedValueOnce(new ApiError('ITEM_NAME_INVALID', 400))
-    const { store } = setup(service)
-    await store.load('l1')
-
-    await expect(store.update('i1', { name: ' ' })).rejects.toMatchObject({
-      code: 'ITEM_NAME_INVALID',
+    outbox.answer({
+      kind: 'update',
+      item: later(item('i2', 'Vollkornbrot'), 2, { quantity: 2 }),
     })
-    expect(store.byId('i1')?.name).toBe('Milch')
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Vollkornbrot'])
+    expect(store.byId('i2')).toMatchObject({ name: 'Vollkornbrot', quantity: 2, serverSeq: 2 })
   })
 })
 
 describe('items store: setChecked', () => {
-  it('checks at once, before the server answers', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store } = setup(service)
+  it('checks at once with user and time, then takes who and when from the answer', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
 
-    expect(service.update).toHaveBeenCalledWith('i1', { checked: true })
+    expect(outbox.changes()).toEqual([
+      {
+        kind: 'update',
+        itemId: 'i1',
+        change: { checked: true, clock: formatHLC(NOW, 0, 'tab') },
+      },
+    ])
     expect(store.byId('i1')?.checked).toBe(true)
     expect(store.byId('i1')?.checkedBy).toBe(ANNA)
     expect(store.byId('i1')?.checkedAt).not.toBeNull()
     expect(names(store.checkedItems('l1'))).toEqual(['Milch'])
 
-    answer.resolve(item('i1', 'Milch', 'l1', true))
-    await checking
-  })
+    outbox.answer({
+      kind: 'update',
+      item: later(item('i1', 'Milch', 'l1', true), 2, { checkedBy: ANNA, checkedAt: CHECKED_AT }),
+    })
+    await flushPromises()
 
-  it('takes who and when from the answer of the server', async () => {
-    const { store } = setup(fakeService([item('i1', 'Milch')]))
-    await store.load('l1')
-
-    await store.setChecked('i1', true)
-
-    expect(store.byId('i1')?.checkedBy).toBe(ANNA)
-    expect(store.byId('i1')?.checkedAt).toBe(CHECKED_AT)
+    expect(store.byId('i1')).toMatchObject({
+      checked: true,
+      checkedBy: ANNA,
+      checkedAt: CHECKED_AT,
+      serverSeq: 2,
+    })
   })
 
   it('unchecks at once and clears who and when', async () => {
-    const service = fakeService([item('i1', 'Milch', 'l1', true)])
-    const answer = deferred<Item>()
-    const { store } = setup(service)
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch', 'l1', true)]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const unchecking = store.setChecked('i1', false)
+    await store.setChecked('i1', false)
 
     expect(store.byId('i1')).toMatchObject({ checked: false, checkedBy: null, checkedAt: null })
     expect(names(store.openItems('l1'))).toEqual(['Milch'])
 
-    answer.resolve(item('i1', 'Milch'))
-    await unchecking
-  })
-
-  it('puts the old state back and throws when the request fails', async () => {
-    const service = fakeService([item('i1', 'Milch', 'l1', true)])
-    service.update.mockRejectedValueOnce(new ApiError('NETWORK'))
-    const { store } = setup(service)
-    await store.load('l1')
-
-    await expect(store.setChecked('i1', false)).rejects.toMatchObject({ code: 'NETWORK' })
-
-    expect(store.byId('i1')).toMatchObject({
-      checked: true,
-      checkedBy: BEN,
-      checkedAt: CHECKED_AT,
-    })
-  })
-
-  it('lets the last tap win when the answers come in a different order', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const first = deferred<Item>()
-    const second = deferred<Item>()
-    const { store } = setup(service)
-    await store.load('l1')
-    service.update.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
-
-    const checking = store.setChecked('i1', true)
-    const unchecking = store.setChecked('i1', false)
-    expect(store.byId('i1')?.checked).toBe(false)
-
-    // The late answer to the first tap must not check the item again.
-    second.resolve(item('i1', 'Milch'))
-    await unchecking
-    first.resolve(item('i1', 'Milch', 'l1', true))
-    await checking
-
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Milch'), 2) })
+    await flushPromises()
     expect(store.byId('i1')?.checked).toBe(false)
   })
 
-  it('does not roll back an older tap that fails after a newer one', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const first = deferred<Item>()
-    const { store } = setup(service)
+  it('lets the last tap win while both are pending and as answers arrive', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(first.promise)
 
-    const checking = store.setChecked('i1', true)
-    const unchecking = store.setChecked('i1', false)
-    first.reject(new ApiError('NETWORK'))
-
-    // The first tap still reports its error to the caller ...
-    await expect(checking).rejects.toMatchObject({ code: 'NETWORK' })
-    await unchecking
-    // ... but the state belongs to the newest tap.
+    await store.setChecked('i1', true)
+    await store.setChecked('i1', false)
     expect(store.byId('i1')?.checked).toBe(false)
+
+    // The first answer comes back while the second tap is still pending:
+    // the second tap stays on top.
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Milch', 'l1', true), 2) })
+    await flushPromises()
+    expect(store.byId('i1')?.checked).toBe(false)
+
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Milch'), 3) })
+    await flushPromises()
+    expect(store.byId('i1')?.checked).toBe(false)
+    expect(store.byId('i1')?.serverSeq).toBe(3)
   })
 
-  it('does not roll back onto an item that a reload has replaced', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store } = setup(service)
-    await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
-
-    const checking = store.setChecked('i1', true)
-    service.list.mockResolvedValueOnce([item('i1', 'Milch', 'l1', true)])
-    await store.load('l1')
-    answer.reject(new ApiError('NETWORK'))
-    await expect(checking).rejects.toBeInstanceOf(ApiError)
-
-    // The reload holds fresher data from the server than the state before the tap.
-    expect(store.byId('i1')?.checked).toBe(true)
-  })
-
-  it('still sends the change for an item it does not know', async () => {
-    const service = fakeService()
-    const { store } = setup(service)
+  it('still enqueues the change for an item it does not know', async () => {
+    const { store, outbox } = setup(fakeService())
 
     await store.setChecked('unknown', true)
 
-    expect(service.update).toHaveBeenCalledWith('unknown', { checked: true })
+    expect(outbox.changes()).toEqual([
+      {
+        kind: 'update',
+        itemId: 'unknown',
+        change: { checked: true, clock: formatHLC(NOW, 0, 'tab') },
+      },
+    ])
   })
 })
 
 describe('items store: remove', () => {
-  it('drops a deleted item from its list only', async () => {
-    const { store } = setup(
+  it('hides the item from its list at once and tombstones it on answer', async () => {
+    const { store, events, outbox } = setup(
       fakeService([item('i1', 'Milch'), item('i2', 'Brot'), item('i3', 'Nägel', 'l2')]),
     )
     await store.load('l1')
@@ -626,27 +733,24 @@ describe('items store: remove', () => {
 
     await store.remove('i1')
 
+    expect(outbox.changes()).toEqual([{ kind: 'remove', itemId: 'i1' }])
     expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
     expect(names(store.itemsOf('l2'))).toEqual(['Nägel'])
+    expect(store.byId('i1')).toBeUndefined()
+
+    outbox.answer({ kind: 'remove' })
+    await flushPromises()
+    events.emit(changed(later(item('i1', 'Milch'), 9)))
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
   })
 
-  it('keeps the item when deleting fails', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    service.remove.mockRejectedValueOnce(new ApiError('ITEM_NOT_FOUND', 404))
-    const { store } = setup(service)
-    await store.load('l1')
-
-    await expect(store.remove('i1')).rejects.toMatchObject({ code: 'ITEM_NOT_FOUND' })
-    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
-  })
-
-  it('still asks the server about an item it does not know', async () => {
-    const service = fakeService()
-    const { store } = setup(service)
+  it('still enqueues a removal for an item it does not know', async () => {
+    const { store, outbox } = setup(fakeService())
 
     await store.remove('unknown')
 
-    expect(service.remove).toHaveBeenCalledWith('unknown')
+    expect(outbox.changes()).toEqual([{ kind: 'remove', itemId: 'unknown' }])
   })
 })
 
@@ -655,11 +759,11 @@ describe('items store: load merge', () => {
     const service = fakeService()
     const answer = deferred<Item[]>()
     service.list.mockReturnValueOnce(answer.promise)
-    service.update.mockResolvedValueOnce(later(item('i1', 'Hafermilch'), 3))
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
 
     const loading = store.load('l1')
     await store.update('i1', { name: 'Hafermilch' })
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Hafermilch'), 3) })
     answer.resolve([item('i1', 'Milch')])
     await loading
 
@@ -670,10 +774,14 @@ describe('items store: load merge', () => {
     const service = fakeService([item('i1', 'Milch')])
     const answer = deferred<Item[]>()
     service.list.mockReturnValueOnce(answer.promise)
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
 
     const loading = store.load('l1')
     await store.create('l1', { name: 'Brot' })
+    outbox.answer({
+      kind: 'create',
+      item: { ...item('new-1', 'Brot'), createdAt: CREATED_LATER, serverSeq: 2 },
+    })
     answer.resolve([item('i1', 'Milch')])
     await loading
 
@@ -682,14 +790,15 @@ describe('items store: load merge', () => {
 
   it('drops an item the server no longer has and does not bring it back', async () => {
     const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
     await store.load('l1')
     service.list.mockResolvedValueOnce([item('i1', 'Milch')])
 
     await store.load('l1')
     // A late answer to a change of the dropped item must not list it again.
-    service.update.mockResolvedValueOnce(later(item('i2', 'Brot'), 5))
     await store.update('i2', { name: 'Brot' })
+    outbox.answer({ kind: 'update', item: later(item('i2', 'Brot'), 5) })
+    await flushPromises()
 
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
   })
@@ -698,10 +807,11 @@ describe('items store: load merge', () => {
     const service = fakeService()
     const answer = deferred<Item[]>()
     service.list.mockReturnValueOnce(answer.promise)
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
 
     const loading = store.load('l1')
     await store.remove('i1')
+    outbox.answer({ kind: 'remove' })
     answer.resolve([item('i1', 'Milch'), item('i2', 'Brot')])
     await loading
 
@@ -768,29 +878,28 @@ describe('items store: load merge', () => {
 
   it('keeps a newer item from an answer over the older one of a reload', async () => {
     const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const updating = store.update('i1', { name: 'Hafermilch' })
+    await store.update('i1', { name: 'Hafermilch' })
     service.list.mockResolvedValueOnce([later(item('i1', 'Milch'), 3, { name: 'Sojamilch' })])
     await store.load('l1')
-    answer.resolve(later(item('i1', 'Milch'), 2, { name: 'Hafermilch' }))
-    await updating
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Milch'), 2, { name: 'Hafermilch' }) })
+    await flushPromises()
 
     expect(store.byId('i1')?.name).toBe('Sojamilch')
   })
 
   it('does not bring back an item after remove when an older reload arrives', async () => {
     const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
     await store.load('l1')
     const answer = deferred<Item[]>()
     service.list.mockReturnValueOnce(answer.promise)
 
     const reloading = store.load('l1')
     await store.remove('i1')
+    outbox.answer({ kind: 'remove' })
     answer.resolve([item('i1', 'Milch'), item('i2', 'Brot')])
     await reloading
 
@@ -801,58 +910,57 @@ describe('items store: load merge', () => {
 describe('items store: checking while the server changes', () => {
   it('keeps the own check while it is pending and takes the other fields of a reload', async () => {
     const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
     service.list.mockResolvedValueOnce([later(item('i1', 'Milch'), 2, { name: 'Hafermilch' })])
     await store.load('l1')
 
     expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: true, checkedBy: ANNA })
-    answer.resolve(later(item('i1', 'Hafermilch', 'l1', true), 3))
-    await checking
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Hafermilch', 'l1', true), 3) })
+    await flushPromises()
     expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: true, serverSeq: 3 })
   })
 
-  it('takes the newest state of the server when a pending check fails', async () => {
+  it('takes the newest state of the server when a pending check is refused', async () => {
     const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
     service.list.mockResolvedValueOnce([later(item('i1', 'Milch'), 2, { name: 'Hafermilch' })])
     await store.load('l1')
-    answer.reject(new ApiError('NETWORK'))
-    await expect(checking).rejects.toMatchObject({ code: 'NETWORK' })
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
 
     expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: false, checkedBy: null })
   })
 
-  it('does not report a failed check of an item deleted meanwhile', async () => {
-    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
-    service.update.mockRejectedValueOnce(new ApiError('ITEM_NOT_FOUND', 404))
-    const { store } = setup(service)
+  it('silently drops a refused check of an item deleted meanwhile', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Brot')]))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
     await store.load('l1')
 
-    await expect(store.setChecked('i1', true)).resolves.toBeUndefined()
+    await store.setChecked('i1', true)
+    outbox.reject(new ApiError('ITEM_NOT_FOUND', 404))
+    await flushPromises()
 
     expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
+    expect(rejections).toEqual([])
   })
 
   it('does not bring back an item that turned out to be deleted when it is reloaded late', async () => {
     const service = fakeService([item('i1', 'Milch')])
-    service.update.mockRejectedValueOnce(new ApiError('ITEM_NOT_FOUND', 404))
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
     await store.load('l1')
     const answer = deferred<Item[]>()
     service.list.mockReturnValueOnce(answer.promise)
 
     const reloading = store.load('l1')
     await store.setChecked('i1', true)
+    outbox.reject(new ApiError('ITEM_NOT_FOUND', 404))
     answer.resolve([item('i1', 'Milch')])
     await reloading
 
@@ -970,13 +1078,10 @@ describe('items store: live events', () => {
   })
 
   it('keeps the own check while it is pending and takes the other fields of a change', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store, events } = setup(service)
+    const { store, events, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
     events.emit(changed(later(item('i1', 'Milch'), 2, { name: 'Hafermilch', quantity: 2 })))
 
     expect(store.byId('i1')).toMatchObject({
@@ -985,110 +1090,393 @@ describe('items store: live events', () => {
       checked: true,
       checkedBy: ANNA,
     })
-    answer.resolve(later(item('i1', 'Hafermilch', 'l1', true), 3))
-    await checking
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Hafermilch', 'l1', true), 3) })
+    await flushPromises()
+    expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: true, serverSeq: 3 })
   })
 
-  it('takes the newest state when a pending check settles', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store, events } = setup(service)
+  it('lets an event with a greater serverSeq beat the answer', async () => {
+    const { store, events, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
     // Another member renamed the item after our change was stored, and the
     // event comes before the answer to our request.
     events.emit(changed(later(item('i1', 'Hafermilch', 'l1', true), 5)))
-    answer.resolve(later(item('i1', 'Milch', 'l1', true), 3))
-    await checking
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Milch', 'l1', true), 3) })
+    await flushPromises()
 
     expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: true, serverSeq: 5 })
   })
 
-  it('falls back to the newest server state when a pending check fails', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store, events } = setup(service)
+  it('falls back to the newest server state when a pending check is refused', async () => {
+    const { store, events, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
     events.emit(changed(later(item('i1', 'Milch'), 2, { name: 'Hafermilch' })))
-    answer.reject(new ApiError('NETWORK'))
-    await expect(checking).rejects.toMatchObject({ code: 'NETWORK' })
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
 
     expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: false, checkedBy: null })
   })
 
-  it('does not report a failed check of an item deleted meanwhile', async () => {
-    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
-    const answer = deferred<Item>()
-    const { store, events } = setup(service)
+  it('does not report a refused check of an item deleted meanwhile by event', async () => {
+    const { store, events, outbox } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Brot')]))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
     events.emit(deleted('l1', 'i1', 3))
-    answer.reject(new ApiError('ITEM_NOT_FOUND', 404))
+    outbox.reject(new ApiError('ITEM_NOT_FOUND', 404))
+    await flushPromises()
 
-    await expect(checking).resolves.toBeUndefined()
+    expect(rejections).toEqual([])
     expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
   })
 
   it('does not bring back an item that was deleted while its check succeeded', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store, events } = setup(service)
+    const { store, events, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const checking = store.setChecked('i1', true)
+    await store.setChecked('i1', true)
     events.emit(deleted('l1', 'i1', 4))
-    answer.resolve(later(item('i1', 'Milch', 'l1', true), 3))
-    await checking
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Milch', 'l1', true), 3) })
+    await flushPromises()
 
     expect(store.itemsOf('l1')).toEqual([])
   })
 
-  it('does not list an item twice when the event arrives before the answer of create', async () => {
-    const service = fakeService()
-    const answer = deferred<Item>()
-    service.create.mockReturnValueOnce(answer.promise)
-    const { store, events } = setup(service)
-    await store.load('l1')
-
-    const creating = store.create('l1', { id: 'i1', name: 'Milch' })
-    events.emit(changed(later(item('i1', 'Milch'), 2)))
-    answer.resolve(later(item('i1', 'Milch'), 2))
-    await creating
-
-    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
-  })
-
   it('keeps a newer change from an event over the answer of update', async () => {
-    const service = fakeService([item('i1', 'Milch')])
-    const answer = deferred<Item>()
-    const { store, events } = setup(service)
+    const { store, events, outbox } = setup(fakeService([item('i1', 'Milch')]))
     await store.load('l1')
-    service.update.mockReturnValueOnce(answer.promise)
 
-    const updating = store.update('i1', { name: 'Hafermilch' })
+    await store.update('i1', { name: 'Hafermilch' })
     events.emit(changed(later(item('i1', 'Milch'), 3, { name: 'Sojamilch' })))
-    answer.resolve(later(item('i1', 'Milch'), 2, { name: 'Hafermilch' }))
-    await updating
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Milch'), 2, { name: 'Hafermilch' }) })
+    await flushPromises()
 
     expect(store.byId('i1')?.name).toBe('Sojamilch')
   })
 
   it('does not bring back an item after remove when its echo arrives', async () => {
-    const { store, events } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Brot')]))
+    const { store, events, outbox } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Brot')]))
     await store.load('l1')
 
     await store.remove('i1')
+    outbox.answer({ kind: 'remove' })
+    await flushPromises()
     events.emit(changed(later(item('i1', 'Milch'), 9)))
 
     expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
+  })
+})
+
+describe('items store: other tabs and reload', () => {
+  it('shows pending changes made in another tab and drops them when that tab sends', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    const added = outbox.fromOtherTab({
+      kind: 'create',
+      listId: 'l1',
+      item: { id: 'i2', name: 'Brot', clock: formatHLC(NOW, 0, 'other') },
+    })
+    const edited = outbox.fromOtherTab({
+      kind: 'update',
+      itemId: 'i1',
+      change: { name: 'Hafermilch', clock: formatHLC(NOW, 1, 'other') },
+    })
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(
+      ['Milch', 'Brot'].map((n) => (n === 'Milch' ? 'Hafermilch' : n)),
+    )
+
+    outbox.leaveFromOtherTab(edited.seq)
+    outbox.leaveFromOtherTab(added.seq)
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('does not bring back an answered entry from a stale outbox read', async () => {
+    const fake = createFakeOutbox()
+    const slowRead = deferred<OutboxEntry[]>()
+    const afterAnswerRead = deferred<OutboxEntry[]>()
+    let reads = 0
+    const user = ref<string | null>(ANNA)
+    const store = defineItemsStore(
+      fakeService([item('i1', 'Milch')]),
+      () => user.value,
+      createFakeServerEvents(),
+      fakeStorage(),
+      {
+        openOutbox(options) {
+          const box = fake.open(options)
+          return {
+            ...box,
+            entries() {
+              reads++
+              // Read 1: initial refresh at open. Read 2: after enqueue (delayed,
+              // still contains seq 1). Read 3: after leave inside answer (still pending).
+              if (reads === 2) return slowRead.promise
+              if (reads === 3) return afterAnswerRead.promise
+              return box.entries()
+            },
+          }
+        },
+        clock: createClock('tab', () => NOW),
+      },
+    )()
+
+    await store.load('l1')
+    // Start write; its refresh (read 2) is held back while enqueue finished.
+    const writing = store.update('i1', { name: 'Hafermilch' })
+    const [entry] = fake.entries()
+    expect(entry).toBeDefined()
+
+    // Server answers with another name (LWW won elsewhere); read 3 is still pending.
+    fake.answer({ kind: 'update', item: later(item('i1', 'Sojamilch'), 2) })
+    // Now stale read 2 resolves with the already-settled entry!
+    slowRead.resolve([entry!])
+    await flushPromises()
+
+    expect(store.byId('i1')?.name).toBe('Sojamilch')
+
+    afterAnswerRead.resolve([])
+    await writing
+    expect(store.byId('i1')?.name).toBe('Sojamilch')
+  })
+
+  it('shows entries left in the outbox before open over stored items on reload', async () => {
+    const outbox = createFakeOutbox()
+    outbox.fromOtherTab({
+      kind: 'update',
+      itemId: 'i1',
+      change: { checked: true, clock: formatHLC(NOW, 0, 'prev') },
+    })
+    outbox.fromOtherTab({
+      kind: 'create',
+      listId: 'l1',
+      item: { id: 'i-offline', name: 'Kaffee', clock: formatHLC(NOW, 1, 'prev') },
+    })
+    const service = fakeService()
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const storage = fakeStorage({ l1: [item('i1', 'Milch')] })
+    const { store } = setup(service, ANNA, storage, outbox)
+
+    await store.load('l1')
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Kaffee'])
+    expect(store.byId('i1')?.checked).toBe(true)
+  })
+})
+
+describe('items store: HLC', () => {
+  const ahead = (minutes: number, counter = 0, node = 'other') =>
+    formatHLC(NOW + minutes * 60_000, counter, node)
+
+  const clockOf = (change: OutboxChange): string => {
+    if (change.kind === 'create') return change.item.clock!
+    if (change.kind === 'update') return change.change.clock!
+    throw new Error(`no clock on ${change.kind}`)
+  }
+
+  it('issues clocks greater than those seen from load', async () => {
+    const futureClock = ahead(4, 3)
+    const loaded = item('i1', 'Milch')
+    loaded.clocks.name = futureClock
+    const { store, outbox } = setup(fakeService([loaded]))
+    await store.load('l1')
+
+    await store.update('i1', { name: 'Hafermilch' })
+
+    const written = clockOf(outbox.changes()[0]!)
+    expect(written > futureClock).toBe(true)
+  })
+
+  it('issues clocks greater than those seen from events, including discarded ones', async () => {
+    const fromUnknownList = ahead(2, 1)
+    const fromTombstoned = ahead(3, 2)
+    const fromOutdatedSeq = ahead(4, 5)
+    const { store, events, outbox } = setup(fakeService([later(item('i1', 'Milch'), 5)]))
+    await store.load('l1')
+
+    // Discarded: unknown list.
+    const unknown = item('i9', 'X', 'l9')
+    unknown.clocks.note = fromUnknownList
+    events.emit(changed(unknown))
+
+    // Discarded: tombstoned item.
+    events.emit(deleted('l1', 'i2', 2))
+    const dead = item('i2', 'Y')
+    dead.clocks.quantity = fromTombstoned
+    events.emit(changed(dead))
+
+    // Discarded: lower serverSeq.
+    const stale = later(item('i1', 'Milch'), 3)
+    stale.clocks.checked = fromOutdatedSeq
+    events.emit(changed(stale))
+
+    await store.setChecked('i1', true)
+
+    const written = clockOf(outbox.changes()[0]!)
+    expect(written > fromUnknownList).toBe(true)
+    expect(written > fromTombstoned).toBe(true)
+    expect(written > fromOutdatedSeq).toBe(true)
+  })
+
+  it('issues clocks greater than those seen from device storage', async () => {
+    const storedClock = ahead(3, 7)
+    const saved = item('i1', 'Milch')
+    saved.clocks.unit = storedClock
+    const service = fakeService()
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { store, outbox } = setup(service, ANNA, fakeStorage({ l1: [saved] }))
+    await store.load('l1')
+
+    await store.create('l1', { name: 'Brot' })
+
+    expect(clockOf(outbox.changes()[0]!) > storedClock).toBe(true)
+  })
+
+  it("issues clocks greater than another tab's outbox entries", async () => {
+    const createClock = ahead(2, 1, 'tab2')
+    const updateClock = ahead(4, 9, 'tab2')
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
+    await store.load('l1')
+
+    outbox.fromOtherTab({
+      kind: 'create',
+      listId: 'l1',
+      item: { id: 'i2', name: 'Brot', clock: createClock },
+    })
+    outbox.fromOtherTab({
+      kind: 'update',
+      itemId: 'i1',
+      change: { name: 'Hafermilch', clock: updateClock },
+    })
+    await flushPromises()
+
+    await store.update('i1', { quantity: 2 })
+
+    const own = clockOf(outbox.changes()[2]!)
+    expect(own > createClock).toBe(true)
+    expect(own > updateClock).toBe(true)
+  })
+})
+
+describe('items store: rejections', () => {
+  it('rolls back and reports kind, name and code for each rejected action', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
+    await store.load('l1')
+
+    // create
+    await store.create('l1', { name: 'Käse' })
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+
+    // update (name)
+    await store.update('i1', { name: 'Hafermilch' })
+    outbox.reject(new ApiError('ITEM_NAME_INVALID', 400))
+    await flushPromises()
+    expect(store.byId('i1')?.name).toBe('Milch')
+
+    // update with checked + another field counts as 'update', not 'check'
+    await store.update('i1', { name: 'Hafermilch', checked: true })
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
+    expect(store.byId('i1')).toMatchObject({ name: 'Milch', checked: false })
+
+    // check
+    await store.setChecked('i1', true)
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
+    expect(store.byId('i1')?.checked).toBe(false)
+
+    // remove
+    await store.remove('i1')
+    expect(store.itemsOf('l1')).toEqual([])
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+
+    expect(rejections).toEqual([
+      { kind: 'create', name: 'Käse', code: 'FORBIDDEN' },
+      { kind: 'update', name: 'Milch', code: 'ITEM_NAME_INVALID' },
+      { kind: 'update', name: 'Milch', code: 'FORBIDDEN' },
+      { kind: 'check', name: 'Milch', code: 'FORBIDDEN' },
+      { kind: 'remove', name: 'Milch', code: 'FORBIDDEN' },
+    ])
+  })
+
+  it('silently forgets on ITEM_NOT_FOUND and ITEM_ID_TAKEN', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch'), item('i2', 'Brot')]))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
+    await store.load('l1')
+
+    await store.update('i1', { name: 'Hafermilch' })
+    outbox.reject(new ApiError('ITEM_NOT_FOUND', 404))
+    await store.create('l1', { name: 'Käse' })
+    outbox.reject(new ApiError('ITEM_ID_TAKEN', 409))
+    await store.create('l1', { name: 'Eier' })
+    outbox.reject(new ApiError('ITEM_NOT_FOUND', 404))
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
+    expect(rejections).toEqual([])
+  })
+
+  it('tombstones an expired create and reports OUTBOX_EXPIRED', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
+    await store.load('l1')
+
+    await store.create('l1', { name: 'Käse' })
+    outbox.reject(new ApiError(ERROR_CODE_OUTBOX_EXPIRED))
+    // Even if another tab still holds a create for the same ID, tombstone hides it.
+    outbox.fromOtherTab({
+      kind: 'create',
+      listId: 'l1',
+      item: { id: 'new-1', name: 'Käse', clock: formatHLC(NOW, 0, 'other') },
+    })
+    await flushPromises()
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+    expect(rejections).toEqual([{ kind: 'create', name: 'Käse', code: ERROR_CODE_OUTBOX_EXPIRED }])
+  })
+
+  it('reports nothing when the item name is unknown', async () => {
+    const { store, outbox } = setup(fakeService())
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
+
+    await store.update('unknown', { name: 'X' })
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
+
+    expect(rejections).toEqual([])
+  })
+
+  it('stops notifying an unsubscribed listener', async () => {
+    const { store, outbox } = setup(fakeService([item('i1', 'Milch')]))
+    const rejections: ItemRejection[] = []
+    const stop = store.onRejected((r) => rejections.push(r))
+    await store.load('l1')
+
+    stop()
+    await store.setChecked('i1', true)
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
+
+    expect(rejections).toEqual([])
   })
 })
 
@@ -1268,8 +1656,10 @@ describe('items store: reloadLoaded', () => {
 
   it('does not load a list that only got an item from a create', async () => {
     const service = fakeService()
-    const { store } = setup(service)
+    const { store, outbox } = setup(service)
     await store.create('l1', { name: 'Brot' })
+    outbox.answer({ kind: 'create', item: item('new-1', 'Brot') })
+    await flushPromises()
 
     store.reloadLoaded()
 
@@ -1562,9 +1952,8 @@ describe('items store: removing checked items', () => {
 describe('items store: removing one item', () => {
   const shopping = () => [item('i1', 'Milch'), item('i2', 'Brot', 'l1', true)]
 
-  it('hides the item at once, open or checked, and sends nothing yet', async () => {
-    const service = fakeService(shopping())
-    const { store } = setup(service)
+  it('hides the item at once, open or checked, and enqueues nothing yet', async () => {
+    const { store, outbox } = setup(fakeService(shopping()))
     await store.load('l1')
 
     const first = store.startRemovingItem('i1')
@@ -1572,7 +1961,7 @@ describe('items store: removing one item', () => {
 
     expect(names(first?.items ?? [])).toEqual(['Milch'])
     expect(store.itemsOf('l1')).toEqual([])
-    expect(service.remove).not.toHaveBeenCalled()
+    expect(outbox.changes()).toEqual([])
   })
 
   it('answers null for an item it does not show', async () => {
@@ -1584,17 +1973,21 @@ describe('items store: removing one item', () => {
     expect(store.startRemovingItem('unknown')).toBeNull()
   })
 
-  it('deletes the item for good on commit', async () => {
-    const service = fakeService(shopping())
-    const { store, events } = setup(service)
+  it('enqueues remove on commit, keeps hidden and tombstones on answer', async () => {
+    const { store, events, outbox } = setup(fakeService(shopping()))
     await store.load('l1')
 
     await store.startRemovingItem('i1')?.commit()
-    events.emit(changed(later(item('i1', 'Hafermilch'), 20)))
 
-    expect(service.remove).toHaveBeenCalledWith('i1')
+    expect(outbox.changes()).toEqual([{ kind: 'remove', itemId: 'i1' }])
     expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
     expect(store.byId('i1')).toBeUndefined()
+
+    outbox.answer({ kind: 'remove' })
+    await flushPromises()
+    events.emit(changed(later(item('i1', 'Hafermilch'), 20)))
+
+    expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
   })
 
   it('keeps the item hidden whatever others change meanwhile', async () => {
@@ -1607,37 +2000,40 @@ describe('items store: removing one item', () => {
     expect(store.checkedItems('l1').map((i) => i.id)).toEqual(['i2'])
   })
 
-  it('shows the item again on undo and sends nothing', async () => {
-    const service = fakeService(shopping())
-    const { store } = setup(service)
+  it('shows the item again on undo and enqueues nothing', async () => {
+    const { store, outbox } = setup(fakeService(shopping()))
     await store.load('l1')
 
     store.startRemovingItem('i1')?.undo()
 
     expect(names(store.openItems('l1'))).toEqual(['Milch'])
-    expect(service.remove).not.toHaveBeenCalled()
+    expect(outbox.changes()).toEqual([])
   })
 
-  it('counts an item someone else deleted meanwhile as deleted', async () => {
-    const service = fakeService(shopping())
-    service.remove.mockRejectedValueOnce(new ApiError('ITEM_NOT_FOUND', 404))
-    const { store } = setup(service)
+  it('does not enqueue when the user changed before commit', async () => {
+    const { store, user, outbox } = setup(fakeService(shopping()))
+    await store.load('l1')
+
+    const removal = store.startRemovingItem('i1')
+    user.value = BEN
+    await flushPromises()
+    await removal?.commit()
+
+    expect(outbox.changes()).toEqual([])
+  })
+
+  it('shows the item again and notifies listeners if the server refuses', async () => {
+    const { store, outbox } = setup(fakeService(shopping()))
+    const rejections: ItemRejection[] = []
+    store.onRejected((r) => rejections.push(r))
     await store.load('l1')
 
     await store.startRemovingItem('i1')?.commit()
-
-    expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
-  })
-
-  it('shows the item again and throws if the request fails', async () => {
-    const service = fakeService(shopping())
-    service.remove.mockRejectedValueOnce(new ApiError('NETWORK'))
-    const { store } = setup(service)
-    await store.load('l1')
-
-    await expect(store.startRemovingItem('i1')?.commit()).rejects.toThrow(ApiError)
+    outbox.reject(new ApiError('FORBIDDEN', 403))
+    await flushPromises()
 
     expect(names(store.openItems('l1'))).toEqual(['Milch'])
+    expect(rejections).toEqual([{ kind: 'remove', name: 'Milch', code: 'FORBIDDEN' }])
   })
 })
 
@@ -1760,7 +2156,7 @@ describe('items store: storage on the device', () => {
   it('writes the items back after a load, own writes and events', async () => {
     const storage = fakeStorage()
     const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot'), item('i3', 'Eier')])
-    const { store, events } = setup(service, ANNA, storage)
+    const { store, events, outbox } = setup(service, ANNA, storage)
 
     await store.load('l1')
     await flushPromises()
@@ -1768,10 +2164,15 @@ describe('items store: storage on the device', () => {
     expect(names(storage.items.l1 ?? [])).toEqual(['Milch', 'Brot', 'Eier'])
 
     await store.create('l1', { name: 'Käse' })
+    outbox.answer({
+      kind: 'create',
+      item: { ...item('new-1', 'Käse'), createdAt: CREATED_LATER, serverSeq: 2 },
+    })
     await flushPromises()
     expect(names(storage.items.l1 ?? [])).toEqual(['Milch', 'Brot', 'Eier', 'Käse'])
 
     await store.update('i1', { name: 'Hafermilch' })
+    outbox.answer({ kind: 'update', item: later(item('i1', 'Hafermilch'), 2) })
     await flushPromises()
     expect(names(storage.items.l1 ?? [])).toEqual(['Hafermilch', 'Brot', 'Eier', 'Käse'])
 
@@ -1824,7 +2225,7 @@ describe('items store: storage on the device', () => {
     const request = deferred<Item[]>()
     service.list.mockReturnValueOnce(request.promise)
     const storage = fakeStorage()
-    const { store } = setup(service, ANNA, storage)
+    const { store, outbox } = setup(service, ANNA, storage)
 
     void store.load('l1')
     await flushPromises()
@@ -1839,6 +2240,7 @@ describe('items store: storage on the device', () => {
     storage.readItems.mockReturnValueOnce(deferred<Item[] | null>().promise)
     void store.load('l1')
     await store.create('l1', { name: 'Käse' })
+    outbox.answer({ kind: 'create', item: item('new-1', 'Käse') })
     await flushPromises()
 
     expect(storage.writeItems).not.toHaveBeenCalled()
@@ -1849,10 +2251,11 @@ describe('items store: storage on the device', () => {
     service.list.mockReturnValueOnce(deferred<Item[]>().promise)
     const storage = fakeStorage()
     storage.readItems.mockReturnValueOnce(deferred<Item[] | null>().promise)
-    const { store } = setup(service, ANNA, storage)
+    const { store, outbox } = setup(service, ANNA, storage)
 
     void store.load('l1')
     await store.create('l1', { name: 'Käse' })
+    outbox.answer({ kind: 'create', item: item('new-1', 'Käse') })
     await flushPromises()
 
     expect(storage.writeItems).not.toHaveBeenCalled()
@@ -1875,52 +2278,53 @@ describe('items store: storage on the device', () => {
     expect(storage.writeItems).not.toHaveBeenCalled()
   })
 
-  describe('a tap that waits for the server', () => {
-    // A loaded and stored list with two items; the next update() waits for
-    // the test to answer.
-    async function loadedWithPendingTap() {
+  describe('pending changes', () => {
+    async function loadedWithPendingChanges() {
       const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
       const storage = fakeStorage()
-      const { store, events } = setup(service, ANNA, storage)
+      const { store, events, outbox } = setup(service, ANNA, storage)
       await store.load('l1')
       await flushPromises()
-      const answer = deferred<Item>()
-      service.update.mockReturnValueOnce(answer.promise)
-      const checking = store.setChecked('i1', true)
-      return { store, events, storage, answer, checking }
+      await store.setChecked('i1', true)
+      return { store, events, storage, outbox }
     }
 
-    it('is not stored until the server confirmed it', async () => {
-      const { store, events, storage, answer, checking } = await loadedWithPendingTap()
-
-      // Another change makes the store write while the tap is waiting.
-      events.emit(changed(later(item('i2', 'Brot'), 2, { name: 'Roggenbrot' })))
+    it('never writes pending changes to the device until the server confirms them', async () => {
+      const { store, events, storage, outbox } = await loadedWithPendingChanges()
+      await store.create('l1', { name: 'Käse' })
+      await store.remove('i2')
+      // Another change makes the store write while everything is pending.
+      events.emit(changed(later(item('i1', 'Milch'), 2, { name: 'Hafermilch' })))
       await flushPromises()
 
+      expect(names(store.itemsOf('l1'))).toEqual(['Hafermilch', 'Käse'])
       expect(store.byId('i1')?.checked).toBe(true)
       expect(storedOf(storage)).toEqual([
-        ['Milch', false],
-        ['Roggenbrot', false],
+        ['Hafermilch', false],
+        ['Brot', false],
       ])
 
-      answer.resolve(later(item('i1', 'Milch', 'l1', true), 2))
-      await checking
+      outbox.answer({ kind: 'update', item: later(item('i1', 'Hafermilch', 'l1', true), 3) })
+      outbox.answer({
+        kind: 'create',
+        item: { ...item('new-1', 'Käse'), createdAt: CREATED_LATER, serverSeq: 4 },
+      })
+      outbox.answer({ kind: 'remove' })
       await flushPromises()
 
       expect(storedOf(storage)).toEqual([
-        ['Milch', true],
-        ['Roggenbrot', false],
+        ['Hafermilch', true],
+        ['Käse', false],
       ])
     })
 
-    it('is never stored when the server refuses it', async () => {
-      const { events, storage, answer, checking } = await loadedWithPendingTap()
+    it('never stores a pending change that the server refuses', async () => {
+      const { events, storage, outbox } = await loadedWithPendingChanges()
       events.emit(changed(later(item('i2', 'Brot'), 2, { name: 'Roggenbrot' })))
       await flushPromises()
       expect(storage.writes.length).toBeGreaterThan(0)
 
-      answer.reject(new ApiError('NETWORK'))
-      await expect(checking).rejects.toBeInstanceOf(ApiError)
+      outbox.reject(new ApiError('FORBIDDEN', 403))
       await flushPromises()
 
       expect(storedOf(storage)).toEqual([
@@ -1928,39 +2332,20 @@ describe('items store: storage on the device', () => {
         ['Roggenbrot', false],
       ])
       for (const written of storage.writes) {
-        expect(written.every((stored) => !stored.checked)).toBe(true)
+        expect(written.every((entry) => !entry.checked)).toBe(true)
       }
     })
 
-    it('stores the new fields of an event but not the tap', async () => {
-      const { store, events, storage, answer, checking } = await loadedWithPendingTap()
-
-      events.emit(changed(later(item('i1', 'Milch'), 2, { name: 'Hafermilch' })))
-      await flushPromises()
-
-      // On screen the new name and the tap, on the device the new name only.
-      expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: true })
-      expect(storedOf(storage)).toEqual([
-        ['Hafermilch', false],
-        ['Brot', false],
-      ])
-
-      answer.resolve(later(item('i1', 'Hafermilch', 'l1', true), 3))
-      await checking
-    })
-
-    it('stays visible when the answer of a load arrives after a tap on a stored item', async () => {
+    it('keeps a pending tap over a stored item when the load answers', async () => {
       const service = fakeService()
       const request = deferred<Item[]>()
       service.list.mockReturnValueOnce(request.promise)
-      const tapAnswer = deferred<Item>()
-      service.update.mockReturnValueOnce(tapAnswer.promise)
       const storage = fakeStorage({ l1: [item('i1', 'Milch')] })
-      const { store } = setup(service, ANNA, storage)
+      const { store, outbox } = setup(service, ANNA, storage)
 
       void store.load('l1')
       await flushPromises()
-      const checking = store.setChecked('i1', true)
+      await store.setChecked('i1', true)
       request.resolve([item('i1', 'Milch')])
       await flushPromises()
 
@@ -1968,8 +2353,7 @@ describe('items store: storage on the device', () => {
       expect(store.byId('i1')?.checked).toBe(true)
       expect(storedOf(storage)).toEqual([['Milch', false]])
 
-      tapAnswer.resolve(later(item('i1', 'Milch', 'l1', true), 2))
-      await checking
+      outbox.answer({ kind: 'update', item: later(item('i1', 'Milch', 'l1', true), 2) })
       await flushPromises()
 
       expect(store.byId('i1')?.checked).toBe(true)
@@ -1986,10 +2370,10 @@ describe('items store: storage on the device', () => {
         item('i3', 'Eier', 'l1', true),
       ])
       const storage = fakeStorage()
-      const { store, events } = setup(service, ANNA, storage)
+      const { store, events, outbox } = setup(service, ANNA, storage)
       await store.load('l1')
       await flushPromises()
-      return { service, store, events, storage }
+      return { service, store, events, storage, outbox }
     }
 
     it('keeps the items of a pending removal until it is committed', async () => {
@@ -2028,10 +2412,18 @@ describe('items store: storage on the device', () => {
       ])
     })
 
-    it('removes a single item from the storage when it is committed', async () => {
-      const { store, storage } = await loadedWithChecked()
+    it('removes a single item from the storage once the server confirmed it', async () => {
+      const { store, storage, outbox } = await loadedWithChecked()
 
       await store.startRemovingItem('i2')?.commit()
+      await flushPromises()
+      expect(storedOf(storage)).toEqual([
+        ['Milch', true],
+        ['Brot', false],
+        ['Eier', true],
+      ])
+
+      outbox.answer({ kind: 'remove' })
       await flushPromises()
 
       expect(storedOf(storage)).toEqual([
@@ -2041,10 +2433,10 @@ describe('items store: storage on the device', () => {
     })
 
     it('removes an item from the storage that is gone when it is checked', async () => {
-      const { service, store, storage } = await loadedWithChecked()
-      service.update.mockRejectedValueOnce(new ApiError('ITEM_NOT_FOUND', 404))
+      const { store, storage, outbox } = await loadedWithChecked()
 
       await store.setChecked('i2', true)
+      outbox.reject(new ApiError('ITEM_NOT_FOUND', 404))
       await flushPromises()
 
       expect(storedOf(storage)).toEqual([
@@ -2052,5 +2444,90 @@ describe('items store: storage on the device', () => {
         ['Eier', true],
       ])
     })
+  })
+})
+
+describe('items store: real outbox integration', () => {
+  function ramOutboxStorage(): OutboxStorage {
+    let seq = 0
+    let entries: { userId: string; entry: OutboxEntry }[] = []
+    return {
+      addOutbox(userId, change, queuedAt) {
+        const nextSeq = ++seq
+        entries.push({ userId, entry: { seq: nextSeq, change, queuedAt } })
+        return Promise.resolve(nextSeq)
+      },
+      readOutbox(userId) {
+        return Promise.resolve(entries.filter((e) => e.userId === userId).map((e) => e.entry))
+      },
+      removeOutbox(userId, targetSeq) {
+        entries = entries.filter((e) => !(e.userId === userId && e.entry.seq === targetSeq))
+        return Promise.resolve()
+      },
+    }
+  }
+
+  it('sends a create through the real outbox, shows it once and stores it', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    const storage = fakeStorage()
+    const outboxStorage = ramOutboxStorage()
+    const store = defineItemsStore(service, () => ANNA, createFakeServerEvents(), storage, {
+      openOutbox: (options) =>
+        createOutbox({
+          ...options,
+          storage: outboxStorage,
+          items: service,
+          locks: (_, fn) => fn(),
+        }),
+      clock: createClock('tab', () => NOW),
+      newId: () => 'new-1',
+    })()
+
+    try {
+      await store.load('l1')
+      await store.create('l1', { name: 'Käse' })
+      await flushPromises()
+
+      expect(service.create).toHaveBeenCalledWith('l1', {
+        id: 'new-1',
+        name: 'Käse',
+        clock: formatHLC(NOW, 0, 'tab'),
+      })
+      expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Käse'])
+      expect(store.byId('new-1')?.serverSeq).toBe(1)
+      expect(names(storage.items.l1 ?? [])).toEqual(['Milch', 'Käse'])
+    } finally {
+      store.$dispose()
+    }
+  })
+
+  it('rolls back and reports a 400 update through the real outbox', async () => {
+    const service = fakeService([item('i1', 'Milch')])
+    service.update.mockRejectedValueOnce(new ApiError('ITEM_NAME_INVALID', 400))
+    const outboxStorage = ramOutboxStorage()
+    const store = defineItemsStore(service, () => ANNA, createFakeServerEvents(), fakeStorage(), {
+      openOutbox: (options) =>
+        createOutbox({
+          ...options,
+          storage: outboxStorage,
+          items: service,
+          locks: (_, fn) => fn(),
+        }),
+      clock: createClock('tab', () => NOW),
+    })()
+
+    try {
+      const rejections: ItemRejection[] = []
+      store.onRejected((r) => rejections.push(r))
+      await store.load('l1')
+
+      await store.update('i1', { name: 'Bad' })
+      await flushPromises()
+
+      expect(store.byId('i1')?.name).toBe('Milch')
+      expect(rejections).toEqual([{ kind: 'update', name: 'Milch', code: 'ITEM_NAME_INVALID' }])
+    } finally {
+      store.$dispose()
+    }
   })
 })

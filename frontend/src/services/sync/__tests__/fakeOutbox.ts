@@ -105,6 +105,9 @@ export function createFakeOutbox(): FakeOutbox {
   let triggers = 0
   let service: Sender | null = null
   let sending = false
+  // Bumped by clear() so a hung send from the previous test neither blocks
+  // the next test nor settles after it started.
+  let sendRun = 0
 
   const live = () => instances.filter((instance) => !instance.stopped)
 
@@ -152,22 +155,23 @@ export function createFakeOutbox(): FakeOutbox {
   // without a refusal (offline): it stays for the next trigger.
   async function sendAll() {
     if (sending || !service) return
+    const run = ++sendRun
     sending = true
     try {
-      for (let entry = list[0]; entry && service; entry = list[0]) {
+      for (let entry = list[0]; entry && service && run === sendRun; entry = list[0]) {
         let result: { answer: OutboxAnswer } | { error: ApiError }
         try {
           result = { answer: await send(service, entry.change) }
         } catch (err) {
-          if (!refuses(err)) return
+          if (run !== sendRun || !refuses(err)) return
           result = { error: err }
         }
         // Cleared or sent elsewhere meanwhile.
-        if (list[0] !== entry) return
+        if (run !== sendRun || list[0] !== entry) return
         settle(entry, result)
       }
     } finally {
-      sending = false
+      if (run === sendRun) sending = false
     }
   }
 
@@ -246,6 +250,8 @@ export function createFakeOutbox(): FakeOutbox {
       list = []
       owner = null
       triggers = 0
+      sendRun++
+      sending = false
     },
   }
 }
