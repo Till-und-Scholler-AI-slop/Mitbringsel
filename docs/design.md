@@ -15,7 +15,7 @@ Das visuelle Design entsteht in Claude Design. Gewählt ist die Richtung „Mark
 - Login
 - Startseite mit den Haushalten
 - Listenansicht mit Artikeln (Hauptscreen, Smartphone und Desktop)
-- Artikel hinzufügen und bearbeiten (Bottom Sheet auf dem Smartphone, Panel neben der Liste auf dem Desktop)
+- Artikel hinzufügen und bearbeiten (Bottom Sheet auf dem Smartphone, Dialog auf dem Desktop, Karte in der Kontextspalte auf großen Bildschirmen)
 - Haushalt verwalten und Einladungslink teilen
 - Einstellungen (Sprache, Theme, Account)
 - Zustände: leere Liste, offline, Synchronisation läuft, Fehler
@@ -34,11 +34,57 @@ Es gibt keinen eigenen Screen mit der Listenübersicht eines Haushalts. Wer eine
 
 Ab `48rem` Breite gilt ein eigenes Layout, nicht das gestreckte Smartphone-Layout:
 
-- **Start und Listenansicht** teilen einen Rahmen mit grüner Seitenleiste links: Logo, Start, die Haushalte mit aufklappbaren Listen, „Haushalt gründen“, Sync-Status und Profil (`start-desktop-*`, `StartApp` mit `layout="desktop"`). Rechts der Inhalt: auf der Startseite die Haushalt-Karten, in der Liste der Haushaltsname groß mit Wechsler und die Chips umbrechend statt scrollend.
-- **Artikel anlegen und bearbeiten** als Panel rechts neben der Liste (`markt2-desktop-*`).
+- **Start und Listenansicht** teilen einen Rahmen mit grüner Seitenleiste links (`start-desktop-*`, `StartApp` mit `layout="desktop"`). Rechts der Inhalt: auf der Startseite die Haushalt-Karten, in der Liste der Haushaltsname groß mit Wechsler und die Chips umbrechend statt scrollend.
+- **Seitenleiste** nach dem Entwurf der Kontextspalte (`KontextDesktop`), für alle Desktop-Breiten ab `48rem`: eine schwebende Karte (16 px Abstand, Radius 28 px, 260 bis 300 px breit) mit Logo; der aktuelle Haushalt mit seinen offenen Artikeln und darunter seine Listen mit Icon, Name und offenen Artikeln, die aktuelle hervorgehoben, die angepinnte (siehe unten) mit Pin; die anderen Haushalte mit ihren offenen Artikeln; „Haushalt gründen“; Sync-Chip mit einer Zeile Text („Alles synchron“, „Alle sehen denselben Stand.“); Profil unten („Das bist du“). Die Zahlen kommen aus den lokalen Stores, die alle Haushalte vorladen.
+- **Artikel anlegen und bearbeiten** zwischen `48rem` und `80rem` als Dialog, ab `80rem` in der Kontextspalte (siehe [Große Bildschirme](#große-bildschirme)).
 - **Verwalten** zweispaltig: links Name und Mitglieder, rechts Einladung und Austreten/Löschen (`verwalten-desktop-*`).
 - **Einladung** mit Kopf und Karte nebeneinander (`markt2-einladung-desktop-*`).
 - **Login** nach `login-desktop-*`.
+
+## Große Bildschirme
+
+Ab `80rem` (1280 px) bekommt die Listenansicht eine Kontextspalte neben der Liste. Vorlage ist Claude Design, Seite „2 · Markt bunt“, Abschnitt „3d · Kontextspalte mit zwei Karten“ (Artboards `markt2-kontext-*`, Quellkomponente `KontextDesktop`); sie ersetzt den Entwurf `markt2-gross-*` und das Panel aus `markt2-desktop-*`. Entscheidungen und Alternativen: [ADR 0008](adr/0008-grosse-bildschirme.md).
+
+### Breakpoints
+
+| Breite | Layout |
+| --- | --- |
+| unter `48rem` | Smartphone |
+| `48rem` bis unter `80rem` | Desktop mit Seitenleiste; Formular als Dialog, keine Kontextspalte |
+| ab `80rem` | Kontextspalte; Listenspalte bis 820 px, Kontextspalte 440 px |
+| ab `137.5rem` (2200 px) | Listenspalte bis 860 px, Kontextspalte 480 px; alles um 1.1 größer |
+
+- Die Vergrößerung ab `137.5rem` läuft über `html { font-size: 110% }`, nicht über `zoom` wie im Design. Feste Breiten stehen deshalb in `rem`; Konturen und Schatten in `px` bleiben gleich.
+- Unter `80rem` stapelt das Design die Karten unter die Liste. Das übernehmen wir nicht: Dort bleibt es beim Dialog.
+- Media Queries können keine Variablen lesen ([ADR 0003](adr/0003-eigenes-css-mit-tokens.md)); jeder Breakpoint steht als Konstante neben `ITEM_PANEL_QUERY` und wird im CSS mit Verweis darauf wiederholt.
+
+### Aufbau
+
+- **Kopf** über Liste und Kontextspalte: Haushaltsname (40 px) mit Wechsler, rechts die Avatare der Mitglieder.
+- **Listenspalte:** Chips umbrechend mit „Archiv (n)“ und einem runden, gestrichelten Button „Neue Liste“ am Ende; Quick-Add mit Hinweis „Enter ↵“ im Feld und einem runden Button daneben, der die Erstellen-Karte öffnet (`aria-pressed`, solange sie offen ist); Artikelzeilen mit Chevron, leichtem Anheben beim Hover, der bearbeitete Artikel mit hellem Hintergrund und orangem Ring; darunter „Erledigt“.
+- **Kontextspalte:** zentriert neben der Liste (Abstand 32 px), `sticky` (`top: 24px`, Höhe `min(812px, 100vh - 190px)`, mindestens 560 px), mit zwei Karten untereinander.
+
+### Karten
+
+Immer ist genau eine Karte offen. Sie nimmt die restliche Höhe ein und scrollt innen. Die andere klappt zu einer Leiste von 76 px zusammen (Icon, Titel, eine Zeile Zusammenfassung, Chevron); ein Klick darauf öffnet sie. Auf- und Zuklappen sind animiert, nicht bei `prefers-reduced-motion`. Die Leiste trägt `aria-expanded`, der Fokus geht in die geöffnete Karte.
+
+- **Überblick** mit dem Umschalter „Aktivität“ | „Zweite Liste“.
+  - *Aktivität:* „Zuletzt im Haushalt“, nach Tagen gruppiert („Heute“, „Gestern“); je Eintrag Avatar, Text („Mehmet hat Butter abgehakt“, eigene Einträge als „Du hast …“), Listen-Chip mit Icon und Zeit („vor 4 Min.“, „09:12“). Zugeklappt: der neueste Eintrag.
+  - *Zweite Liste:* Chips der anderen aktiven Listen zur Auswahl, Kopf mit Icon, Name und „3 offen“, eigenes Quick-Add, kompakte Zeilen (Haken, Name, Notiz, Menge). Zugeklappt: „Bäcker · 3 offen · zuletzt Zimtschnecken“.
+- **Erstellen/Bearbeiten** mit dem Formular (`ItemForm`).
+  - *Neu:* Kopf „Neuer Artikel“, Marke „Neu in Supermarkt“. Zugeklappt: „Neuer Artikel · In Supermarkt · mit Menge, Einheit und Notiz“.
+  - *Bearbeiten:* Kopf mit dem Artikelnamen, Marke „In Supermarkt“; ein Kasten „Eingetragen von Sophie · heute, 09:12“ und „Zuletzt geändert von Mehmet · vor 4 Min.“ (ein früheres Mitglied heißt „ehemaliges Mitglied“); Chips „In andere Liste verschieben“; „Löschen“ und „Speichern“; der Link „Stattdessen neuen Artikel anlegen“. Zugeklappt: „Tomaten bearbeiten · Noch nicht gespeichert · in Supermarkt“.
+
+### Verhalten
+
+- Nach dem Laden ist der Überblick offen.
+- Der gewählte Tab und die angepinnte Liste werden pro Gerät und Haushalt gemerkt, nicht synchronisiert. Ohne gemerkten Tab öffnet „Aktivität“, ohne gemerkten Pin ist die erste andere aktive Liste angepinnt. Wird die angepinnte Liste die aktuelle, wechselt der Pin; eine archivierte oder gelöschte Liste wird vergessen. Hat der Haushalt nur eine aktive Liste, ist „Zweite Liste“ deaktiviert. Den Pin in der Seitenleiste gibt es nur, solange „Zweite Liste“ gewählt ist.
+- Der Button am Quick-Add öffnet die Erstellen-Karte, ein Klick auf einen Artikel die Bearbeiten-Karte.
+- Nach „Hinzufügen“ bleibt die Erstellen-Karte offen und leer, der Fokus geht zurück ins Namensfeld.
+- Nach „Speichern“, „Löschen“, „Abbrechen“, Esc und dem Verschieben öffnet der Überblick. „Löschen“ zeigt den bekannten „Rückgängig“-Toast.
+- Verschieben speichert die Werte im Formular mit.
+- Ein Listenwechsel beim Bearbeiten schaltet auf „Neuer Artikel“ mit leerem Formular. Ein Klick auf einen anderen Artikel übernimmt dessen Werte; ungespeicherte Eingaben gehen ohne Rückfrage verloren.
+- Die Aktivität sehen alle Mitglieder, auch Einträge aus archivierten Listen; sie reicht 30 Tage zurück.
 
 ## App-Icons (PWA)
 

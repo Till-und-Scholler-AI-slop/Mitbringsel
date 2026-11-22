@@ -9,6 +9,7 @@ Der Agent spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hi
 - [x] API-Vertrag: OpenAPI-Spezifikation (`api/openapi.yaml`), daraus generierte Typen für Go und TypeScript (siehe [ADR 0002](adr/0002-openapi-als-api-vertrag.md))
 - [ ] Bestätigung der vorgeschlagenen Libraries aus dem [Tech-Stack](tech-stack.md); WebSocket: entschieden, [ADR 0005](adr/0005-live-sync-phase-5.md)
 - [x] Domain und VPS: bestehender eigener VPS hinter Traefik, `mitbringsel.tinowolter.com` und `mitbringsel-dev.tinowolter.com` (siehe [ADR 0001](adr/0001-staging-und-production.md))
+- [x] Große Bildschirme: Breakpoints, Aktivität auf dem Server, Verschieben per `listId` (siehe [ADR 0008](adr/0008-grosse-bildschirme.md))
 - [ ] Datenschutzerklärung und Impressum, da die App öffentlich nutzbar ist und personenbezogene Daten (Google-Profil) verarbeitet ([#97](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/97))
 
 ## Roadmap
@@ -49,7 +50,24 @@ Jede Phase endet mit einem lauffähigen, getesteten Stand. Offene Schritte haben
     11. UI: Sync-Chip „ausstehend“, Uhr-Symbol in der Artikelzeile, Offline-Texte, Hinweise bei Aktionen nur online ([#135](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/135))
     12. PWA (`vite-plugin-pwa`, Manifest, Icons; [#136](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/136))
     13. Prüfung auf Staging mit echten Geräten ([#137](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/137))
-7. **Design-Umsetzung:** Tokens und Komponenten nach der gewählten Claude-Design-Richtung. Kann ab Phase 3 parallel laufen, sobald das Design steht.
+7. **Design-Umsetzung und große Bildschirme:** Tokens und Komponenten nach der gewählten Claude-Design-Richtung, ab Phase 3 parallel umgesetzt. Danach die Listenansicht für Full HD und WQHD mit einer Kontextspalte neben der Liste ([#171](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/171), siehe [Design](design.md#große-bildschirme) und [ADR 0008](adr/0008-grosse-bildschirme.md)). Vorher empfohlen: `ListView` aufteilen ([#122](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/122)). Schritte, je ein PR:
+    1. Entscheidungen ([#172](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/172))
+    2. Seitenleiste mit offenen Artikeln und Listen-Icons ([#173](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/173))
+    3. Kontextspalte: Layout, Kartenstapel und Formular-Karte ([#174](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/174))
+    4. Listenspalte auf großen Bildschirmen ([#175](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/175))
+    5. Zweite Liste anpinnen ([#176](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/176))
+    6. API: wer einen Artikel zuletzt geändert hat ([#177](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/177))
+    7. Bearbeiten-Karte mit Details, Löschen und Wechsel zu „Neu“ ([#178](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/178))
+    8. Artikel in eine andere Liste verschieben ([#179](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/179)), in zwei PRs:
+        1. API und Backend: `listId` in `updateItem` ([#180](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/180))
+        2. Frontend: Verschieben in der Bearbeiten-Karte ([#181](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/181))
+    9. Aktivität im Haushalt ([#182](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/182)), in drei PRs:
+        1. Protokoll und Endpunkt ([#183](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/183))
+        2. Live-Ereignis ([#184](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/184))
+        3. Tab „Aktivität“ in der Kontextspalte ([#185](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/185))
+    10. Prüfung auf echten Monitoren ([#186](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/186))
+
+    Die Schritte 2, 4 und 5 brauchen kein Backend und können nach Schritt 3 in beliebiger Reihenfolge laufen; 6, 8.1 und 9.1 parallel zu den Frontend-Schritten.
 8. **Deployment:** Compose für Staging und Production hinter dem bestehenden Traefik, Authelia-Schutz für Staging, Backups, automatisches Deployment: `main` auf Staging, GitHub Release auf Production (siehe [ADR 0001](adr/0001-staging-und-production.md)). Vorgezogen und parallel zu Phase 2, damit jeder weitere Stand früh unter echten Bedingungen auf Staging läuft. Schritte: Container-Images, Compose mit Traefik-Labels, Images nach GHCR, Deploy auf Staging, Promote nach Production, Backups.
 
 ## Später
