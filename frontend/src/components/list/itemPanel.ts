@@ -4,7 +4,3 @@
 // 2rem margin) is 78.375rem. ListView.vue repeats the number in its CSS,
 // since a media query cannot read a custom property.
 export const ITEM_PANEL_QUERY = '(min-width: 79rem)'
-
-// The element in ListView that ListItems teleports the panel into, so the
-// panel stands next to the header as well, not only next to the items.
-export const ITEM_PANEL_TARGET = 'item-panel'

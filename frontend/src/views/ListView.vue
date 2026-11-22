@@ -12,10 +12,11 @@ import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
 import ListActionsDialog from '@/components/list/ListActionsDialog.vue'
 import ListChips from '@/components/list/ListChips.vue'
 import ListHeader from '@/components/list/ListHeader.vue'
+import ItemFormHost from '@/components/list/ItemFormHost.vue'
 import ListItems from '@/components/list/ListItems.vue'
 import ListNameDialog from '@/components/list/ListNameDialog.vue'
-import { ITEM_PANEL_TARGET } from '@/components/list/itemPanel'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { provideItemFormControl } from '@/composables/useItemFormControl'
 import { useLeaveDeletedList } from '@/composables/useLeaveDeletedList'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
 import { canManage } from '@/services/groupRoles'
@@ -55,6 +56,9 @@ const list = computed<List | undefined>(() => {
   const found = lists.byId(props.listId)
   return found?.groupId === props.groupId ? found : undefined
 })
+
+// The item form of this screen; ListItems opens it, ItemFormHost shows it.
+provideItemFormControl(() => list.value)
 
 const actionsFor = computed(() => lists.byId(actionsId.value ?? ''))
 const renaming = computed(() => lists.byId(renamingId.value ?? ''))
@@ -189,8 +193,8 @@ function openCreated(created: List) {
           <ListItems v-else-if="list" :list="list" :members="members" />
         </main>
       </div>
-      <!-- ListItems puts the item form here on a wide screen (itemPanel.ts). -->
-      <div :id="ITEM_PANEL_TARGET" class="panel-slot" />
+      <!-- Next to the column: on a wide screen the form is a panel there. -->
+      <ItemFormHost v-if="list" :list="list" :members="members" />
 
       <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />
       <ListNameDialog
@@ -230,11 +234,6 @@ function openCreated(created: List) {
 .column {
   flex: 1;
   min-width: 0;
-}
-
-/* The panel inside is the flex item, not this wrapper. */
-.panel-slot {
-  display: contents;
 }
 
 .content {
