@@ -17,4 +17,4 @@ Das Design aus Claude Design steht (Richtung „Markt bunt“, Login in Iteratio
 - Keine zusätzliche Dependency und kein Build-Schritt für CSS; Vite und Vue bringen Scoped Styles mit.
 - Ein Theme-Wechsel braucht kein JavaScript außer dem Setzen von `data-theme`.
 - Die Tokens sind die eine Stelle, an der das Design gepflegt wird. Neue Werte aus dem Design kommen zuerst dort hinein.
-- Media Queries können keine Variablen lesen. Der Umbruch zwischen Smartphone- und Desktop-Layout steht deshalb als `48rem` in den Komponenten.
+- Media Queries können keine Variablen lesen. Der Umbruch zwischen Smartphone- und Desktop-Layout steht deshalb als `48rem` in den Komponenten. (Nachtrag [ADR 0008](0008-grosse-bildschirme.md): Dazu kommen `80rem` für die Kontextspalte und `137.5rem` für die WQHD-Maße.)
