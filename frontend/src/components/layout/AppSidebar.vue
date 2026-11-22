@@ -10,6 +10,7 @@ import LogoutConfirmDialog from '@/components/layout/LogoutConfirmDialog.vue'
 import ProfileMenu from '@/components/start/ProfileMenu.vue'
 import SyncStatus from '@/components/layout/SyncStatus.vue'
 import { useLogout } from '@/composables/useLogout'
+import { useOpenCounts } from '@/composables/useOpenCounts'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import { useListsStore } from '@/stores/lists'
@@ -29,6 +30,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const groups = useGroupsStore()
 const lists = useListsStore()
+const { openInGroup, openInList } = useOpenCounts()
 const {
   logout,
   confirmOpen: logoutConfirmOpen,
@@ -40,6 +42,12 @@ const listHintId = useId()
 
 const current = computed(() => (props.groupId ? groups.byId(props.groupId) : undefined))
 const currentLists = computed(() => (props.groupId ? lists.activeLists(props.groupId) : []))
+const householdEntries = computed(() =>
+  groups.groups.map((group) => ({ group, openCount: openInGroup(group.id) })),
+)
+const currentListEntries = computed(() =>
+  currentLists.value.map((list) => ({ list, openCount: openInList(list.id) })),
+)
 
 function onListKeydown(event: KeyboardEvent, list: List) {
   if (event.ctrlKey || event.altKey || event.metaKey) return
@@ -67,7 +75,7 @@ function onListKeydown(event: KeyboardEvent, list: List) {
     <div class="households">
       <h2 class="label">{{ t('nav.households') }}</h2>
       <ul class="groups">
-        <li v-for="group in groups.groups" :key="group.id" class="group">
+        <li v-for="{ group, openCount } in householdEntries" :key="group.id" class="group">
           <!-- "true", not "page": the page is the list below it. -->
           <RouterLink
             :class="['entry', { 'entry--current': group.id === current?.id }]"
@@ -78,15 +86,18 @@ function onListKeydown(event: KeyboardEvent, list: List) {
               ><BaseIcon name="home" :size="20"
             /></span>
             <span class="entry-name">{{ group.name }}</span>
-            <span class="entry-count" aria-hidden="true">{{ group.members.length }}</span>
+            <template v-if="openCount !== null">
+              <span class="entry-count" aria-hidden="true">{{ openCount }}</span>
+              <span class="sr-only">, {{ t('nav.openItems', { count: openCount }) }}</span>
+            </template>
           </RouterLink>
 
           <ul
-            v-if="group.id === current?.id && currentLists.length > 0"
+            v-if="group.id === current?.id && currentListEntries.length > 0"
             class="lists"
             :aria-label="t('nav.lists', { name: group.name })"
           >
-            <li v-for="list in currentLists" :key="list.id">
+            <li v-for="{ list, openCount: listOpenCount } in currentListEntries" :key="list.id">
               <RouterLink
                 :class="['list', { 'list--current': list.id === listId }]"
                 :to="{ name: 'list', params: { groupId: group.id, listId: list.id } }"
@@ -98,6 +109,10 @@ function onListKeydown(event: KeyboardEvent, list: List) {
                 <!-- 40 px: its art is about as large as the 32 px dot in the design. -->
                 <BaseSticker :icon="list.icon" :size="40" />
                 <span class="list-name">{{ list.name }}</span>
+                <template v-if="listOpenCount !== null">
+                  <span class="list-count" aria-hidden="true">{{ listOpenCount }}</span>
+                  <span class="sr-only">, {{ t('nav.openItems', { count: listOpenCount }) }}</span>
+                </template>
               </RouterLink>
             </li>
           </ul>
@@ -289,8 +304,14 @@ function onListKeydown(event: KeyboardEvent, list: List) {
   overflow-wrap: anywhere;
 }
 
+.list-count {
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-heavy);
+}
+
 .list--current {
-  background: color-mix(in srgb, var(--color-on-brand) 20%, transparent);
+  background: var(--color-sidebar-current-bg);
   font-weight: var(--font-weight-black);
 }
 

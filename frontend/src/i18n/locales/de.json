@@ -475,7 +475,8 @@
     "start": "Start",
     "households": "Haushalte",
     "lists": "Listen von {name}",
-    "listActionsHint": "Rechtsklick oder Kontextmenütaste (Umschalt+F10) zum Bearbeiten, Archivieren oder Löschen"
+    "listActionsHint": "Rechtsklick oder Kontextmenütaste (Umschalt+F10) zum Bearbeiten, Archivieren oder Löschen",
+    "openItems": "{count} offener Artikel | {count} offene Artikel"
   },
   "sync": {
     "synced": "Synchron",

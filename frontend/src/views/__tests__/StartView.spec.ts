@@ -83,7 +83,14 @@ const { groupsService, listsService, authService } = vi.hoisted(() => ({
 
 // A signed-in user would start the real live socket and outbox; the chip stays hidden.
 vi.mock('@/stores/sync', () => ({ useSyncStore: () => ({ indicator: 'hidden' }) }))
-vi.mock('@/stores/items', () => ({ useItemsStore: () => ({ pendingCount: 0 }) }))
+vi.mock('@/stores/items', () => ({
+  useItemsStore: () => ({
+    pendingCount: 0,
+    statusOf: () => 'idle',
+    itemsOf: () => [],
+    openItems: () => [],
+  }),
+}))
 vi.mock('@/stores/auth', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/auth')>()
   return { ...original, useAuthStore: original.defineAuthStore(authService, null) }

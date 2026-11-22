@@ -108,6 +108,8 @@
   --color-text-muted: #4a5568;
   --color-border: #16181d;
   --color-brand: #1f7a3a;
+  /* Current list entry on the green sidebar. */
+  --color-sidebar-current-bg: rgb(255 255 255 / 0.2);
   --color-primary: #ff7a59;
   --color-primary-contrast: #16181d;
   --color-focus: #2457f5;
@@ -193,6 +195,7 @@
     --color-text-muted: #aeb8c8;
     --color-border: #dce3ee;
     --color-brand: #1a5a32;
+    --color-sidebar-current-bg: rgb(255 255 255 / 0.2);
     --color-primary: #ff7a59;
     --color-primary-contrast: #16181d;
     --color-focus: #8fb0ff;
@@ -267,6 +270,7 @@
   --color-text-muted: #aeb8c8;
   --color-border: #dce3ee;
   --color-brand: #1a5a32;
+  --color-sidebar-current-bg: rgb(255 255 255 / 0.2);
   --color-primary: #ff7a59;
   --color-primary-contrast: #16181d;
   --color-focus: #8fb0ff;
