@@ -55,6 +55,8 @@ func (r *fakeRepo) Create(_ context.Context, it Item) (Item, error) {
 		return Item{}, ErrIDTaken
 	}
 	it.CreatedAt = at
+	it.UpdatedBy = it.CreatedBy
+	it.UpdatedAt = it.CreatedAt
 	r.seq++
 	it.ServerSeq = r.seq
 	r.items[it.ID] = it
@@ -121,6 +123,8 @@ func (r *fakeRepo) Apply(_ context.Context, itemID uuid.UUID, u Update) (Item, e
 	if u.Checked.Set {
 		it.Checked, it.CheckedBy, it.CheckedAt = u.Checked.Value, u.CheckedBy, u.CheckedAt
 	}
+	it.UpdatedBy = u.UpdatedBy
+	it.UpdatedAt = u.UpdatedAt
 	merged := Clocks{}
 	for f, c := range it.Clocks {
 		merged[f] = c
@@ -334,6 +338,9 @@ func TestService_Create(t *testing.T) {
 		}
 		if it.CreatedBy == nil || *it.CreatedBy != f.member {
 			t.Errorf("CreatedBy = %v, want the member", it.CreatedBy)
+		}
+		if it.UpdatedBy == nil || *it.UpdatedBy != f.member || !it.UpdatedAt.Equal(it.CreatedAt) {
+			t.Errorf("UpdatedBy, UpdatedAt = %v, %v; want %v, %v", it.UpdatedBy, it.UpdatedAt, f.member, it.CreatedAt)
 		}
 		for _, field := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
 			if it.Clocks[field] != clock {
@@ -632,6 +639,96 @@ func TestService_Update(t *testing.T) {
 		}
 	})
 
+	t.Run("records who changed the item last and when", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			setup         func(t *testing.T, f fixture, it Item)
+			change        Change
+			minutes       int
+			wantUpdatedBy bool // true = ben, false = stays f.member
+			wantNow       bool // true = serverNow, false = stays CreatedAt
+			wantSameCheck bool // true = UpdatedAt matches CheckedAt
+		}{
+			{
+				name: "winning edit", change: Change{Name: Some("Hafermilch")}, minutes: 1,
+				wantUpdatedBy: true, wantNow: true,
+			},
+			{
+				name: "checking", change: Change{Checked: Some(true)}, minutes: 1,
+				wantUpdatedBy: true, wantNow: true, wantSameCheck: true,
+			},
+			{
+				name: "unchecking",
+				setup: func(t *testing.T, f fixture, it Item) {
+					if _, err := f.svc.Update(ctx, f.member, it.ID, Change{Checked: Some(true)}, f.clock(t, 1, "anna")); err != nil {
+						t.Fatal(err)
+					}
+				},
+				change: Change{Checked: Some(false)}, minutes: 2,
+				wantUpdatedBy: true, wantNow: true,
+			},
+			{
+				name: "mixed change where one field wins",
+				setup: func(t *testing.T, f fixture, it Item) {
+					if _, err := f.svc.Update(ctx, f.member, it.ID, Change{Name: Some("Neu")}, f.clock(t, 10, "anna")); err != nil {
+						t.Fatal(err)
+					}
+				},
+				change: Change{Name: Some("Alt"), Quantity: Some(ptr(2.0))}, minutes: 5,
+				wantUpdatedBy: true, wantNow: true,
+			},
+			{
+				name: "losing change leaves both untouched", change: Change{Name: Some("Alt")}, minutes: -1,
+				wantUpdatedBy: false, wantNow: false,
+			},
+			{
+				name: "deleted item leaves both untouched",
+				setup: func(t *testing.T, f fixture, it Item) {
+					if _, err := f.svc.Delete(ctx, f.member, it.ID); err != nil {
+						t.Fatal(err)
+					}
+				},
+				change: Change{Name: Some("Zombie")}, minutes: 10,
+				wantUpdatedBy: false, wantNow: false,
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f := newFixture()
+				ben := uuid.New()
+				f.lists.access[f.listID][ben] = true
+				it := f.create(t)
+				if tt.setup != nil {
+					tt.setup(t, f, it)
+				}
+				updateTime := serverNow.Add(10 * time.Minute)
+				f.svc.now = func() time.Time { return updateTime }
+
+				got, err := f.svc.Update(ctx, ben, it.ID, tt.change, f.clock(t, tt.minutes, "ben"))
+				if err != nil {
+					t.Fatalf("Update() error = %v", err)
+				}
+				wantActor := f.member
+				if tt.wantUpdatedBy {
+					wantActor = ben
+				}
+				wantAt := it.CreatedAt
+				if tt.wantNow {
+					wantAt = updateTime
+				}
+				if got.UpdatedBy == nil || *got.UpdatedBy != wantActor {
+					t.Errorf("UpdatedBy = %v, want %v", got.UpdatedBy, wantActor)
+				}
+				if !got.UpdatedAt.Equal(wantAt) {
+					t.Errorf("UpdatedAt = %v, want %v", got.UpdatedAt, wantAt)
+				}
+				if tt.wantSameCheck && (got.CheckedAt == nil || !got.UpdatedAt.Equal(*got.CheckedAt)) {
+					t.Errorf("UpdatedAt = %v, CheckedAt = %v; want equal", got.UpdatedAt, got.CheckedAt)
+				}
+			})
+		}
+	})
+
 	t.Run("a lost check does not touch who checked", func(t *testing.T) {
 		f := newFixture()
 		it := f.create(t)
@@ -866,6 +963,9 @@ func TestService_Delete(t *testing.T) {
 		first, err := f.svc.Delete(ctx, f.member, it.ID)
 		if err != nil || !first.Deleted() {
 			t.Fatalf("Delete() = %+v, %v, want a tombstone", first, err)
+		}
+		if first.UpdatedBy == nil || *first.UpdatedBy != *it.UpdatedBy || !first.UpdatedAt.Equal(it.UpdatedAt) {
+			t.Errorf("Delete() changed UpdatedBy/UpdatedAt: %v/%v, want %v/%v", first.UpdatedBy, first.UpdatedAt, it.UpdatedBy, it.UpdatedAt)
 		}
 		again, err := f.svc.Delete(ctx, f.member, it.ID)
 		if err != nil || !again.Deleted() || again.ServerSeq != first.ServerSeq {

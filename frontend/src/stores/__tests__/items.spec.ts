@@ -39,6 +39,8 @@ function item(id: string, name: string, listId = 'l1', checked = false): Item {
     checkedAt: checked ? CHECKED_AT : null,
     createdBy: ANNA,
     createdAt: '2026-01-01T10:00:00Z',
+    updatedBy: ANNA,
+    updatedAt: '2026-01-01T10:00:00Z',
     serverSeq: 1,
     clocks: { name: 'c', quantity: 'c', unit: 'c', note: 'c', checked: 'c' },
   }

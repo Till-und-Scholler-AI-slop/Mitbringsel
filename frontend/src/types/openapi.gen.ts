@@ -713,6 +713,13 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /**
+             * Format: uuid
+             * @description null if that person deleted their account.
+             */
+            updatedBy: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
              * Format: int64
              * @description Orders changes across lists and items; clients ask for what
              *     changed after the last one they saw.

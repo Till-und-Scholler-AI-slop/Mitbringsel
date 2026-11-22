@@ -17,6 +17,8 @@ function item(id: string, name: string): Item {
     checkedAt: null,
     createdBy: null,
     createdAt: '2026-01-01T10:00:00Z',
+    updatedBy: null,
+    updatedAt: '2026-01-01T10:00:00Z',
     serverSeq: 1,
     clocks: { name: 'c', quantity: 'c', unit: 'c', note: 'c', checked: 'c' },
   }

@@ -2,8 +2,8 @@
 -- The id comes from the client. A second insert of the same id (a request
 -- sent again after a lost answer) inserts nothing and returns no row, which
 -- the caller tells apart from success.
-INSERT INTO items (id, list_id, name, quantity, unit, note, created_by, field_clocks)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO items (id, list_id, name, quantity, unit, note, created_by, updated_by, field_clocks)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
@@ -52,6 +52,8 @@ SET name         = CASE WHEN sqlc.arg(set_name)::boolean THEN sqlc.arg(name)::te
     checked      = CASE WHEN sqlc.arg(set_checked)::boolean THEN sqlc.arg(checked)::boolean ELSE checked END,
     checked_by   = CASE WHEN sqlc.arg(set_checked)::boolean THEN sqlc.narg(checked_by)::uuid ELSE checked_by END,
     checked_at   = CASE WHEN sqlc.arg(set_checked)::boolean THEN sqlc.narg(checked_at)::timestamptz ELSE checked_at END,
+    updated_by   = sqlc.narg(updated_by)::uuid,
+    updated_at   = sqlc.arg(updated_at)::timestamptz,
     field_clocks = field_clocks || sqlc.arg(clocks)::jsonb,
     server_seq   = nextval('change_seq')
 WHERE id = sqlc.arg(id)

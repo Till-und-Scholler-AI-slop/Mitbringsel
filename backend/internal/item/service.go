@@ -231,7 +231,12 @@ func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Ch
 		}
 		changed = true
 
-		update := Update{Change: change.only(won), Clocks: won}
+		update := Update{
+			Change:    change.only(won),
+			UpdatedBy: &actor,
+			UpdatedAt: now,
+			Clocks:    won,
+		}
 		if _, ok := won[FieldChecked]; ok && change.Checked.Value {
 			update.CheckedBy = &actor
 			update.CheckedAt = &now

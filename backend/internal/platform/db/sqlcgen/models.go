@@ -50,6 +50,8 @@ type Item struct {
 	DeletedAt   *time.Time
 	FieldClocks []byte
 	ServerSeq   int64
+	UpdatedBy   *uuid.UUID
+	UpdatedAt   time.Time
 }
 
 type List struct {

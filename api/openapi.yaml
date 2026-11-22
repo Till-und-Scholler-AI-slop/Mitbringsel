@@ -1276,6 +1276,8 @@ components:
         - checkedAt
         - createdBy
         - createdAt
+        - updatedBy
+        - updatedAt
         - serverSeq
         - clocks
       properties:
@@ -1333,6 +1335,17 @@ components:
             path: github.com/google/uuid
           description: null if that person deleted their account.
         createdAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: null if that person deleted their account.
+        updatedAt:
           type: string
           format: date-time
         serverSeq:

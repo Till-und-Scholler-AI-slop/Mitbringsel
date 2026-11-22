@@ -33,6 +33,8 @@ function serverItem(id: string, name = id): Item {
     checkedAt: null,
     createdBy: ANNA,
     createdAt: '2026-11-21T10:00:00Z',
+    updatedBy: ANNA,
+    updatedAt: '2026-11-21T10:00:00Z',
     serverSeq: 1,
     clocks: { name: 'c', quantity: 'c', unit: 'c', note: 'c', checked: 'c' },
   }

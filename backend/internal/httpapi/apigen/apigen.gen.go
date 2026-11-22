@@ -715,7 +715,11 @@ type Item struct {
 	ServerSeq int64 `json:"serverSeq"`
 
 	// Unit null if the item has no unit.
-	Unit *Unit `json:"unit"`
+	Unit      *Unit     `json:"unit"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// UpdatedBy null if that person deleted their account.
+	UpdatedBy *uuid.UUID `json:"updatedBy"`
 }
 
 // ItemChangedMessage Server to client: an item was created or changed.
