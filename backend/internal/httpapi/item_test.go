@@ -126,6 +126,7 @@ func testItem() item.Item {
 	checkedAt := itemTime.Add(time.Hour)
 	checkedBy := testMemberID
 	creator := testUserID
+	updater := testMemberID
 	unit := item.UnitKilogram
 	return item.Item{
 		ID:        testItemID,
@@ -139,6 +140,8 @@ func testItem() item.Item {
 		CheckedAt: &checkedAt,
 		CreatedBy: &creator,
 		CreatedAt: itemTime,
+		UpdatedBy: &updater,
+		UpdatedAt: itemTime.Add(2 * time.Hour),
 		ServerSeq: 42,
 		Clocks: item.Clocks{
 			item.FieldName:     "0000019a2b3c4d5e-0000-anna",
@@ -275,8 +278,10 @@ func TestItemResponses(t *testing.T) {
 				t.Errorf("quantity, unit, note = %v, %v, %v", got.Quantity, got.Unit, got.Note)
 			}
 			if got.CheckedBy == nil || *got.CheckedBy != testMemberID || got.CheckedAt == nil ||
-				got.CreatedBy == nil || *got.CreatedBy != testUserID {
-				t.Errorf("checkedBy, checkedAt, createdBy = %v, %v, %v", got.CheckedBy, got.CheckedAt, got.CreatedBy)
+				got.CreatedBy == nil || *got.CreatedBy != testUserID ||
+				got.UpdatedBy == nil || *got.UpdatedBy != testMemberID || !got.UpdatedAt.Equal(itemTime.Add(2*time.Hour)) {
+				t.Errorf("checkedBy, checkedAt, createdBy, updatedBy, updatedAt = %v, %v, %v, %v, %v",
+					got.CheckedBy, got.CheckedAt, got.CreatedBy, got.UpdatedBy, got.UpdatedAt)
 			}
 			if got.Clocks.Name != "0000019a2b3c4d5e-0000-anna" || got.Clocks.Checked != "0000019a2b3c4d62-0000-ben" {
 				t.Errorf("clocks = %+v", got.Clocks)
@@ -285,11 +290,11 @@ func TestItemResponses(t *testing.T) {
 	}
 
 	t.Run("an item without optional values has null, not missing", func(t *testing.T) {
-		plain := item.Item{ID: testItemID, ListID: testListID, Name: "Brot", CreatedAt: itemTime, Clocks: item.Clocks{}}
+		plain := item.Item{ID: testItemID, ListID: testListID, Name: "Brot", CreatedAt: itemTime, UpdatedAt: itemTime, Clocks: item.Clocks{}}
 
 		rec := itemRequest(t, &fakeItems{items: []item.Item{plain}}, http.MethodGet, itemPathFor(), "")
 
-		for _, field := range []string{"quantity", "unit", "note", "checkedBy", "checkedAt", "createdBy"} {
+		for _, field := range []string{"quantity", "unit", "note", "checkedBy", "checkedAt", "createdBy", "updatedBy"} {
 			if !strings.Contains(rec.Body.String(), `"`+field+`":null`) {
 				t.Errorf("body %s lacks %s:null", rec.Body, field)
 			}

@@ -123,6 +123,8 @@ func (r *PostgresRepository) Apply(ctx context.Context, itemID uuid.UUID, u Upda
 		Checked:     u.Checked.Value,
 		CheckedBy:   u.CheckedBy,
 		CheckedAt:   u.CheckedAt,
+		UpdatedBy:   u.UpdatedBy,
+		UpdatedAt:   u.UpdatedAt,
 		Clocks:      clocks,
 	})
 	if err != nil {
@@ -176,6 +178,8 @@ func fromRow(row sqlcgen.Item) (Item, error) {
 		CheckedAt: row.CheckedAt,
 		CreatedBy: row.CreatedBy,
 		CreatedAt: row.CreatedAt,
+		UpdatedBy: row.UpdatedBy,
+		UpdatedAt: row.UpdatedAt,
 		DeletedAt: row.DeletedAt,
 		Clocks:    clocks,
 		ServerSeq: row.ServerSeq,

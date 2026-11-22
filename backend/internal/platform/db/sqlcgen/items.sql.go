@@ -21,10 +21,12 @@ SET name         = CASE WHEN $1::boolean THEN $2::text ELSE name END,
     checked      = CASE WHEN $9::boolean THEN $10::boolean ELSE checked END,
     checked_by   = CASE WHEN $9::boolean THEN $11::uuid ELSE checked_by END,
     checked_at   = CASE WHEN $9::boolean THEN $12::timestamptz ELSE checked_at END,
-    field_clocks = field_clocks || $13::jsonb,
+    updated_by   = $13::uuid,
+    updated_at   = $14::timestamptz,
+    field_clocks = field_clocks || $15::jsonb,
     server_seq   = nextval('change_seq')
-WHERE id = $14
-RETURNING id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq
+WHERE id = $16
+RETURNING id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq, updated_by, updated_at
 `
 
 type ApplyItemUpdateParams struct {
@@ -40,6 +42,8 @@ type ApplyItemUpdateParams struct {
 	Checked     bool
 	CheckedBy   *uuid.UUID
 	CheckedAt   *time.Time
+	UpdatedBy   *uuid.UUID
+	UpdatedAt   time.Time
 	Clocks      []byte
 	ID          uuid.UUID
 }
@@ -61,6 +65,8 @@ func (q *Queries) ApplyItemUpdate(ctx context.Context, arg ApplyItemUpdateParams
 		arg.Checked,
 		arg.CheckedBy,
 		arg.CheckedAt,
+		arg.UpdatedBy,
+		arg.UpdatedAt,
 		arg.Clocks,
 		arg.ID,
 	)
@@ -80,15 +86,17 @@ func (q *Queries) ApplyItemUpdate(ctx context.Context, arg ApplyItemUpdateParams
 		&i.DeletedAt,
 		&i.FieldClocks,
 		&i.ServerSeq,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const createItem = `-- name: CreateItem :one
-INSERT INTO items (id, list_id, name, quantity, unit, note, created_by, field_clocks)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO items (id, list_id, name, quantity, unit, note, created_by, updated_by, field_clocks)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq
+RETURNING id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq, updated_by, updated_at
 `
 
 type CreateItemParams struct {
@@ -132,6 +140,8 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (Item, e
 		&i.DeletedAt,
 		&i.FieldClocks,
 		&i.ServerSeq,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -152,7 +162,7 @@ func (q *Queries) DeleteItemTombstones(ctx context.Context, cutoff time.Time) (i
 }
 
 const getItem = `-- name: GetItem :one
-SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq FROM items
+SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq, updated_by, updated_at FROM items
 WHERE id = $1
 `
 
@@ -174,12 +184,14 @@ func (q *Queries) GetItem(ctx context.Context, id uuid.UUID) (Item, error) {
 		&i.DeletedAt,
 		&i.FieldClocks,
 		&i.ServerSeq,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getItemForUpdate = `-- name: GetItemForUpdate :one
-SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq FROM items
+SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq, updated_by, updated_at FROM items
 WHERE id = $1
 FOR UPDATE
 `
@@ -205,12 +217,14 @@ func (q *Queries) GetItemForUpdate(ctx context.Context, id uuid.UUID) (Item, err
 		&i.DeletedAt,
 		&i.FieldClocks,
 		&i.ServerSeq,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const listItemsForList = `-- name: ListItemsForList :many
-SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq FROM items
+SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq, updated_by, updated_at FROM items
 WHERE list_id = $1
   AND deleted_at IS NULL
 ORDER BY created_at, id
@@ -241,6 +255,8 @@ func (q *Queries) ListItemsForList(ctx context.Context, listID uuid.UUID) ([]Ite
 			&i.DeletedAt,
 			&i.FieldClocks,
 			&i.ServerSeq,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -253,7 +269,7 @@ func (q *Queries) ListItemsForList(ctx context.Context, listID uuid.UUID) ([]Ite
 }
 
 const listItemsForLists = `-- name: ListItemsForLists :many
-SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq FROM items
+SELECT id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq, updated_by, updated_at FROM items
 WHERE list_id = ANY($1::uuid[])
   AND deleted_at IS NULL
 ORDER BY created_at, id
@@ -285,6 +301,8 @@ func (q *Queries) ListItemsForLists(ctx context.Context, listIds []uuid.UUID) ([
 			&i.DeletedAt,
 			&i.FieldClocks,
 			&i.ServerSeq,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -311,7 +329,7 @@ SET deleted_at = now(),
     server_seq = nextval('change_seq')
 FROM target
 WHERE items.id = target.id
-RETURNING items.id, items.list_id, items.name, items.quantity, items.unit, items.note, items.checked, items.checked_by, items.checked_at, items.created_by, items.created_at, items.deleted_at, items.field_clocks, items.server_seq
+RETURNING items.id, items.list_id, items.name, items.quantity, items.unit, items.note, items.checked, items.checked_by, items.checked_at, items.created_by, items.created_at, items.deleted_at, items.field_clocks, items.server_seq, items.updated_by, items.updated_at
 `
 
 type MarkCheckedItemsDeletedParams struct {
@@ -348,6 +366,8 @@ func (q *Queries) MarkCheckedItemsDeleted(ctx context.Context, arg MarkCheckedIt
 			&i.DeletedAt,
 			&i.FieldClocks,
 			&i.ServerSeq,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -364,7 +384,7 @@ UPDATE items
 SET deleted_at = COALESCE(deleted_at, now()),
     server_seq = CASE WHEN deleted_at IS NULL THEN nextval('change_seq') ELSE server_seq END
 WHERE id = $1
-RETURNING id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq
+RETURNING id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq, updated_by, updated_at
 `
 
 // Tombstone instead of DELETE, so offline devices learn about the deletion.
@@ -387,6 +407,8 @@ func (q *Queries) MarkItemDeleted(ctx context.Context, id uuid.UUID) (Item, erro
 		&i.DeletedAt,
 		&i.FieldClocks,
 		&i.ServerSeq,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

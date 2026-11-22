@@ -92,6 +92,9 @@ type Item struct {
 	// CreatedBy is nil if the person deleted their account.
 	CreatedBy *uuid.UUID
 	CreatedAt time.Time
+	// UpdatedBy is nil if the person deleted their account.
+	UpdatedBy *uuid.UUID
+	UpdatedAt time.Time
 	// DeletedAt is set for a tombstone: the item is gone for the users, but
 	// stays so that offline devices learn about the deletion.
 	DeletedAt *time.Time
@@ -192,13 +195,17 @@ func (c Change) only(won Clocks) Change {
 }
 
 // Update is what the service tells the repository to write: the fields that
-// won the merge, who checked the item and when, and the clocks to store.
+// won the merge, who checked the item and when, who changed it and when, and
+// the clocks to store.
 type Update struct {
 	Change
 	// CheckedBy and CheckedAt belong to Checked: both are set when the item
 	// gets checked and nil when it gets unchecked.
 	CheckedBy *uuid.UUID
 	CheckedAt *time.Time
+	// UpdatedBy and UpdatedAt record who made the change and when (server time).
+	UpdatedBy *uuid.UUID
+	UpdatedAt time.Time
 	Clocks    Clocks
 }
 

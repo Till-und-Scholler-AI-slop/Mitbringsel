@@ -55,6 +55,8 @@ function makeItem(overrides: Partial<Item> = {}): Item {
     checkedAt: null,
     createdBy: 'user-1',
     createdAt: '2026-01-01T10:00:00Z',
+    updatedBy: 'user-1',
+    updatedAt: '2026-01-01T10:00:00Z',
     serverSeq: 1,
     clocks: { name: 'c', quantity: 'c', unit: 'c', note: 'c', checked: 'c' },
     ...overrides,

@@ -72,6 +72,8 @@ function item(name: string): Item {
     checkedAt: null,
     createdBy: ANNA,
     createdAt: '2026-01-01T10:00:00Z',
+    updatedBy: ANNA,
+    updatedAt: '2026-01-01T10:00:00Z',
     serverSeq: 3,
     clocks: { name: 'c', quantity: 'c', unit: 'c', note: 'c', checked: 'c' },
   }
@@ -323,6 +325,50 @@ describe('localData', () => {
     expect(await data.readLists(ANNA, GROUP)).toBeNull()
     expect(await data.readItems(ANNA, LIST)).toBeNull()
     expect(await data.readOutbox(ANNA)).toEqual([])
+  })
+
+  it('fills updatedBy and updatedAt for items stored by older app versions', async () => {
+    await data.claim(me(ANNA))
+    const legacy = {
+      id: '0190a8c4-0000-7000-8000-0000000000c1',
+      listId: LIST,
+      name: 'Milk',
+      quantity: 2,
+      unit: 'piece',
+      note: null,
+      checked: false,
+      checkedBy: null,
+      checkedAt: null,
+      createdBy: ANNA,
+      createdAt: '2026-01-01T10:00:00Z',
+      serverSeq: 3,
+      clocks: { name: 'c', quantity: 'c', unit: 'c', note: 'c', checked: 'c' },
+    }
+    const deletedUpdater: Item = {
+      ...item('Bread'),
+      id: '0190a8c4-0000-7000-8000-0000000000c2',
+      createdBy: ANNA,
+      updatedBy: null,
+      updatedAt: '2026-01-02T10:00:00Z',
+    }
+    const req = indexedDB.open('mitbringsel', LOCAL_DATA_DB_VERSION)
+    await new Promise<void>((resolve, reject) => {
+      req.onsuccess = () => {
+        const tx = req.result.transaction('items', 'readwrite')
+        tx.objectStore('items').put([legacy, deletedUpdater], LIST)
+        tx.oncomplete = () => {
+          req.result.close()
+          resolve()
+        }
+        tx.onerror = () => reject(tx.error)
+      }
+      req.onerror = () => reject(req.error)
+    })
+
+    expect(await data.readItems(ANNA, LIST)).toEqual([
+      { ...legacy, updatedBy: ANNA, updatedAt: '2026-01-01T10:00:00Z' },
+      deletedUpdater,
+    ])
   })
 
   it('upgrades a database of version 1 and keeps its data', async () => {

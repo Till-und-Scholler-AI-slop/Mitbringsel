@@ -81,6 +81,23 @@ interface Schema extends DBSchema {
   outbox: { key: number; value: StoredChange }
 }
 
+// An item as stored on the device: older app versions lacked updatedBy and
+// updatedAt (ADR 0008), which normalizeItem fills from createdBy/createdAt.
+type StoredItem = Omit<Item, 'updatedBy' | 'updatedAt'> &
+  Partial<Pick<Item, 'updatedBy' | 'updatedAt'>>
+
+function normalizeItem(item: StoredItem): Item {
+  if (item.updatedBy !== undefined && item.updatedAt !== undefined) {
+    return item as Item
+  }
+  return {
+    ...item,
+    // Keep an explicit null on updatedBy (the person deleted their account).
+    updatedBy: item.updatedBy === undefined ? item.createdBy : item.updatedBy,
+    updatedAt: item.updatedAt ?? item.createdAt,
+  }
+}
+
 // An outbox entry as stored; its seq is the key.
 type StoredChange = Omit<OutboxEntry, 'seq'>
 
@@ -267,7 +284,10 @@ export function createLocalData(name = LOCAL_DATA_DB_NAME): LocalData {
     writeLists: (userId, groupId, lists) => writeListsOf(userId, groupId, lists),
     removeLists: (userId, groupId) => writeListsOf(userId, groupId, undefined),
 
-    readItems: (userId, listId) => read('items', userId, listId),
+    readItems: async (userId, listId) => {
+      const items = await read('items', userId, listId)
+      return items ? items.map(normalizeItem) : null
+    },
     writeItems: (userId, listId, items) => write('items', userId, listId, items),
     removeItems: (userId, listId) => write('items', userId, listId, undefined),
 

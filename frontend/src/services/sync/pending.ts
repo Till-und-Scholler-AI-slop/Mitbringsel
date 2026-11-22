@@ -56,6 +56,7 @@ function synthesize(
   // A create from the store always carries a clock. Without one the server
   // stamps the change, and an empty clock is older than any real one.
   const clock = request.clock ?? ''
+  const createdAt = new Date(queuedAt).toISOString()
   return {
     id: request.id,
     listId,
@@ -67,7 +68,9 @@ function synthesize(
     checkedBy: null,
     checkedAt: null,
     createdBy: userId,
-    createdAt: new Date(queuedAt).toISOString(),
+    createdAt,
+    updatedBy: userId,
+    updatedAt: createdAt,
     serverSeq: 0,
     clocks: { name: clock, quantity: clock, unit: clock, note: clock, checked: clock },
   }

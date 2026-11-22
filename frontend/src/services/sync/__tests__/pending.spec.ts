@@ -44,6 +44,8 @@ function serverItem(overrides: Partial<Item> = {}): Item {
     checkedAt: null,
     createdBy: OTHER,
     createdAt: '2026-02-01T08:00:00Z',
+    updatedBy: OTHER,
+    updatedAt: '2026-02-01T08:00:00Z',
     serverSeq: 7,
     clocks: { name: clock, quantity: clock, unit: clock, note: clock, checked: clock },
     ...overrides,
@@ -72,6 +74,8 @@ describe('create', () => {
       checkedAt: null,
       createdBy: ME,
       createdAt: '2026-03-01T10:00:00.000Z',
+      updatedBy: ME,
+      updatedAt: '2026-03-01T10:00:00.000Z',
       serverSeq: 0,
       clocks: { name: CLOCK, quantity: CLOCK, unit: CLOCK, note: CLOCK, checked: CLOCK },
     })
@@ -88,7 +92,9 @@ describe('create', () => {
 
   it('has a user that is not signed in as creator null', () => {
     const pending = foldPending([queued(create)], null).get(ID)!
-    expect(applyPending(undefined, pending)?.createdBy).toBeNull()
+    const item = applyPending(undefined, pending)
+    expect(item?.createdBy).toBeNull()
+    expect(item?.updatedBy).toBeNull()
   })
 })
 

@@ -78,6 +78,8 @@ func newItemResponse(i item.Item) apigen.Item {
 		CheckedAt: utcPtr(i.CheckedAt),
 		CreatedBy: i.CreatedBy,
 		CreatedAt: i.CreatedAt.UTC(),
+		UpdatedBy: i.UpdatedBy,
+		UpdatedAt: i.UpdatedAt.UTC(),
 		ServerSeq: i.ServerSeq,
 		Clocks: apigen.ItemClocks{
 			Name:     string(i.Clocks[item.FieldName]),

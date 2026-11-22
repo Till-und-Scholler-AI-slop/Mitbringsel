@@ -148,6 +148,9 @@ func TestPostgresRepository(t *testing.T) {
 		if got.CreatedBy == nil || *got.CreatedBy != anna || got.CreatedAt.IsZero() || got.ServerSeq == 0 {
 			t.Errorf("Get() = %+v, want creator, time and server_seq", got)
 		}
+		if got.UpdatedBy == nil || *got.UpdatedBy != anna || !got.UpdatedAt.Equal(got.CreatedAt) {
+			t.Errorf("Get() UpdatedBy=%v UpdatedAt=%v, want %v and %v", got.UpdatedBy, got.UpdatedAt, anna, got.CreatedAt)
+		}
 		for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
 			if got.Clocks[f] != c {
 				t.Errorf("clock of %s = %q, want %q", f, got.Clocks[f], c)
@@ -247,6 +250,96 @@ func TestPostgresRepository(t *testing.T) {
 		}
 		if unchecked.Checked || unchecked.CheckedBy != nil || unchecked.CheckedAt != nil {
 			t.Errorf("item = %+v, want unchecked with nobody and no time", unchecked)
+		}
+	})
+
+	t.Run("updated_by and updated_at follow winning changes and anonymize on account deletion", func(t *testing.T) {
+		anna, listID := newList(t, "updated-anna")
+		ben := newTestUser(t, pool, "updated-ben")
+		l, err := lists.Get(ctx, anna, listID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, "INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, 'member')", l.GroupID, ben); err != nil {
+			t.Fatalf("add ben to group: %v", err)
+		}
+
+		// Local service with controllable server time so UpdatedAt is exact.
+		controlled := NewService(repo, lists, nil)
+		stepTime := time.Now().UTC().Truncate(time.Microsecond)
+		controlled.now = func() time.Time { return stepTime }
+
+		created, err := controlled.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: "Milch"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if created.UpdatedBy == nil || *created.UpdatedBy != anna || !created.UpdatedAt.Equal(created.CreatedAt) {
+			t.Fatalf("Create() UpdatedBy=%v UpdatedAt=%v, want %v and %v", created.UpdatedBy, created.UpdatedAt, anna, created.CreatedAt)
+		}
+
+		// A losing update leaves updated_by and updated_at untouched.
+		stepTime = stepTime.Add(time.Minute)
+		lost, err := controlled.Update(ctx, ben, created.ID, Change{Name: Some("Alt")}, clock(t, -time.Minute, "ben"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lost.UpdatedBy == nil || *lost.UpdatedBy != anna || !lost.UpdatedAt.Equal(created.UpdatedAt) {
+			t.Errorf("losing Update() UpdatedBy=%v UpdatedAt=%v, want unchanged %v/%v", lost.UpdatedBy, lost.UpdatedAt, anna, created.UpdatedAt)
+		}
+
+		// Checking by Ben updates updated_by to Ben and updated_at to server time (matching checked_at).
+		stepTime = stepTime.Add(time.Minute)
+		checked, err := controlled.Update(ctx, ben, created.ID, Change{Checked: Some(true)}, clock(t, time.Minute, "ben"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if checked.UpdatedBy == nil || *checked.UpdatedBy != ben || !checked.UpdatedAt.Equal(stepTime) {
+			t.Errorf("check Update() UpdatedBy=%v UpdatedAt=%v, want %v and %v", checked.UpdatedBy, checked.UpdatedAt, ben, stepTime)
+		}
+		if checked.CheckedAt == nil || !checked.UpdatedAt.Equal(*checked.CheckedAt) {
+			t.Errorf("UpdatedAt=%v, CheckedAt=%v; want equal", checked.UpdatedAt, checked.CheckedAt)
+		}
+
+		// Deleting does not overwrite updated_by or updated_at.
+		deleted, err := controlled.Delete(ctx, anna, created.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if deleted.UpdatedBy == nil || *deleted.UpdatedBy != ben || !deleted.UpdatedAt.Equal(stepTime) {
+			t.Errorf("Delete() UpdatedBy=%v UpdatedAt=%v, want %v and %v", deleted.UpdatedBy, deleted.UpdatedAt, ben, stepTime)
+		}
+
+		// Removing checked items does not overwrite updated_by or updated_at.
+		other, err := controlled.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: "Brot"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		stepTime = stepTime.Add(time.Minute)
+		other, err = controlled.Update(ctx, ben, other.ID, Change{Checked: Some(true)}, clock(t, time.Minute, "ben"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		removed, err := controlled.RemoveChecked(ctx, anna, listID, []uuid.UUID{other.ID})
+		if err != nil || len(removed) != 1 {
+			t.Fatalf("RemoveChecked() = %+v, %v", removed, err)
+		}
+		if removed[0].UpdatedBy == nil || *removed[0].UpdatedBy != ben || !removed[0].UpdatedAt.Equal(other.UpdatedAt) {
+			t.Errorf("RemoveChecked() UpdatedBy=%v UpdatedAt=%v, want %v and %v", removed[0].UpdatedBy, removed[0].UpdatedAt, ben, other.UpdatedAt)
+		}
+
+		// Deleting Ben's account sets updated_by to NULL (ON DELETE SET NULL).
+		if _, err := pool.Exec(ctx, "DELETE FROM users WHERE id = $1", ben); err != nil {
+			t.Fatalf("delete user ben: %v", err)
+		}
+		afterDelete, err := repo.Get(ctx, created.ID)
+		if err != nil {
+			t.Fatalf("Get() after user delete: %v", err)
+		}
+		if afterDelete.UpdatedBy != nil {
+			t.Errorf("UpdatedBy after user deletion = %v, want nil", afterDelete.UpdatedBy)
+		}
+		if !afterDelete.UpdatedAt.Equal(checked.UpdatedAt) {
+			t.Errorf("UpdatedAt after user deletion = %v, want %v", afterDelete.UpdatedAt, checked.UpdatedAt)
 		}
 	})
 

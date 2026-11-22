@@ -121,6 +121,8 @@ func TestBroadcaster_ItemChanged(t *testing.T) {
 
 	var got struct {
 		ServerSeq int64             `json:"serverSeq"`
+		UpdatedBy *uuid.UUID        `json:"updatedBy"`
+		UpdatedAt string            `json:"updatedAt"`
 		Clocks    map[string]string `json:"clocks"`
 	}
 	if err := json.Unmarshal(payload["item"], &got); err != nil {
@@ -128,6 +130,9 @@ func TestBroadcaster_ItemChanged(t *testing.T) {
 	}
 	if got.ServerSeq != it.ServerSeq {
 		t.Errorf("item.serverSeq = %d, want %d", got.ServerSeq, it.ServerSeq)
+	}
+	if got.UpdatedBy == nil || *got.UpdatedBy != *it.UpdatedBy || got.UpdatedAt == "" {
+		t.Errorf("item.updatedBy, updatedAt = %v, %q; want %v and non-empty", got.UpdatedBy, got.UpdatedAt, it.UpdatedBy)
 	}
 	if got.Clocks["name"] != "0000019a2b3c4d5e-0000-anna" || got.Clocks["checked"] != "0000019a2b3c4d62-0000-ben" {
 		t.Errorf("item.clocks = %v", got.Clocks)
