@@ -4,6 +4,15 @@
   box-sizing: border-box;
 }
 
+/* WQHD and larger (ADR 0008): everything 1.1 times larger. Only rem grows,
+   borders and shadows in px stay; media queries in rem do not move, as they
+   go by the browser's font size. 137.5rem = 2200px. */
+@media (min-width: 137.5rem) {
+  html {
+    font-size: 110%;
+  }
+}
+
 body {
   margin: 0;
   background: var(--color-bg);

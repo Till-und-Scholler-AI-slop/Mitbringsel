@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -12,11 +12,15 @@ import { useItemForm } from '@/composables/useItemForm'
 import type { Item } from '@/types/api'
 
 // Form fields and actions for adding or editing an item (shared by the modal
-// dialog and the desktop panel). Without `item` it adds a new one;
-// `initialName` fills the name field, e.g. with what was typed into the
+// dialog and the card in the context column). Without `item` it adds a new
+// one; `initialName` fills the name field, e.g. with what was typed into the
 // quick-add bar. With `item` it edits that item; `creatorName` says who
 // added it (null if unknown). `open` defaults to true for callers that mount
 // and unmount the form via v-if.
+// hideMeta: the caller shows where the item goes itself (the card's head).
+// stayAfterAdd: after adding, the form empties for the next item instead of
+// closing, and the focus goes back to the name. autofocus: focus the name
+// when the form appears (a dialog); off for a form that is always there.
 const props = withDefaults(
   defineProps<{
     listId: string
@@ -25,8 +29,11 @@ const props = withDefaults(
     item?: Item
     creatorName?: string | null
     open?: boolean
+    hideMeta?: boolean
+    stayAfterAdd?: boolean
+    autofocus?: boolean
   }>(),
-  { open: true },
+  { open: true, hideMeta: false, stayAfterAdd: false, autofocus: true },
 )
 // fromKeyboard: Delete was pressed with Enter or Space (see DoneSection).
 const emit = defineEmits<{
@@ -36,13 +43,23 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const { name, quantity, unit, note, nameError, quantityError, noteError, submitting, submit } =
-  useItemForm({
-    open: () => props.open,
-    listId: () => props.listId,
-    initialName: () => props.initialName,
-    item: () => props.item,
-  })
+const {
+  name,
+  quantity,
+  unit,
+  note,
+  nameError,
+  quantityError,
+  noteError,
+  submitting,
+  submit,
+  clear,
+} = useItemForm({
+  open: () => props.open,
+  listId: () => props.listId,
+  initialName: () => props.initialName,
+  item: () => props.item,
+})
 
 const meta = computed(() => {
   if (!props.item) return t('list.itemForm.newIn', { list: props.listName })
@@ -56,14 +73,29 @@ function onRemove(event: MouseEvent) {
   emit('remove', event.detail === 0)
 }
 
-async function onSubmit() {
-  if (await submit()) emit('close')
+const form = ref<HTMLFormElement | null>(null)
+
+/** Moves the focus into the name field, the first input of the form. */
+function focusName() {
+  form.value?.querySelector('input')?.focus()
 }
+
+async function onSubmit() {
+  if (!(await submit())) return
+  if (props.stayAfterAdd && !props.item) {
+    clear()
+    focusName()
+    return
+  }
+  emit('close')
+}
+
+defineExpose({ focusName })
 </script>
 
 <template>
-  <form class="form" novalidate @submit.prevent="onSubmit">
-    <p class="meta">{{ meta }}</p>
+  <form ref="form" class="form" novalidate @submit.prevent="onSubmit">
+    <p v-if="!hideMeta" class="meta">{{ meta }}</p>
     <BaseInput
       v-model="name"
       :label="t('list.itemForm.name')"
@@ -71,7 +103,7 @@ async function onSubmit() {
       :error="nameError"
       autocomplete="off"
       aria-required="true"
-      autofocus
+      :autofocus="autofocus"
     />
     <QuantityStepper
       v-model="quantity"

@@ -10,9 +10,10 @@
  * The dark values appear twice (media query and forced dark) because plain CSS
  * has no way to share one block between the two selectors.
  *
- * Breakpoints cannot be variables (media queries do not read them), so the
- * one breakpoint lives in the components as `48rem` (768px): below it the
- * phone layout, from it on the desktop layout.
+ * Breakpoints cannot be variables (media queries do not read them), so they
+ * live in the components: `48rem` (768px) between the phone and the desktop
+ * layout, `80rem` for the context column of the list view and `137.5rem`
+ * for large screens (ADR 0008, docs/design.md).
  */
 
 /* Values that are the same in both themes. */
@@ -180,6 +181,7 @@
   --shadow-sticker-sm: 0 2px 0 var(--color-shadow);
   --shadow-sticker: 0 3px 0 var(--color-shadow);
   --shadow-sticker-lg: 0 6px 0 var(--color-shadow);
+  --shadow-card: 0 4px 0 var(--color-shadow); /* cards of the context column */
 }
 
 /* Dark theme following the system, unless light is forced. */

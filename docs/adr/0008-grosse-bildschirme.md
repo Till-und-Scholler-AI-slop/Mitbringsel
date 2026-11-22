@@ -20,7 +20,7 @@ Vor dem Code waren acht Fragen offen (#172). Fakten aus dem Code, die sie beeinf
 ## Entscheidung
 
 1. **Breakpoints und Skalierung**
-   - Die Kontextspalte gilt ab `80rem` (1280 px) und ersetzt dort das Panel (`ITEM_PANEL_QUERY` wird `80rem`). Zwischen `48rem` und `80rem` bleibt die Listenansicht wie heute: das Formular als Dialog, keine Überblick-Karte. Vom Design (Karten unter der Liste) weichen wir bewusst ab, weil die Karten unter einer langen Liste kaum erreichbar wären.
+   - Die Kontextspalte gilt ab `80rem` (1280 px) und ersetzt dort das Panel (`ITEM_PANEL_QUERY` wird `80rem`; Nachtrag #174: heißt jetzt `CONTEXT_COLUMN_QUERY` in `components/list/contextColumn.ts`). Zwischen `48rem` und `80rem` bleibt die Listenansicht wie heute: das Formular als Dialog, keine Überblick-Karte. Vom Design (Karten unter der Liste) weichen wir bewusst ab, weil die Karten unter einer langen Liste kaum erreichbar wären.
    - Spalten: Liste bis 820 px, Kontextspalte 440 px. Ab `137.5rem` (2200 px) gelten die WQHD-Maße 860 px und 480 px, und alles wird um den Faktor 1.1 größer.
    - Die Vergrößerung läuft über die Grundschrift (`html { font-size: 110% }` in der Media Query), nicht über `zoom`. Dafür stehen die festen Breiten in `rem` statt `px`. Konturen und Schatten in `px` bleiben gleich.
 2. **Aktivität entsteht auf dem Server.** Ein Protokoll pro Haushalt, geschrieben in derselben Transaktion wie die Änderung, mit Endpunkt, Live-Ereignis und Aufräum-Job.

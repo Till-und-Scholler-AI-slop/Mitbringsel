@@ -68,21 +68,29 @@ export function useItemForm(options: UseItemFormOptions) {
     }
   }
 
+  function fill(fields: Fields) {
+    opened = fields
+    name.value = fields.name
+    quantity.value = fields.quantity
+    unit.value = fields.unit
+    note.value = fields.note
+    tried.value = false
+  }
+
   // Every opening starts afresh. immediate: the parent may render it open.
   // Later changes of the item by others do not overwrite what is typed.
   watch(
     options.open,
     (isOpen) => {
-      if (!isOpen) return
-      opened = fieldsOf(options.item?.())
-      name.value = opened.name
-      quantity.value = opened.quantity
-      unit.value = opened.unit
-      note.value = opened.note
-      tried.value = false
+      if (isOpen) fill(fieldsOf(options.item?.()))
     },
     { immediate: true },
   )
+
+  /** Empties the form for the next new item (the form stays open after adding). */
+  function clear() {
+    fill({ name: '', quantity: '', unit: DEFAULT_UNIT, note: '' })
+  }
 
   const nameProblem = computed(() => validateItemName(name.value))
   const parsedQuantity = computed(() => parseQuantity(quantity.value))
@@ -167,5 +175,6 @@ export function useItemForm(options: UseItemFormOptions) {
     noteError,
     submitting,
     submit,
+    clear,
   }
 }

@@ -118,4 +118,38 @@ describe('ItemForm', () => {
 
     expect(wrapper.emitted('remove')).toEqual([[fromKeyboard]])
   })
+
+  it('stays open after adding when asked to, empty and with the focus on the name', async () => {
+    const wrapper = mountForm({ initialName: 'Brot', stayAfterAdd: true })
+    await wrapper.setProps({ autofocus: false })
+    document.body.append(wrapper.element)
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    const name = wrapper.get('input').element as HTMLInputElement
+    expect(itemsService.create).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(name.value).toBe('')
+    expect(document.activeElement).toBe(name)
+    wrapper.unmount()
+  })
+
+  it('still closes after saving an edit when asked to stay after adding', async () => {
+    itemsService.update.mockResolvedValue(item('i1', 'Vollkornbrot'))
+    const wrapper = mountForm({ item: item('i1', 'Brot'), stayAfterAdd: true })
+
+    await wrapper.get('input').setValue('Vollkornbrot')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.emitted('close')).toEqual([[]])
+  })
+
+  it('leaves out where the item goes and the autofocus when asked to', () => {
+    const wrapper = mountForm({ hideMeta: true, autofocus: false })
+
+    expect(wrapper.find('.meta').exists()).toBe(false)
+    expect(wrapper.get('input').attributes('autofocus')).toBeUndefined()
+  })
 })
