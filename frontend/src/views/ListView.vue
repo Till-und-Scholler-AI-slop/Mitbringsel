@@ -1,51 +1,37 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
-import BaseIcon from '@/components/base/BaseIcon.vue'
-import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import AppFrame from '@/components/layout/AppFrame.vue'
-import ArchivedListsDialog from '@/components/list/ArchivedListsDialog.vue'
-import ListActionsDialog from '@/components/list/ListActionsDialog.vue'
-import ListChips from '@/components/list/ListChips.vue'
-import ListHeader from '@/components/list/ListHeader.vue'
 import ItemFormHost from '@/components/list/ItemFormHost.vue'
+import ListChips from '@/components/list/ListChips.vue'
+import ListDialogs from '@/components/list/ListDialogs.vue'
+import ListHeader from '@/components/list/ListHeader.vue'
 import ListItems from '@/components/list/ListItems.vue'
-import ListNameDialog from '@/components/list/ListNameDialog.vue'
-import { useErrorMessage } from '@/composables/useErrorMessage'
+import ListStateNotice, { type ListNoticeState } from '@/components/list/ListStateNotice.vue'
 import { provideItemFormControl } from '@/composables/useItemFormControl'
 import { useLeaveDeletedList } from '@/composables/useLeaveDeletedList'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
-import { canManage } from '@/services/groupRoles'
 import { listToOpen, rememberLastList } from '@/services/lastList'
 import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
 import type { List } from '@/types/api'
 
-// noLists: the household has no active list to open.
-type ViewState = 'loading' | 'failed' | 'missing' | 'noLists' | 'ready'
+// ready: a list is open; otherwise ListStateNotice says why not.
+type ViewState = ListNoticeState | 'ready'
 
 // Without listId (the route of the household) the view opens the last or
 // first active list, or offers to create one.
 const props = defineProps<{ groupId: string; listId?: string }>()
 
-const { t } = useI18n()
 const router = useRouter()
 const groups = useGroupsStore()
 const lists = useListsStore()
 const items = useItemsStore()
 
-const createOpen = ref(false)
-const archiveOpen = ref(false)
-// The list whose actions are open, and the one being renamed; at most one
-// of the two is set.
-const actionsId = ref<string | null>(null)
-const renamingId = ref<string | null>(null)
-const listsError = useErrorMessage(() => lists.errorCodeOf(props.groupId))
+// The list dialogs; opened through their exposed functions.
+const dialogs = ref<InstanceType<typeof ListDialogs> | null>(null)
 // Empty while there is no listId in the URL.
 const listKey = computed(() => props.listId ?? '')
 
@@ -60,9 +46,6 @@ const list = computed<List | undefined>(() => {
 // The item form of this screen; ListItems opens it, ItemFormHost shows it.
 provideItemFormControl(() => list.value)
 
-const actionsFor = computed(() => lists.byId(actionsId.value ?? ''))
-const renaming = computed(() => lists.byId(renamingId.value ?? ''))
-const canDelete = computed(() => group.value !== undefined && canManage(group.value.role))
 const active = computed(() => lists.activeLists(props.groupId))
 const archived = computed(() => lists.archivedLists(props.groupId))
 
@@ -84,9 +67,6 @@ const members = computed(() => group.value?.members ?? [])
 watch(
   [() => props.groupId, () => props.listId],
   ([groupId, listId]) => {
-    actionsId.value = null
-    renamingId.value = null
-    archiveOpen.value = false
     if (groups.status === 'idle') groups.load()
     if (lists.statusOf(groupId) === 'idle') lists.load(groupId)
     if (listId) items.load(listId)
@@ -117,15 +97,6 @@ useLeaveDeletedList(
   group,
 )
 useLeaveRemovedGroup(() => props.groupId)
-
-function startRename(listId: string) {
-  actionsId.value = null
-  renamingId.value = listId
-}
-
-function openCreated(created: List) {
-  return router.push({ name: 'list', params: { groupId: props.groupId, listId: created.id } })
-}
 </script>
 
 <template>
@@ -133,7 +104,7 @@ function openCreated(created: List) {
     :group-id="groupId"
     :list-id="listId"
     :bottom-bar="list !== undefined"
-    @list-actions="actionsId = $event.id"
+    @list-actions="dialogs?.openActions($event.id)"
   >
     <div class="page">
       <div class="column">
@@ -146,9 +117,9 @@ function openCreated(created: List) {
             :open-count="openCount"
             :archived-count="archived.length"
             :current-archived="list?.archivedAt != null"
-            @create="createOpen = true"
-            @actions="actionsId = $event.id"
-            @archive="archiveOpen = true"
+            @create="dialogs?.openCreate()"
+            @actions="dialogs?.openActions($event.id)"
+            @archive="dialogs?.openArchive()"
           />
         </ListHeader>
 
@@ -156,68 +127,19 @@ function openCreated(created: List) {
           <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
           <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
 
-          <p v-if="state === 'loading'" class="loading" role="status">
-            <BaseSpinner /> {{ t('list.loading') }}
-          </p>
-
-          <div v-else-if="state === 'failed'" class="failed" role="alert">
-            <p class="failed-title">{{ t('list.loadFailed') }}</p>
-            <p>{{ listsError }}</p>
-            <BaseButton variant="secondary" @click="lists.load(groupId)">
-              <BaseIcon name="retry" /> {{ t('common.retry') }}
-            </BaseButton>
-          </div>
-
-          <BaseEmptyState
-            v-else-if="state === 'missing'"
-            :title="t('list.missing.title')"
-            :description="t('list.missing.description')"
-          >
-            <template #icon><BaseIcon name="linkOff" :size="24" /></template>
-            <BaseButton @click="router.push({ name: 'group', params: { groupId } })">
-              {{ t('list.missing.home') }}
-            </BaseButton>
-          </BaseEmptyState>
-
-          <BaseEmptyState
-            v-else-if="state === 'noLists'"
-            :title="t('list.noLists.title')"
-            :description="t('list.noLists.description')"
-          >
-            <template #icon><BaseIcon name="list" :size="24" /></template>
-            <BaseButton aria-haspopup="dialog" @click="createOpen = true">
-              <BaseIcon name="plus" /> {{ t('list.noLists.create') }}
-            </BaseButton>
-          </BaseEmptyState>
-
-          <ListItems v-else-if="list" :list="list" :members="members" />
+          <ListItems v-if="list" :list="list" :members="members" />
+          <ListStateNotice
+            v-else-if="state !== 'ready'"
+            :state="state"
+            :group-id="groupId"
+            @create="dialogs?.openCreate()"
+          />
         </main>
       </div>
       <!-- Next to the column: on a wide screen the form is a panel there. -->
       <ItemFormHost v-if="list" :list="list" :members="members" />
 
-      <ListNameDialog v-model:open="createOpen" :group-id="groupId" @created="openCreated" />
-      <ListNameDialog
-        v-if="renaming"
-        :open="true"
-        :group-id="groupId"
-        :list="renaming"
-        @update:open="renamingId = null"
-      />
-      <ListActionsDialog
-        v-if="actionsFor"
-        :open="true"
-        :list="actionsFor"
-        :can-delete="canDelete"
-        @update:open="actionsId = null"
-        @rename="startRename(actionsFor.id)"
-      />
-      <ArchivedListsDialog
-        v-model:open="archiveOpen"
-        :group-id="groupId"
-        :lists="archived"
-        :current-id="listKey"
-      />
+      <ListDialogs ref="dialogs" :group-id="groupId" :current-id="listKey" />
     </div>
   </AppFrame>
 </template>
@@ -250,35 +172,6 @@ function openCreated(created: List) {
 /* The quick-add bar brings its own space below. */
 .content--bar {
   padding-bottom: 0;
-}
-
-.loading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: 0;
-  color: var(--color-text-muted);
-}
-
-.failed {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin: 0;
-  padding: var(--space-4);
-  border: var(--border-width-md) solid var(--color-danger);
-  border-radius: var(--radius-lg);
-  background: var(--color-danger-surface);
-  color: var(--color-danger-text);
-}
-
-.failed p {
-  margin: 0;
-}
-
-.failed-title {
-  font-weight: var(--font-weight-black);
 }
 
 /* Desktop: the items at most 820px wide, like the header above. */
