@@ -1010,8 +1010,8 @@ describe('ListView: item panel on a wide screen', () => {
     vi.unstubAllGlobals()
   })
 
-  const panelOf = (w: Mounted) => w.find('#item-panel aside')
-  const nameField = (w: Mounted) => w.get('#item-panel aside input').element as HTMLInputElement
+  const panelOf = (w: Mounted) => w.find('aside.panel')
+  const nameField = (w: Mounted) => w.get('aside.panel input').element as HTMLInputElement
   const rows = (w: Mounted) => w.findAll('.open li')
 
   async function openEdit(w: Mounted, index: number) {
@@ -1036,8 +1036,8 @@ describe('ListView: item panel on a wide screen', () => {
     expect(button.getAttribute('aria-haspopup')).toBeNull()
 
     nameField(wrapper).value = 'Hafermilch'
-    await wrapper.get('#item-panel input').trigger('input')
-    await wrapper.get('#item-panel form').trigger('submit')
+    await wrapper.get('aside.panel input').trigger('input')
+    await wrapper.get('aside.panel form').trigger('submit')
     await flushPromises()
 
     expect(itemsService.update).toHaveBeenCalledWith('i1', {
@@ -1056,7 +1056,7 @@ describe('ListView: item panel on a wide screen', () => {
     const { wrapper } = await mountView()
 
     await openEdit(wrapper, 0)
-    await wrapper.get('#item-panel input').setValue('Hafermilch')
+    await wrapper.get('aside.panel input').setValue('Hafermilch')
     await openEdit(wrapper, 1)
 
     expect(nameField(wrapper).value).toBe('Brot')
@@ -1070,7 +1070,7 @@ describe('ListView: item panel on a wide screen', () => {
     const { wrapper } = await mountView()
 
     await openEdit(wrapper, 0)
-    await wrapper.get('#item-panel input').setValue('Hafermilch')
+    await wrapper.get('aside.panel input').setValue('Hafermilch')
     serverEvents.emit(changed(item('i1', 'Milch', { note: 'Soja', serverSeq: 2 })))
     await flushPromises()
 
@@ -1099,7 +1099,7 @@ describe('ListView: item panel on a wide screen', () => {
     const { wrapper } = await mountView()
 
     const button = await openEdit(wrapper, 0)
-    await wrapper.get('#item-panel input').trigger('keydown', { key: 'Escape' })
+    await wrapper.get('aside.panel input').trigger('keydown', { key: 'Escape' })
     await flushPromises()
 
     expect(panelOf(wrapper).exists()).toBe(false)
@@ -1112,7 +1112,7 @@ describe('ListView: item panel on a wide screen', () => {
     const { wrapper } = await mountView()
 
     await openEdit(wrapper, 0)
-    await wrapper.get('#item-panel .remove').trigger('click')
+    await wrapper.get('aside.panel .remove').trigger('click')
     await flushPromises()
 
     expect(panelOf(wrapper).exists()).toBe(false)
