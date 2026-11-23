@@ -8,14 +8,22 @@ import BrandLogo from '../BrandLogo.vue'
 const global = { plugins: [createAppI18n(['en'], null)] }
 
 describe('BrandLogo', () => {
-  it('shows the app name in the normal size by default', () => {
+  it('shows the name as an image with two price tags in the normal size', () => {
     const wrapper = mount(BrandLogo, { global })
 
-    expect(wrapper.text()).toBe('Mitbringsel')
     expect(wrapper.classes()).toEqual(['logo'])
+    expect(wrapper.attributes('role')).toBe('img')
+    expect(wrapper.attributes('aria-label')).toBe('Tuolino')
+    expect(wrapper.findAll('.tag')).toHaveLength(2)
   })
 
-  it.each(['small', 'large', 'flat'] as const)('has a %s variant', (variant) => {
+  it('draws the dot of the "i" in every size', () => {
+    const wrapper = mount(BrandLogo, { props: { small: true }, global })
+
+    expect(wrapper.find('.tag--front .dot').exists()).toBe(true)
+  })
+
+  it.each(['small', 'large'] as const)('has a %s variant', (variant) => {
     const wrapper = mount(BrandLogo, { props: { [variant]: true }, global })
 
     expect(wrapper.classes()).toContain(`logo--${variant}`)

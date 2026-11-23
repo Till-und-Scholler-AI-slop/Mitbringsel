@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mitbringsel/internal/config"
+	"tuolino/internal/config"
 )
 
 // localHosts are the database hosts that count as "this machine". A host

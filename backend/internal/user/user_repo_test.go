@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/platform/db/dbtest"
-	"mitbringsel/internal/platform/db/sqlcgen"
+	"tuolino/internal/platform/db/dbtest"
+	"tuolino/internal/platform/db/sqlcgen"
 )
 
 // TestPostgresRepository shares one container across its subtests, because

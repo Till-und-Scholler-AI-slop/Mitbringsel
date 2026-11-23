@@ -15,17 +15,17 @@ import (
 	"syscall"
 	"time"
 
-	"mitbringsel/internal/auth"
-	"mitbringsel/internal/cleanup"
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/group"
-	"mitbringsel/internal/httpapi"
-	"mitbringsel/internal/item"
-	"mitbringsel/internal/list"
-	"mitbringsel/internal/platform/db"
-	"mitbringsel/internal/platform/db/sqlcgen"
-	"mitbringsel/internal/realtime"
-	"mitbringsel/internal/user"
+	"tuolino/internal/auth"
+	"tuolino/internal/cleanup"
+	"tuolino/internal/config"
+	"tuolino/internal/group"
+	"tuolino/internal/httpapi"
+	"tuolino/internal/item"
+	"tuolino/internal/list"
+	"tuolino/internal/platform/db"
+	"tuolino/internal/platform/db/sqlcgen"
+	"tuolino/internal/realtime"
+	"tuolino/internal/user"
 )
 
 const (

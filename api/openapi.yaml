@@ -9,10 +9,10 @@
 openapi: 3.0.3
 
 info:
-  title: Mitbringsel API
+  title: Tuolino API
   version: "1"
   description: |
-    REST API of Mitbringsel. All endpoints answer JSON; errors share one
+    REST API of Tuolino. All endpoints answer JSON; errors share one
     format (`Error`) with a machine-readable code that the frontend
     translates.
 

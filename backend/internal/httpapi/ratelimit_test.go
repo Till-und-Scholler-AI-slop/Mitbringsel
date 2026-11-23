@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/user"
+	"tuolino/internal/config"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/user"
 )
 
 // fakeClock is a clock that only moves when the test says so.

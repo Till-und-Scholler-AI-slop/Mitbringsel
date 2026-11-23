@@ -1,9 +1,9 @@
 package seed
 
 import (
-	"mitbringsel/internal/group"
-	"mitbringsel/internal/item"
-	"mitbringsel/internal/list"
+	"tuolino/internal/group"
+	"tuolino/internal/item"
+	"tuolino/internal/list"
 )
 
 // The seed data is mixed German and English on purpose, with umlauts, long

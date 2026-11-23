@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/item"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/item"
 )
 
 const (

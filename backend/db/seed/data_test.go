@@ -4,9 +4,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"mitbringsel/internal/group"
-	"mitbringsel/internal/item"
-	"mitbringsel/internal/list"
+	"tuolino/internal/group"
+	"tuolino/internal/item"
+	"tuolino/internal/list"
 )
 
 // TestData checks the seed data without a database, so a typo in data.go

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"mitbringsel/internal/httpapi/apigen"
+	"tuolino/internal/httpapi/apigen"
 )
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

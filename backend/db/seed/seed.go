@@ -12,11 +12,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mitbringsel/internal/group"
-	"mitbringsel/internal/item"
-	"mitbringsel/internal/list"
-	"mitbringsel/internal/platform/db/sqlcgen"
-	"mitbringsel/internal/user"
+	"tuolino/internal/group"
+	"tuolino/internal/item"
+	"tuolino/internal/list"
+	"tuolino/internal/platform/db/sqlcgen"
+	"tuolino/internal/user"
 )
 
 // clockNode is the node of the clock that stamps the seeded items. It is

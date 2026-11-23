@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"mitbringsel/db/migrations"
+	"tuolino/db/migrations"
 )
 
 // NewPool opens a connection pool and verifies the database is reachable.

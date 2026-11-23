@@ -86,6 +86,12 @@
   --color-on-accent: #16181d;
   --color-on-brand: #ffffff;
 
+  /* Logo colors, the same in both themes: the lemon price tag in front with
+     berry letters, the berry tag behind it, a light lilac dot on the "i". */
+  --color-logo-lemon: #f4f06b;
+  --color-logo-berry: #c2185b;
+  --color-logo-dot: #dccbff;
+
   /* Popup menus lift off the page; the same in both themes. */
   --shadow-menu: 0 6px 0 rgb(0 0 0 / 0.25);
 

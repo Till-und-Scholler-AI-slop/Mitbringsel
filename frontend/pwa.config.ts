@@ -17,8 +17,8 @@ export const pwaOptions: Partial<VitePWAOptions> = {
   includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon.png'],
   manifest: {
     id: '/',
-    name: 'Mitbringsel',
-    short_name: 'Mitbringsel',
+    name: 'Tuolino',
+    short_name: 'Tuolino',
     description: 'Geteilte Einkaufslisten – live synchron, auch offline.',
     lang: 'de',
     start_url: '/',

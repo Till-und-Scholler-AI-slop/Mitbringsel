@@ -10,7 +10,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"mitbringsel/internal/platform/db"
+	"tuolino/internal/platform/db"
 )
 
 // Image matches the PostgreSQL version of deploy/docker-compose.dev.yml.

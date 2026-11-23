@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/user"
+	"tuolino/internal/config"
+	"tuolino/internal/user"
 )
 
 // fakeUsers returns users from a map. Like the real service, it wraps

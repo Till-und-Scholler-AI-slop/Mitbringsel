@@ -10,9 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"mitbringsel/db/migrations"
-	"mitbringsel/internal/platform/db"
-	"mitbringsel/internal/platform/db/dbtest"
+	"tuolino/db/migrations"
+	"tuolino/internal/platform/db"
+	"tuolino/internal/platform/db/dbtest"
 )
 
 func TestMigrate(t *testing.T) {

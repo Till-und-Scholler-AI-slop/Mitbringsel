@@ -95,7 +95,7 @@ describe('JoinGroupDialog', () => {
 
     await submit(wrapper, 'https://mitbringsel.tinowolter.com/rezepte/hallo')
 
-    expect(wrapper.get('[role="alert"]').text()).toContain('not a Mitbringsel invite link')
+    expect(wrapper.get('[role="alert"]').text()).toContain('not a Tuolino invite link')
     expect(service.preview).not.toHaveBeenCalled()
     expect(wrapper.props('open')).toBe(true)
     wrapper.unmount()

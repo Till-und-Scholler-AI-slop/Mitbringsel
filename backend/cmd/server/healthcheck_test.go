@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"mitbringsel/internal/httpapi"
+	"tuolino/internal/httpapi"
 )
 
 func TestHealthURL(t *testing.T) {

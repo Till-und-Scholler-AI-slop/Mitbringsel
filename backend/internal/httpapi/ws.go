@@ -13,8 +13,8 @@ import (
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/realtime"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/realtime"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"mitbringsel/internal/httpapi/apigen"
+	"tuolino/internal/httpapi/apigen"
 )
 
 // HealthPath is exported because the container healthcheck in cmd/server

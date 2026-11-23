@@ -53,7 +53,7 @@ function onListKeydown(event: KeyboardEvent, list: List) {
 
 <template>
   <nav class="sidebar" :aria-label="t('nav.label')">
-    <BrandLogo class="logo" small flat />
+    <BrandLogo class="logo" />
 
     <RouterLink
       :class="['entry', { 'entry--current': !groupId }]"
@@ -147,7 +147,6 @@ function onListKeydown(event: KeyboardEvent, list: List) {
 
 .logo {
   align-self: flex-start;
-  font-size: var(--font-size-lg);
 }
 
 /* Start and the households: sticker chips that sink in while current. */

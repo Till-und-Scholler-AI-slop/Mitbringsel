@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"mitbringsel/internal/config"
+	"tuolino/internal/config"
 )
 
 func TestCheckTarget(t *testing.T) {

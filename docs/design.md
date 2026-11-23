@@ -86,12 +86,16 @@ Immer ist genau eine Karte offen. Sie nimmt die restliche Höhe ein und scrollt 
 - Ein Listenwechsel beim Bearbeiten schaltet auf „Neuer Artikel“ mit leerem Formular. Ein Klick auf einen anderen Artikel übernimmt dessen Werte; ungespeicherte Eingaben gehen ohne Rückfrage verloren.
 - Die Aktivität sehen alle Mitglieder, auch Einträge aus archivierten Listen; sie reicht 30 Tage zurück.
 
+## Name und Wortmarke
+
+Die App heißt **Tuolino**, Entwurf auf Seite „9 · Name“ im Design-Canvas. Das Logo (`BrandLogo`) sind zwei Preisschilder nach Variante „9b · Zitrone & Beere (umgedreht)“: vorne ein Zitronen-Schild (`#F4F06B`) mit Beeren-Schrift (`#C2185B`), dahinter schräg ein Beeren-Schild, beide mit Loch, Tinten-Rand und hartem Schatten. Der Punkt des „i“ ist in allen Größen ein heller Lila-Kreis (`#DCCBFF`). Die drei Farben stehen als `--color-logo-*` in `tokens.css`. Interne Namen (IndexedDB, `localStorage`-Keys, Web-Locks, Postgres, Container-Images, Domains, Repo) heißen weiter `mitbringsel`.
+
 ## App-Icons (PWA)
 
-Das App-Icon greift den geneigten Mitbringsel-Sticker auf: ein geometrisches **M** (als SVG-Pfad, unabhängig von Systemschriften) in Tinte (`#16181D`) auf einer leicht gedrehten Tomaten-Pille (`#FF7A59`) mit hartem Sticker-Schatten auf Kopf-Grün (`#1F7A3A`).
+Das App-Icon ist selbst das Preisschild (Variante „B · Das Icon ist das Etikett“ im Artboard „Preisschild · Tuolino · App-Icon“): die ganze Kachel Sonnengelb (`#FFD23F`) mit Tinten-Rand (`#16181D`), oben links ein grünes Loch (`#1F7A3A`) und ein leicht gedrehtes **T** (als SVG-Pfad, unabhängig von Systemschriften).
 
 - `frontend/public/icon.svg`: abgerundete Kachel für Browser-Favicon und Standard-PNGs (`pwa-192x192.png`, `pwa-512x512.png`, `favicon.ico`).
-- `frontend/public/icon-maskable.svg`: vollflächiges `#1F7A3A` ohne Transparenz, Sticker innerhalb der zentralen 80 %-Safe-Zone für `pwa-512x512-maskable.png` und `apple-touch-icon.png` (180 × 180).
+- `frontend/public/icon-maskable.svg`: vollflächiges `#FFD23F` ohne Transparenz und ohne Rand, Loch und T innerhalb der zentralen 80 %-Safe-Zone für `pwa-512x512-maskable.png` und `apple-touch-icon.png` (180 × 180).
 
 Neu erzeugen der Rasterdateien nach Änderungen an den SVGs (ohne neue Node-Dependency, mit `rsvg-convert` und ImageMagick `magick`):
 
@@ -102,6 +106,8 @@ rsvg-convert -w 512 -h 512 frontend/public/icon-maskable.svg -o frontend/public/
 rsvg-convert -w 180 -h 180 frontend/public/icon-maskable.svg -o frontend/public/apple-touch-icon.png
 rsvg-convert -w 32 -h 32 frontend/public/icon.svg -o /tmp/favicon-32.png && magick /tmp/favicon-32.png frontend/public/favicon.ico && rm /tmp/favicon-32.png
 ```
+
+Danach in `frontend/index.html` den Parameter `?v=` an den Icon-Links hochzählen: Browser halten Favicons in einem eigenen Cache und laden sie sonst nicht neu.
 
 Alternativ lassen sich die PNGs auch mit `google-chrome-stable --headless=new --hide-scrollbars --force-device-scale-factor=1 --window-size=W,H --screenshot=<ziel>.png file://<pfad>.svg` erzeugen (für transparente Ecken zusätzlich `--default-background-color=00000000`).
 

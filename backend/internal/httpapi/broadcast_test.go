@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/item"
+	"tuolino/internal/item"
 )
 
 // fakeHub records what the Broadcaster hands over.

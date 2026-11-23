@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/config"
+	"tuolino/internal/config"
 )
 
 const newToken = "NEW-TOKEN"

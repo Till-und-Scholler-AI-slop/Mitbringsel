@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/list"
+	"tuolino/internal/list"
 )
 
 // ListAccess is the door to the lists: it returns a list, or the lists of a

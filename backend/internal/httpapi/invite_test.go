@@ -12,10 +12,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/group"
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/user"
+	"tuolino/internal/config"
+	"tuolino/internal/group"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/user"
 )
 
 const testInviteToken = "SECRET-TOKEN"

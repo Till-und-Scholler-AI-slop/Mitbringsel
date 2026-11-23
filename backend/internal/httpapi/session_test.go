@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/auth"
-	"mitbringsel/internal/config"
+	"tuolino/internal/auth"
+	"tuolino/internal/config"
 )
 
 // testEnv is the environment the requireUser tests run in; testCookieName

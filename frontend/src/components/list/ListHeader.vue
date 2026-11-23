@@ -46,7 +46,7 @@ function openCreatedGroup(created: Group) {
     <div class="top">
       <RouterLink class="home" :to="{ name: 'home' }" :aria-label="t('list.home')">
         <span class="home-icon" aria-hidden="true"><BaseIcon name="home" :size="20" /></span>
-        <BrandLogo small flat aria-hidden="true" />
+        <BrandLogo small aria-hidden="true" />
       </RouterLink>
       <SyncStatus />
     </div>
