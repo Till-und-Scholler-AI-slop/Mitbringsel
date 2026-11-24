@@ -240,6 +240,8 @@
     "row": {
       "edit": "Edit {name}",
       "editHint": "Edit",
+      "checkItem": "Check off {name}",
+      "openLabel": "Edit: {details}",
       "check": "check off",
       "uncheck": "bring back",
       "addedBy": "by {name}",
@@ -248,7 +250,6 @@
       "justChangedAnon": "Just changed",
       "justChangedBy": "just changed by {name}",
       "justChangedByAnon": "just changed",
-      "editing": "Editing",
       "editingLabel": "being edited",
       "pending": "Not synced yet",
       "pendingLabel": "not synced yet"

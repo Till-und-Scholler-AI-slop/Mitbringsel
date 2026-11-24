@@ -1029,7 +1029,7 @@ describe('ListView: context column on a wide screen', () => {
   const rows = (w: Mounted) => w.findAll('.open li')
 
   async function openEdit(w: Mounted, index: number) {
-    const button = rows(w)[index]!.get('.edit')
+    const button = rows(w)[index]!.get('.open')
     ;(button.element as HTMLElement).focus()
     await button.trigger('click')
     await flushPromises()
@@ -1058,6 +1058,25 @@ describe('ListView: context column on a wide screen', () => {
     const { wrapper } = await mountView()
 
     expect(wrapper.get('header .member').attributes('style')).toContain('width: 34px')
+    wrapper.unmount()
+  })
+
+  it('checks off with the checkbox without opening the card', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    itemsService.update.mockResolvedValue(
+      item('i1', 'Milch', { checked: true, checkedBy: 'user-1', serverSeq: 2 }),
+    )
+    const { wrapper } = await mountView()
+
+    await rows(wrapper)[0]!.get('.check').trigger('click')
+    await flushPromises()
+
+    expect(itemsService.update).toHaveBeenCalledWith(
+      'i1',
+      expect.objectContaining({ checked: true }),
+    )
+    expect(titleOf(wrapper)).toBe('New item')
+    expect(wrapper.find('.row--editing').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -1113,7 +1132,7 @@ describe('ListView: context column on a wide screen', () => {
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
     expect(titleOf(wrapper)).toBe('Milch')
     expect(document.activeElement).toBe(nameField(wrapper))
-    expect(rows(wrapper)[0]!.get('.editing').text()).toBe('Editing')
+    expect(rows(wrapper)[0]!.classes()).toContain('row--editing')
     expect(button.getAttribute('aria-haspopup')).toBeNull()
 
     await typeName(wrapper, 'Hafermilch')
@@ -1126,7 +1145,7 @@ describe('ListView: context column on a wide screen', () => {
     })
     expect(titleOf(wrapper)).toBe('New item')
     expect(nameField(wrapper).value).toBe('')
-    expect(wrapper.find('.editing').exists()).toBe(false)
+    expect(wrapper.find('.row--editing').exists()).toBe(false)
     // Back where the user was.
     expect(document.activeElement).toBe(button)
     wrapper.unmount()
@@ -1142,7 +1161,7 @@ describe('ListView: context column on a wide screen', () => {
 
     expect(nameField(wrapper).value).toBe('Brot')
     expect(document.activeElement).toBe(nameField(wrapper))
-    expect(rows(wrapper).map((r) => r.find('.editing').exists())).toEqual([false, true])
+    expect(rows(wrapper).map((r) => r.classes().includes('row--editing'))).toEqual([false, true])
     wrapper.unmount()
   })
 
@@ -1171,7 +1190,7 @@ describe('ListView: context column on a wide screen', () => {
     expect(titleOf(wrapper)).toBe('New item')
     expect(nameField(wrapper).value).toBe('Tomaten')
     expect(document.activeElement).toBe(nameField(wrapper))
-    expect(wrapper.find('.editing').exists()).toBe(false)
+    expect(wrapper.find('.row--editing').exists()).toBe(false)
     expect(wrapper.get('.add-bar .details').attributes('aria-haspopup')).toBeUndefined()
     wrapper.unmount()
   })

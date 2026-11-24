@@ -240,6 +240,8 @@
     "row": {
       "edit": "{name} bearbeiten",
       "editHint": "Bearbeiten",
+      "checkItem": "{name} abhaken",
+      "openLabel": "Bearbeiten: {details}",
       "check": "abhaken",
       "uncheck": "zurückholen",
       "addedBy": "von {name}",
@@ -248,7 +250,6 @@
       "justChangedAnon": "Gerade geändert",
       "justChangedBy": "gerade von {name} geändert",
       "justChangedByAnon": "gerade geändert",
-      "editing": "Wird bearbeitet",
       "editingLabel": "wird bearbeitet",
       "pending": "Noch nicht synchronisiert",
       "pendingLabel": "noch nicht synchronisiert"

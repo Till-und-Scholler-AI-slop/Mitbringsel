@@ -163,30 +163,27 @@ describe('ItemRow: edit button', () => {
   })
 })
 
-describe('ItemRow: form open in the panel', () => {
-  it('says that the item is being edited, to the eye and in the label', () => {
+describe('ItemRow: form open in the card', () => {
+  it('says that the item is being edited in the label and the ring, not with a tag', () => {
     const wrapper = mountRow(item(), JONAS, { editing: true })
 
     expect(wrapper.classes()).toContain('row--editing')
-    expect(wrapper.get('.editing').text()).toBe('Editing')
+    expect(wrapper.find('.editing').exists()).toBe(false)
     expect(wrapper.get('button').attributes('aria-label')).toBe(
       'Milch, by Jonas, being edited – check off',
     )
   })
 
-  it('shows it next to a recent change of someone else', () => {
+  it('keeps the recent change next to it', () => {
     const wrapper = mountRow(item(), JONAS, { editing: true, recent: { name: 'Lena' } })
 
-    expect(wrapper.findAll('.tags > span').map((s) => s.text())).toEqual([
-      'Lena · just changed',
-      'Editing',
-    ])
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(['row--editing', 'row--recent']))
+    expect(wrapper.findAll('.tags > span').map((s) => s.text())).toEqual(['Lena · just changed'])
   })
 
   it('shows nothing for a done item', () => {
     const wrapper = mountRow(item({ checked: true }), JONAS, { editing: true })
 
-    expect(wrapper.find('.editing').exists()).toBe(false)
     expect(wrapper.classes()).not.toContain('row--editing')
   })
 
@@ -230,5 +227,56 @@ describe('ItemRow: pending sync', () => {
     expect(wrapper.get('button').attributes('aria-label')).toBe(
       'Milch, checked by Jonas – bring back',
     )
+  })
+})
+
+describe('ItemRow: selectable (list column)', () => {
+  const selectable = { selectable: true }
+
+  it('splits the row into a checkbox button and a button that opens the form', () => {
+    const wrapper = mountRow(item({ quantity: 2, unit: 'l', note: 'Hafer' }), JONAS, selectable)
+
+    expect(wrapper.get('.check').attributes('aria-label')).toBe('Check off Milch')
+    expect(wrapper.get('.open').attributes('aria-label')).toBe('Edit: Milch, 2 l, Hafer, by Jonas')
+    expect(wrapper.get('.open .name').text()).toBe('Milch')
+    expect(wrapper.find('.open .chevron').exists()).toBe(true)
+    expect(wrapper.find('.toggle').exists()).toBe(false)
+    expect(wrapper.find('.edit').exists()).toBe(false)
+    expect(wrapper.get('.open').attributes('aria-haspopup')).toBeUndefined()
+  })
+
+  it('checks off with the checkbox and opens the form with the rest of the row', async () => {
+    const wrapper = mountRow(item(), JONAS, selectable)
+
+    await wrapper.get('.check').trigger('click')
+    expect(wrapper.emitted('toggle')).toHaveLength(1)
+    expect(wrapper.emitted('edit')).toBeUndefined()
+
+    await wrapper.get('.open').trigger('click')
+    expect(wrapper.emitted('edit')).toHaveLength(1)
+    expect(wrapper.emitted('toggle')).toHaveLength(1)
+  })
+
+  it('says in the label that the form is open, and marks the row', () => {
+    const wrapper = mountRow(item(), JONAS, { ...selectable, editing: true })
+
+    expect(wrapper.classes()).toContain('row--editing')
+    expect(wrapper.get('.open').attributes('aria-label')).toBe(
+      'Edit: Milch, by Jonas, being edited',
+    )
+    expect(wrapper.find('.editing').exists()).toBe(false)
+  })
+
+  it('keeps the plain row for a done item', () => {
+    const wrapper = mountRow(
+      item({ checked: true, checkedBy: 'u1', checkedAt: '2026-02-01T10:00:00Z' }),
+      JONAS,
+      selectable,
+    )
+
+    expect(wrapper.find('.toggle').exists()).toBe(true)
+    expect(wrapper.find('.check').exists()).toBe(false)
+    expect(wrapper.find('.open').exists()).toBe(false)
+    expect(wrapper.classes()).not.toContain('row--selectable')
   })
 })

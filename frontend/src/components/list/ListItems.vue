@@ -111,6 +111,7 @@ function toggle(item: Item) {
           :editing="columnMode && editingId === item.id"
           :pending="items.isPending(item.id)"
           :opens-dialog="!columnMode"
+          :selectable="columnMode"
           @toggle="toggle(item)"
           @edit="startEdit(item)"
         />
