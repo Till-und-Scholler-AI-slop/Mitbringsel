@@ -96,7 +96,7 @@ func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem
 	// an edit made before it existed cannot win. Merge also limits a clock
 	// that runs too far ahead.
 	stamps := Clocks{}
-	for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
+	for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked, FieldList} {
 		stamps[f] = clock
 	}
 	clocks, err := Merge(nil, stamps, false, s.now())

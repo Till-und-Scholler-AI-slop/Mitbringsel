@@ -151,7 +151,7 @@ func TestPostgresRepository(t *testing.T) {
 		if got.UpdatedBy == nil || *got.UpdatedBy != anna || !got.UpdatedAt.Equal(got.CreatedAt) {
 			t.Errorf("Get() UpdatedBy=%v UpdatedAt=%v, want %v and %v", got.UpdatedBy, got.UpdatedAt, anna, got.CreatedAt)
 		}
-		for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
+		for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked, FieldList} {
 			if got.Clocks[f] != c {
 				t.Errorf("clock of %s = %q, want %q", f, got.Clocks[f], c)
 			}

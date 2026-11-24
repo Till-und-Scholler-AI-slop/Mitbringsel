@@ -342,7 +342,7 @@ func TestService_Create(t *testing.T) {
 		if it.UpdatedBy == nil || *it.UpdatedBy != f.member || !it.UpdatedAt.Equal(it.CreatedAt) {
 			t.Errorf("UpdatedBy, UpdatedAt = %v, %v; want %v, %v", it.UpdatedBy, it.UpdatedAt, f.member, it.CreatedAt)
 		}
-		for _, field := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
+		for _, field := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked, FieldList} {
 			if it.Clocks[field] != clock {
 				t.Errorf("clock of %s = %q, want %q", field, it.Clocks[field], clock)
 			}

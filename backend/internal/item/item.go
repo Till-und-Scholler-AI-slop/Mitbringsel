@@ -150,6 +150,8 @@ type Change struct {
 	Unit     Optional[*Unit]
 	Note     Optional[*string]
 	Checked  Optional[bool]
+	// ListID moves the item to another list. The service checks the target.
+	ListID Optional[uuid.UUID]
 }
 
 // clocks returns the clock for every field the change sets.
@@ -169,6 +171,9 @@ func (c Change) clocks(clock HLC) Clocks {
 	}
 	if c.Checked.Set {
 		out[FieldChecked] = clock
+	}
+	if c.ListID.Set {
+		out[FieldList] = clock
 	}
 	return out
 }
@@ -190,6 +195,9 @@ func (c Change) only(won Clocks) Change {
 	}
 	if _, ok := won[FieldChecked]; ok {
 		out.Checked = c.Checked
+	}
+	if _, ok := won[FieldList]; ok {
+		out.ListID = c.ListID
 	}
 	return out
 }
