@@ -55,6 +55,7 @@ async function mountChips({
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe('ListChips', () => {
@@ -184,5 +185,20 @@ describe('ListChips', () => {
     const { wrapper } = await mountChips({ archivedCount: 1, currentArchived: true })
 
     expect(wrapper.get('.chip--archive').classes()).toContain('chip--current')
+  })
+
+  it('disables the new-list button while offline and keeps list and archive chips active', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const { wrapper } = await mountChips({ archivedCount: 1 })
+
+    const add = wrapper.get('button[aria-label="New list"]')
+    expect(add.attributes('disabled')).toBeDefined()
+    await add.trigger('click')
+    expect(wrapper.emitted('create')).toBeUndefined()
+
+    expect(
+      wrapper.findAll('.chip--list').every((c) => c.attributes('disabled') === undefined),
+    ).toBe(true)
+    expect(wrapper.get('.chip--archive').attributes('disabled')).toBeUndefined()
   })
 })

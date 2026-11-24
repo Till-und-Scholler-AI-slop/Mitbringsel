@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 
 export type NameProblem = 'empty' | 'tooLong'
@@ -33,6 +36,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{ 'update:name': [name: string] }>()
 const open = defineModel<boolean>('open', { required: true })
+
+const { t } = useI18n()
+const { online } = useOnlineStatus()
 
 const name = ref('')
 const submitting = ref(false)
@@ -86,7 +92,7 @@ watch(name, (value) => {
 })
 
 async function submit() {
-  if (problem.value || submitting.value) return
+  if (problem.value || submitting.value || !online.value) return
   const trimmed = name.value.trim()
   // Nothing to save; no request for the same name.
   if (props.initialName !== undefined && trimmed === props.initialName && !props.changed) {
@@ -121,6 +127,7 @@ async function submit() {
         @blur="onBlur"
       />
       <slot />
+      <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.actionHint')" />
       <div class="actions">
         <!-- mousedown.prevent: pressing "Cancel" must not take the focus from
              the field. Otherwise the field is left (maybe empty), the error
@@ -129,7 +136,12 @@ async function submit() {
         <BaseButton variant="secondary" class="cancel" @mousedown.prevent @click="open = false">
           {{ cancelLabel }}
         </BaseButton>
-        <BaseButton type="submit" class="submit" :loading="submitting" :disabled="problem !== null">
+        <BaseButton
+          type="submit"
+          class="submit"
+          :loading="submitting"
+          :disabled="problem !== null || !online"
+        >
           {{ submitLabel }}
         </BaseButton>
       </div>

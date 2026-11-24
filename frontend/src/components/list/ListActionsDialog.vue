@@ -5,8 +5,10 @@ import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import type { IconName } from '@/components/base/icons'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { useListsStore } from '@/stores/lists'
 import type { List } from '@/types/api'
@@ -30,6 +32,7 @@ const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
 const lists = useListsStore()
+const { online } = useOnlineStatus()
 
 // Deleting needs a second look; the other actions run right away.
 const confirmingDelete = ref(false)
@@ -44,6 +47,7 @@ const actions = computed<ListAction[]>(() => {
 })
 
 async function run(action: ListAction) {
+  if (!online.value) return
   if (action === 'rename') {
     // The parent closes this dialog and opens the name form.
     emit('rename')
@@ -77,6 +81,8 @@ async function run(action: ListAction) {
     <div class="body">
       <p class="question">{{ t('list.actions.question', { name: list.name }) }}</p>
 
+      <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.listHint')" />
+
       <p v-if="errorCode" class="problem" role="alert">
         <BaseIcon name="alert" /> {{ errorMessage }}
       </p>
@@ -87,7 +93,7 @@ async function run(action: ListAction) {
           :key="action"
           type="button"
           :class="['action', { 'action--danger': action === 'delete' }]"
-          :disabled="busy"
+          :disabled="busy || !online"
           @click="run(action)"
         >
           <span class="action-icon" aria-hidden="true">
@@ -111,7 +117,13 @@ async function run(action: ListAction) {
           >
             {{ t('list.actions.confirm.back') }}
           </BaseButton>
-          <BaseButton variant="danger-solid" class="delete" :loading="busy" @click="run('delete')">
+          <BaseButton
+            variant="danger-solid"
+            class="delete"
+            :loading="busy"
+            :disabled="!online"
+            @click="run('delete')"
+          >
             {{ t('list.actions.confirm.delete') }}
           </BaseButton>
         </div>

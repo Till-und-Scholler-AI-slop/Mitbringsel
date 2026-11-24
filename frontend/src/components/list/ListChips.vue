@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseSticker from '@/components/base/BaseSticker.vue'
 import { useLongPress } from '@/composables/useLongPress'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import type { List } from '@/types/api'
 
 // The lists of a household as chips in the green bar, each with the sticker
@@ -33,6 +34,7 @@ const emit = defineEmits<{ create: []; actions: [list: List]; archive: [] }>()
 
 const { t } = useI18n()
 const router = useRouter()
+const { online } = useOnlineStatus()
 const hintId = useId()
 const press = useLongPress<List>((list) => emit('actions', list))
 
@@ -75,6 +77,7 @@ function onClick(list: List) {
       type="button"
       class="add press-inset"
       :aria-label="t('list.newList')"
+      :disabled="!online"
       @click="$emit('create')"
     >
       <BaseIcon name="plus" :size="20" :stroke-width="2.5" />
@@ -168,7 +171,6 @@ function onClick(list: List) {
   border-radius: var(--radius-full);
   background: transparent;
   color: var(--color-on-brand);
-  cursor: pointer;
 }
 
 /* Desktop: there is room, so the chips wrap instead of scrolling, and the

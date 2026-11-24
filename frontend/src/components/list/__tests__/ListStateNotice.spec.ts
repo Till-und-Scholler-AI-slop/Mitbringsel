@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -91,4 +91,20 @@ describe('ListStateNotice', () => {
 
     expect(wrapper.emitted('create')).toHaveLength(1)
   })
+
+  it('disables creating the first list and shows a hint while offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const { wrapper } = await mountNotice('noLists')
+
+    expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[role="status"]').text()).toBe(
+      'Lists can only be created or changed online.',
+    )
+    await wrapper.get('button').trigger('click')
+    expect(wrapper.emitted('create')).toBeUndefined()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })

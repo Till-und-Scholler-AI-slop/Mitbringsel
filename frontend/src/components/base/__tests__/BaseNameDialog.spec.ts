@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import { createAppI18n } from '@/i18n'
@@ -232,4 +232,34 @@ describe('BaseNameDialog', () => {
     expect(wrapper.emitted('update:name')).toContainEqual(['Drogerie'])
     wrapper.unmount()
   })
+
+  it('shows a hint and disables submit when going offline, preserving input until online', async () => {
+    const { wrapper, save } = mountDialog()
+    await wrapper.get('input').setValue('Bakery')
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(wrapper.get('[role="status"]').text()).toBe('Requires an internet connection.')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+    expect(save).not.toHaveBeenCalled()
+    expect(inputEl(wrapper).value).toBe('Bakery')
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    window.dispatchEvent(new Event('online'))
+    await flushPromises()
+
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(save).toHaveBeenCalledWith('Bakery')
+    wrapper.unmount()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
