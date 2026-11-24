@@ -15,7 +15,7 @@ import { useCountdown } from '@/composables/useCountdown'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { INVITE_PATH } from '@/services/inviteLink'
-import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
+import { ApiError, ERROR_CODE_NETWORK, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { googleLoginUrl } from '@/services/googleLogin'
 import { redirectTo } from '@/services/navigation'
 import { useAuthStore } from '@/stores/auth'
@@ -90,7 +90,7 @@ watch(online, (isOnline) => {
   if (
     isOnline &&
     !invites.has(props.token) &&
-    (invites.status === 'idle' || invites.errorCode === 'NETWORK')
+    (invites.status === 'idle' || invites.errorCode === ERROR_CODE_NETWORK)
   ) {
     void invites.load(props.token)
   }
