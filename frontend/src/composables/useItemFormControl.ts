@@ -15,6 +15,11 @@ export interface ItemFormCardHandle {
   focusName(): void
 }
 
+/** What the overview card offers to the control: moving the focus into it. */
+export interface OverviewCardHandle {
+  focusStart(): void
+}
+
 /**
  * Which item form is open in the list view, and how it opens and closes: a
  * form for a new item (with the name typed into the quick-add bar) or for
@@ -28,9 +33,13 @@ export interface ItemFormCardHandle {
  * useItemFormControl. The state belongs to the screen, not to the data, so
  * it lives as long as the view and not in a store.
  *
+ * With an overview card above it (`hasOverview`) one of the two cards is
+ * collapsed to a bar: the overview is open after loading and whenever the form
+ * closes, the form opens for a new or edited item.
+ *
  * `list` is the open list. Switching lists closes the form.
  */
-function createItemFormControl(list: () => List | undefined) {
+function createItemFormControl(list: () => List | undefined, hasOverview: () => boolean) {
   const { t } = useI18n()
   const groups = useGroupsStore()
   const items = useItemsStore()
@@ -41,6 +50,12 @@ function createItemFormControl(list: () => List | undefined) {
   const columnMode = useMediaQuery(CONTEXT_COLUMN_QUERY)
   // Set by ItemFormHost while the card is shown.
   const card = ref<ItemFormCardHandle | null>(null)
+  const overviewCard = ref<OverviewCardHandle | null>(null)
+  // Which card of the column is open. Not remembered: the overview is open
+  // after every load (ADR 0008).
+  const expanded = ref<'overview' | 'form'>('overview')
+  // Without an overview the form card is the only one and always open.
+  const formExpanded = computed(() => !hasOverview() || expanded.value === 'form')
   // Where the focus goes back to when the card's form closes. A dialog does
   // that itself.
   let opener: HTMLElement | null = null
@@ -63,13 +78,24 @@ function createItemFormControl(list: () => List | undefined) {
     if (active instanceof HTMLElement && active !== document.body) opener = active
   }
 
+  // Opens the form card and moves the focus into it. Its content is inert
+  // while collapsed, so a card that was collapsed gets the focus after the
+  // next render.
+  async function showForm() {
+    const wasCollapsed = !formExpanded.value
+    expanded.value = 'form'
+    if (wasCollapsed) await nextTick()
+    card.value?.focusName()
+  }
+
   function startEdit(item: Item) {
     rememberOpener()
     newItemOpen.value = false
     if (editingId.value === item.id) {
-      card.value?.focusName()
+      void showForm()
       return
     }
+    expanded.value = 'form'
     editingName = item.name
     editingId.value = item.id
   }
@@ -81,9 +107,10 @@ function createItemFormControl(list: () => List | undefined) {
     rememberOpener()
     if (columnMode.value && editingId.value === null && name === '') {
       newItemOpen.value = true
-      card.value?.focusName()
+      void showForm()
       return
     }
+    expanded.value = 'form'
     editingId.value = null
     newItemName.value = name
     newItemKey.value++
@@ -96,11 +123,27 @@ function createItemFormControl(list: () => List | undefined) {
     newItemOpen.value = false
     editingId.value = null
     newItemKey.value++
+    expanded.value = 'overview'
     if (!columnMode.value) return
     const target = opener
     opener = null
     await nextTick()
     if (target?.isConnected) target.focus()
+    else if (hasOverview()) overviewCard.value?.focusStart()
+  }
+
+  // The bar of the collapsed form card, or the collapse button of the
+  // overview card. Neither resets the form: what was typed stays.
+  function expandForm() {
+    void showForm()
+  }
+
+  // The bar of the collapsed overview card, or the collapse button of the form
+  // card.
+  async function expandOverview() {
+    expanded.value = 'overview'
+    await nextTick()
+    overviewCard.value?.focusStart()
   }
 
   // Deleting closes the form; the list offers undo in a toast.
@@ -145,6 +188,9 @@ function createItemFormControl(list: () => List | undefined) {
   return {
     columnMode,
     card,
+    overviewCard,
+    expanded,
+    formExpanded,
     newItemOpen,
     newItemName,
     newItemKey,
@@ -154,6 +200,8 @@ function createItemFormControl(list: () => List | undefined) {
     openNew,
     close,
     removeEditing,
+    expandForm,
+    expandOverview,
   }
 }
 
@@ -164,8 +212,11 @@ export type ItemFormControl = ReturnType<typeof createItemFormControl>
 const ITEM_FORM_CONTROL: InjectionKey<ItemFormControl> = Symbol('itemFormControl')
 
 /** Creates the control and hands it to all components below the caller. */
-export function provideItemFormControl(list: () => List | undefined): ItemFormControl {
-  const control = createItemFormControl(list)
+export function provideItemFormControl(
+  list: () => List | undefined,
+  hasOverview: () => boolean,
+): ItemFormControl {
+  const control = createItemFormControl(list, hasOverview)
   provide(ITEM_FORM_CONTROL, control)
   return control
 }

@@ -54,7 +54,11 @@ const overview = provideContextOverview(
 // The item form of this screen; ListItems opens it, ItemFormHost shows it.
 // columnMode: from the width of the context column on, the chips sit in the
 // list column instead of the header.
-const { columnMode } = provideItemFormControl(() => list.value)
+// There is no overview card to show yet, so the form card is always open.
+const { columnMode } = provideItemFormControl(
+  () => list.value,
+  () => false,
+)
 
 const active = computed(() => lists.activeLists(props.groupId))
 const archived = computed(() => lists.archivedLists(props.groupId))

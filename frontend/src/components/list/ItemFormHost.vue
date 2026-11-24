@@ -13,8 +13,19 @@ const props = defineProps<{ list: List; members: GroupMember[] }>()
 
 // Destructured, so the template unwraps the refs: only refs at the top level
 // of <script setup> lose their .value there.
-const { columnMode, card, newItemOpen, newItemName, newItemKey, editing, close, removeEditing } =
-  useItemFormControl()
+const {
+  columnMode,
+  card,
+  newItemOpen,
+  newItemName,
+  newItemKey,
+  editing,
+  formExpanded,
+  close,
+  removeEditing,
+  expandForm,
+  expandOverview,
+} = useItemFormControl()
 
 // Who added the item; null if unknown (left the household).
 function creatorOf(item: Item) {
@@ -58,8 +69,11 @@ function setCard(instance: unknown) {
       :initial-name="editing ? undefined : newItemName"
       :creator-name="editing ? creatorOf(editing) : undefined"
       :focus-on-mount="newItemOpen || editing !== undefined"
+      :collapsed="!formExpanded"
       @close="close"
       @remove="removeEditing"
+      @expand="expandForm"
+      @collapse="expandOverview"
     />
   </ContextColumn>
 </template>

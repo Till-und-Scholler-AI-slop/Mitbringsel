@@ -271,6 +271,17 @@
       "details": "Add with details",
       "detailsCard": "Add item with quantity and note"
     },
+    "context": {
+      "collapse": "Collapse",
+      "form": {
+        "labelNew": "Create",
+        "labelEdit": "Edit",
+        "collapseNew": "Collapse create and open overview",
+        "collapseEdit": "Collapse edit and open overview",
+        "barSummaryNew": "In {list} · with quantity, unit and note",
+        "barTitleEdit": "Edit {name}"
+      }
+    },
     "itemForm": {
       "newTitle": "New item",
       "newIn": "New in {list}",
