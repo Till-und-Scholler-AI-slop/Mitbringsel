@@ -13,7 +13,8 @@ import type { Group, List } from '@/types/api'
 // toasts of the app show here, as only these pages have them so far.
 // bottomBar: the page keeps a bar at the bottom of the phone screen (the
 // quick-add bar of the list view); the toasts move above it.
-defineProps<{ groupId?: string; listId?: string; bottomBar?: boolean }>()
+// pinnedListId: the list pinned in the context column, marked in the sidebar.
+defineProps<{ groupId?: string; listId?: string; pinnedListId?: string; bottomBar?: boolean }>()
 const emit = defineEmits<{ listActions: [list: List] }>()
 
 const router = useRouter()
@@ -31,6 +32,7 @@ function openCreated(group: Group) {
         class="sidebar"
         :group-id="groupId"
         :list-id="listId"
+        :pinned-list-id="pinnedListId"
         @create="createOpen = true"
         @list-actions="emit('listActions', $event)"
       />

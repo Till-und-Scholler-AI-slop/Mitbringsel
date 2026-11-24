@@ -50,7 +50,9 @@ beforeEach(() => {
   }
 })
 
-async function mountFrame(props: { groupId?: string; listId?: string } = {}) {
+async function mountFrame(
+  props: { groupId?: string; listId?: string; pinnedListId?: string } = {},
+) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -129,6 +131,37 @@ describe('AppFrame', () => {
     await wrapper.get('.side .lists a').trigger('contextmenu')
 
     expect(wrapper.emitted('listActions')).toEqual([[expect.objectContaining({ id: 'l1' })]])
+    wrapper.unmount()
+  })
+
+  it('passes the pinned list on to the sidebar', async () => {
+    groupsService.list.mockResolvedValue([
+      {
+        id: 'g1',
+        name: 'WG',
+        role: 'owner',
+        members: [],
+        createdAt: '2026-01-01T10:00:00Z',
+        updatedAt: '2026-01-01T10:00:00Z',
+      },
+    ])
+    listsService.list.mockResolvedValue([
+      {
+        id: 'l1',
+        groupId: 'g1',
+        name: 'Supermarkt',
+        icon: 'supermarket',
+        archivedAt: null,
+        createdAt: '2026-01-01T10:00:00Z',
+        updatedAt: '2026-01-01T10:00:00Z',
+        serverSeq: 1,
+      },
+    ])
+    await useGroupsStore().load()
+    await useListsStore().load('g1')
+    const { wrapper } = await mountFrame({ groupId: 'g1', listId: 'l2', pinnedListId: 'l1' })
+
+    expect(wrapper.get('.side .lists [role="img"]').attributes('aria-label')).toBe('pinned')
     wrapper.unmount()
   })
 })

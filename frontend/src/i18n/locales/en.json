@@ -479,7 +479,8 @@
     "households": "Households",
     "lists": "Lists of {name}",
     "listActionsHint": "Right-click or press Context Menu (Shift+F10) to edit, archive or delete",
-    "openItems": "{count} open item | {count} open items"
+    "openItems": "{count} open item | {count} open items",
+    "pinned": "pinned"
   },
   "sync": {
     "synced": "Synced",

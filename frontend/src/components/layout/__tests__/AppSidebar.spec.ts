@@ -201,7 +201,7 @@ afterEach(() => {
 })
 
 async function mountSidebar(
-  props: { groupId?: string; listId?: string } = {},
+  props: { groupId?: string; listId?: string; pinnedListId?: string } = {},
   locale: 'en' | 'de' = 'en',
 ) {
   const router = createRouter({
@@ -267,6 +267,27 @@ describe('AppSidebar', () => {
       ['Baumarkt', '1', '/groups/g1/lists/l2'],
     ])
     expect(links.map((l) => l.attributes('aria-current'))).toEqual([undefined, 'page'])
+    wrapper.unmount()
+  })
+
+  it('marks the pinned list with a pin the screen reader announces', async () => {
+    const { wrapper } = await mountSidebar({ groupId: 'g1', listId: 'l2', pinnedListId: 'l1' })
+
+    const [supermarket, hardware] = wrapper.get('.lists').findAll('a')
+    const pin = supermarket!.get('[role="img"]')
+    expect(pin.attributes('aria-label')).toBe('pinned')
+    expect(hardware!.find('[role="img"]').exists()).toBe(false)
+    wrapper.unmount()
+
+    const german = await mountSidebar({ groupId: 'g1', listId: 'l2', pinnedListId: 'l1' }, 'de')
+    expect(german.wrapper.get('.lists [role="img"]').attributes('aria-label')).toBe('angepinnt')
+    german.wrapper.unmount()
+  })
+
+  it('shows no pin without a pinned list', async () => {
+    const { wrapper } = await mountSidebar({ groupId: 'g1', listId: 'l2' })
+
+    expect(wrapper.find('.lists [role="img"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
