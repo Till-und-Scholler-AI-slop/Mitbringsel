@@ -272,6 +272,7 @@
     "itemForm": {
       "newTitle": "New item",
       "newIn": "New in {list}",
+      "in": "In {list}",
       "name": "Name",
       "required": "required",
       "quantity": "Quantity",

@@ -994,7 +994,7 @@ describe('ListView: editing items', () => {
   })
 })
 
-describe('ListView: item panel on a wide screen', () => {
+describe('ListView: context column on a wide screen', () => {
   const makeItems = () => [item('i1', 'Milch', { note: 'Hafer' }), item('i2', 'Brot')]
   const changed = (changedItem: Item): ServerMessage => ({
     type: 'itemChanged',
@@ -1012,8 +1012,9 @@ describe('ListView: item panel on a wide screen', () => {
     vi.unstubAllGlobals()
   })
 
-  const panelOf = (w: Mounted) => w.find('aside.panel')
-  const nameField = (w: Mounted) => w.get('aside.panel input').element as HTMLInputElement
+  const cardOf = (w: Mounted) => w.get('.context-column section')
+  const titleOf = (w: Mounted) => cardOf(w).get('h2').text()
+  const nameField = (w: Mounted) => cardOf(w).get('input').element as HTMLInputElement
   const rows = (w: Mounted) => w.findAll('.open li')
 
   async function openEdit(w: Mounted, index: number) {
@@ -1024,7 +1025,24 @@ describe('ListView: item panel on a wide screen', () => {
     return button.element
   }
 
-  it('edits an item in the panel next to the list, not in a dialog', async () => {
+  async function typeName(w: Mounted, value: string) {
+    nameField(w).value = value
+    await cardOf(w).get('input').trigger('input')
+  }
+
+  it('offers an empty form for a new item next to the list, without taking the focus', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    expect(titleOf(wrapper)).toBe('New item')
+    expect(cardOf(wrapper).get('.tag').text()).toBe('New in Supermarkt')
+    expect(nameField(wrapper).value).toBe('')
+    expect(document.activeElement).not.toBe(nameField(wrapper))
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('edits an item in the card, not in a dialog, and offers a new item again after saving', async () => {
     itemsService.list.mockResolvedValue(makeItems())
     itemsService.update.mockResolvedValue(item('i1', 'Hafermilch', { note: 'Hafer', serverSeq: 2 }))
     const { wrapper } = await mountView()
@@ -1032,21 +1050,21 @@ describe('ListView: item panel on a wide screen', () => {
     const button = await openEdit(wrapper, 0)
 
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
-    expect(panelOf(wrapper).get('h2').text()).toBe('Edit item')
+    expect(titleOf(wrapper)).toBe('Milch')
     expect(document.activeElement).toBe(nameField(wrapper))
     expect(rows(wrapper)[0]!.get('.editing').text()).toBe('Editing')
     expect(button.getAttribute('aria-haspopup')).toBeNull()
 
-    nameField(wrapper).value = 'Hafermilch'
-    await wrapper.get('aside.panel input').trigger('input')
-    await wrapper.get('aside.panel form').trigger('submit')
+    await typeName(wrapper, 'Hafermilch')
+    await cardOf(wrapper).get('form').trigger('submit')
     await flushPromises()
 
     expect(itemsService.update).toHaveBeenCalledWith('i1', {
       name: 'Hafermilch',
       clock: expect.any(String),
     })
-    expect(panelOf(wrapper).exists()).toBe(false)
+    expect(titleOf(wrapper)).toBe('New item')
+    expect(nameField(wrapper).value).toBe('')
     expect(wrapper.find('.editing').exists()).toBe(false)
     // Back where the user was.
     expect(document.activeElement).toBe(button)
@@ -1058,7 +1076,7 @@ describe('ListView: item panel on a wide screen', () => {
     const { wrapper } = await mountView()
 
     await openEdit(wrapper, 0)
-    await wrapper.get('aside.panel input').setValue('Hafermilch')
+    await typeName(wrapper, 'Hafermilch')
     await openEdit(wrapper, 1)
 
     expect(nameField(wrapper).value).toBe('Brot')
@@ -1072,7 +1090,7 @@ describe('ListView: item panel on a wide screen', () => {
     const { wrapper } = await mountView()
 
     await openEdit(wrapper, 0)
-    await wrapper.get('aside.panel input').setValue('Hafermilch')
+    await typeName(wrapper, 'Hafermilch')
     serverEvents.emit(changed(item('i1', 'Milch', { note: 'Soja', serverSeq: 2 })))
     await flushPromises()
 
@@ -1089,35 +1107,67 @@ describe('ListView: item panel on a wide screen', () => {
     await wrapper.get('.add-bar .details').trigger('click')
     await flushPromises()
 
-    expect(panelOf(wrapper).get('h2').text()).toBe('New item')
+    expect(titleOf(wrapper)).toBe('New item')
     expect(nameField(wrapper).value).toBe('Tomaten')
+    expect(document.activeElement).toBe(nameField(wrapper))
     expect(wrapper.find('.editing').exists()).toBe(false)
     expect(wrapper.get('.add-bar .details').attributes('aria-haspopup')).toBeUndefined()
     wrapper.unmount()
   })
 
-  it('closes with Escape and gives the focus back', async () => {
+  it('stays open and empty after adding, for the next item', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    itemsService.create.mockImplementation(async (_listId, req) =>
+      item(req.id ?? 'i3', req.name, { serverSeq: 3 }),
+    )
+    const { wrapper } = await mountView()
+
+    await typeName(wrapper, 'Tomaten')
+    await cardOf(wrapper).get('form').trigger('submit')
+    await flushPromises()
+
+    expect(openNames(wrapper)).toHaveLength(3)
+    expect(openNames(wrapper)).toContain('Tomaten')
+    expect(titleOf(wrapper)).toBe('New item')
+    expect(nameField(wrapper).value).toBe('')
+    expect(document.activeElement).toBe(nameField(wrapper))
+    wrapper.unmount()
+  })
+
+  it('empties the new item form on cancel', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await typeName(wrapper, 'Tomaten')
+    await cardOf(wrapper).get('.cancel').trigger('click')
+    await flushPromises()
+
+    expect(nameField(wrapper).value).toBe('')
+    wrapper.unmount()
+  })
+
+  it('closes the edit form with Escape and gives the focus back', async () => {
     itemsService.list.mockResolvedValue(makeItems())
     const { wrapper } = await mountView()
 
     const button = await openEdit(wrapper, 0)
-    await wrapper.get('aside.panel input').trigger('keydown', { key: 'Escape' })
+    await cardOf(wrapper).get('input').trigger('keydown', { key: 'Escape' })
     await flushPromises()
 
-    expect(panelOf(wrapper).exists()).toBe(false)
+    expect(titleOf(wrapper)).toBe('New item')
     expect(document.activeElement).toBe(button)
     wrapper.unmount()
   })
 
-  it('closes when the item is deleted from it, with undo', async () => {
+  it('offers a new item again when the item is deleted from it, with undo', async () => {
     itemsService.list.mockResolvedValue(makeItems())
     const { wrapper } = await mountView()
 
     await openEdit(wrapper, 0)
-    await wrapper.get('aside.panel .remove').trigger('click')
+    await cardOf(wrapper).get('.remove').trigger('click')
     await flushPromises()
 
-    expect(panelOf(wrapper).exists()).toBe(false)
+    expect(titleOf(wrapper)).toBe('New item')
     expect(openNames(wrapper)).toEqual(['Brot'])
     expect(wrapper.get('.toast .text').text()).toBe('“Milch” removed')
     wrapper.unmount()

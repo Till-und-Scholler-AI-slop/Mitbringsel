@@ -56,7 +56,7 @@ Ab `80rem` (1280 px) bekommt die Listenansicht eine Kontextspalte neben der List
 
 - Die Vergrößerung ab `137.5rem` läuft über `html { font-size: 110% }`, nicht über `zoom` wie im Design. Feste Breiten stehen deshalb in `rem`; Konturen und Schatten in `px` bleiben gleich.
 - Unter `80rem` stapelt das Design die Karten unter die Liste. Das übernehmen wir nicht: Dort bleibt es beim Dialog.
-- Media Queries können keine Variablen lesen ([ADR 0003](adr/0003-eigenes-css-mit-tokens.md)); jeder Breakpoint steht als Konstante neben `ITEM_PANEL_QUERY` und wird im CSS mit Verweis darauf wiederholt.
+- Media Queries können keine Variablen lesen ([ADR 0003](adr/0003-eigenes-css-mit-tokens.md)); `80rem` steht als `CONTEXT_COLUMN_QUERY` in `components/list/contextColumn.ts` und wird im CSS mit Verweis darauf wiederholt; `137.5rem` gibt es nur im CSS (`base.css`, `ListView.vue`).
 
 ### Aufbau
 
@@ -77,7 +77,7 @@ Immer ist genau eine Karte offen. Sie nimmt die restliche Höhe ein und scrollt 
 
 ### Verhalten
 
-- Nach dem Laden ist der Überblick offen.
+- Nach dem Laden ist der Überblick offen. Bis es den Überblick gibt (#176), zeigt die Kontextspalte nur die Formular-Karte: ohne geöffneten Artikel ein leeres Formular für einen neuen.
 - Der gewählte Tab und die angepinnte Liste werden pro Gerät und Haushalt gemerkt, nicht synchronisiert. Ohne gemerkten Tab öffnet „Aktivität“, ohne gemerkten Pin ist die erste andere aktive Liste angepinnt. Wird die angepinnte Liste die aktuelle, wechselt der Pin; eine archivierte oder gelöschte Liste wird vergessen. Hat der Haushalt nur eine aktive Liste, ist „Zweite Liste“ deaktiviert. Den Pin in der Seitenleiste gibt es nur, solange „Zweite Liste“ gewählt ist.
 - Der Button am Quick-Add öffnet die Erstellen-Karte, ein Klick auf einen Artikel die Bearbeiten-Karte.
 - Nach „Hinzufügen“ bleibt die Erstellen-Karte offen und leer, der Fokus geht zurück ins Namensfeld.

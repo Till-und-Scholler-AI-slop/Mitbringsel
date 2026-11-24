@@ -26,7 +26,7 @@ const { t } = useI18n()
 const items = useItemsStore()
 const recentChanges = useRecentChangesStore()
 const { removeChecked } = useRemoveItems()
-const { panelMode, editingId, startEdit, openNew } = useItemFormControl()
+const { columnMode, editingId, startEdit, openNew } = useItemFormControl()
 
 const itemsError = useErrorMessage(() => items.errorCodeOf(props.list.id))
 
@@ -68,7 +68,12 @@ function toggle(item: Item) {
   <div class="list-items">
     <!-- First in the DOM and on the desktop, so it comes first for the
        keyboard; on the phone CSS moves it to the bottom of the screen. -->
-    <QuickAddBar class="add-bar" :list-id="list.id" :opens-dialog="!panelMode" @details="openNew" />
+    <QuickAddBar
+      class="add-bar"
+      :list-id="list.id"
+      :opens-dialog="!columnMode"
+      @details="openNew"
+    />
 
     <p v-if="list.archivedAt" class="archived">
       <BaseIcon name="archive" :size="18" /> {{ t('list.archivedBadge') }}
@@ -102,9 +107,9 @@ function toggle(item: Item) {
           :item="item"
           :person="personOf(item)"
           :recent="recentOf(item)"
-          :editing="panelMode && editingId === item.id"
+          :editing="columnMode && editingId === item.id"
           :pending="items.isPending(item.id)"
-          :opens-dialog="!panelMode"
+          :opens-dialog="!columnMode"
           @toggle="toggle(item)"
           @edit="startEdit(item)"
         />

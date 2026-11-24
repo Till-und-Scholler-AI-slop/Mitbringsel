@@ -107,36 +107,34 @@ useLeaveRemovedGroup(() => props.groupId)
     @list-actions="dialogs?.openActions($event.id)"
   >
     <div class="page">
-      <div class="column">
-        <ListHeader :group="group">
-          <ListChips
-            v-if="list || state === 'noLists'"
-            :group-id="groupId"
-            :lists="active"
-            :current-id="listKey"
-            :open-count="openCount"
-            :archived-count="archived.length"
-            :current-archived="list?.archivedAt != null"
-            @create="dialogs?.openCreate()"
-            @actions="dialogs?.openActions($event.id)"
-            @archive="dialogs?.openArchive()"
-          />
-        </ListHeader>
+      <ListHeader class="header" :group="group">
+        <ListChips
+          v-if="list || state === 'noLists'"
+          :group-id="groupId"
+          :lists="active"
+          :current-id="listKey"
+          :open-count="openCount"
+          :archived-count="archived.length"
+          :current-archived="list?.archivedAt != null"
+          @create="dialogs?.openCreate()"
+          @actions="dialogs?.openActions($event.id)"
+          @archive="dialogs?.openArchive()"
+        />
+      </ListHeader>
 
-        <main class="content" :class="{ 'content--bar': list }">
-          <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
-          <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
+      <main class="content" :class="{ 'content--bar': list }">
+        <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
+        <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
 
-          <ListItems v-if="list" :list="list" :members="members" />
-          <ListStateNotice
-            v-else-if="state !== 'ready'"
-            :state="state"
-            :group-id="groupId"
-            @create="dialogs?.openCreate()"
-          />
-        </main>
-      </div>
-      <!-- Next to the column: on a wide screen the form is a panel there. -->
+        <ListItems v-if="list" :list="list" :members="members" />
+        <ListStateNotice
+          v-else-if="state !== 'ready'"
+          :state="state"
+          :group-id="groupId"
+          @create="dialogs?.openCreate()"
+        />
+      </main>
+      <!-- On a wide screen the context column next to the list. -->
       <ItemFormHost v-if="list" :list="list" :members="members" />
 
       <ListDialogs ref="dialogs" :group-id="groupId" :current-id="listKey" />
@@ -145,17 +143,11 @@ useLeaveRemovedGroup(() => props.groupId)
 </template>
 
 <style scoped>
-.page,
-.column {
+.page {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
-}
-
-.column {
-  flex: 1;
-  min-width: 0;
 }
 
 .content {
@@ -183,18 +175,39 @@ useLeaveRemovedGroup(() => props.groupId)
   }
 }
 
-/* Header and list in one column, the item panel next to it (design
-   "markt2-desktop"). 79rem is ITEM_PANEL_QUERY in itemPanel.ts. */
-@media (min-width: 79rem) {
+/* Large screens (design "markt2-kontext-*", ADR 0008): the header across
+   the list and the context column (ItemFormHost) next to the list. 80rem is
+   CONTEXT_COLUMN_QUERY in contextColumn.ts. */
+@media (min-width: 80rem) {
   .page {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 51.25rem) 27.5rem;
+    grid-template-rows: auto 1fr;
+    justify-content: center;
+    align-content: start;
+    column-gap: var(--space-8);
+    row-gap: 1.375rem;
+    padding: 2.5rem var(--space-8) 3.5rem;
   }
 
-  .column {
-    flex: 999 1 35rem;
-    align-self: stretch;
+  .header {
+    grid-column: 1 / -1;
+  }
+
+  .content,
+  .content--bar {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* WQHD: wider columns; base.css scales everything by 1.1 from here. */
+@media (min-width: 137.5rem) {
+  .page {
+    grid-template-columns: minmax(0, 53.75rem) 30rem;
   }
 }
 </style>

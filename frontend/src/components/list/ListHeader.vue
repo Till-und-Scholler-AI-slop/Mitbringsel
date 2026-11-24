@@ -158,4 +158,13 @@ function openCreatedGroup(created: Group) {
     box-shadow: 0 0 0 2.5px var(--color-bg);
   }
 }
+
+/* Large screens: across the list and the context column; ListView's grid
+   sets the width and the space around (80rem: CONTEXT_COLUMN_QUERY). */
+@media (min-width: 80rem) {
+  .bar {
+    max-width: none;
+    padding: 0;
+  }
+}
 </style>

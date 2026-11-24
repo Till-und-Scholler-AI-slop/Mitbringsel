@@ -79,7 +79,7 @@ function item(id: string, name: string): Item {
   }
 }
 
-// matchMedia decides between dialog (false) and panel (true); jsdom has none.
+// matchMedia decides between dialog (false) and card (true); jsdom has none.
 function stubPanelMode(matches: boolean) {
   vi.stubGlobal(
     'matchMedia',
@@ -180,11 +180,11 @@ describe('useItemFormControl', () => {
     expect(form.newItemOpen.value).toBe(true)
   })
 
-  it('moves the focus into the panel when the same item is edited again', async () => {
+  it('moves the focus into the card when the same item is edited again', async () => {
     const { form } = setup()
     await loadItems(item('i1', 'Milch'))
     const focusName = vi.fn()
-    form.panel.value = { focusName }
+    form.card.value = { focusName }
 
     form.startEdit(item('i1', 'Milch'))
     expect(focusName).not.toHaveBeenCalled()
@@ -193,7 +193,7 @@ describe('useItemFormControl', () => {
     expect(focusName).toHaveBeenCalledOnce()
   })
 
-  it('gives the focus back to the opener when the panel closes', async () => {
+  it('gives the focus back to the opener when the form in the card closes', async () => {
     stubPanelMode(true)
     const { form, opener } = setup()
     await loadItems(item('i1', 'Milch'))
@@ -219,15 +219,28 @@ describe('useItemFormControl', () => {
     expect(document.activeElement).toBe(document.body)
   })
 
+  it('starts a new empty form after closing, so the card does not keep the old input', async () => {
+    const { form } = setup()
+
+    form.openNew('Tomaten')
+    const openKey = form.newItemKey.value
+    await form.close()
+
+    expect(form.newItemOpen.value).toBe(false)
+    expect(form.newItemKey.value).not.toBe(openKey)
+  })
+
   it('closes on switching lists without a deleted-meanwhile toast', async () => {
     const { form, current } = setup()
     await loadItems(item('i1', 'Milch'))
 
     form.startEdit(item('i1', 'Milch'))
+    const keyBefore = form.newItemKey.value
     current.value = list('l2')
     await flushPromises()
 
     expect(form.editingId.value).toBeNull()
+    expect(form.newItemKey.value).not.toBe(keyBefore)
     expect(useToastsStore().toasts).toEqual([])
   })
 

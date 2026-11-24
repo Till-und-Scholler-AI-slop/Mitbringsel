@@ -1,7 +1,7 @@
 import { computed, inject, nextTick, provide, ref, watch, type InjectionKey } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { ITEM_PANEL_QUERY } from '@/components/list/itemPanel'
+import { CONTEXT_COLUMN_QUERY } from '@/components/list/contextColumn'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useRemoveItems } from '@/composables/useRemoveItems'
 import { useGroupsStore } from '@/stores/groups'
@@ -10,17 +10,18 @@ import { useListsStore } from '@/stores/lists'
 import { useToastsStore } from '@/stores/toasts'
 import type { Item, List } from '@/types/api'
 
-/** What the panel offers to the control: moving the focus into its form. */
-export interface ItemFormPanelHandle {
+/** What the form card offers to the control: moving the focus into its form. */
+export interface ItemFormCardHandle {
   focusName(): void
 }
 
 /**
  * Which item form is open in the list view, and how it opens and closes: a
  * form for a new item (with the name typed into the quick-add bar) or for
- * editing an item. Below ITEM_PANEL_QUERY the form is a dialog, from it on a
- * panel next to the list; the panel is no dialog, so the control gives the
- * focus back itself when it closes.
+ * editing an item. Below CONTEXT_COLUMN_QUERY the form is a dialog, from it on
+ * a card in the context column next to the list. The card is always there:
+ * "closed" means it shows an empty form for a new item. It is no dialog, so
+ * the control gives the focus back itself when the form closes.
  *
  * ListView creates it with provideItemFormControl; the parts of the view
  * that open the form (ListItems) or show it (ItemFormHost) take it with
@@ -37,15 +38,15 @@ function createItemFormControl(list: () => List | undefined) {
   const toasts = useToastsStore()
   const { removeItem } = useRemoveItems()
 
-  const panelMode = useMediaQuery(ITEM_PANEL_QUERY)
-  // Set by ItemFormHost while the panel is shown.
-  const panel = ref<ItemFormPanelHandle | null>(null)
-  // Where the focus goes back to when the panel closes. A dialog does that
-  // itself.
+  const columnMode = useMediaQuery(CONTEXT_COLUMN_QUERY)
+  // Set by ItemFormHost while the card is shown.
+  const card = ref<ItemFormCardHandle | null>(null)
+  // Where the focus goes back to when the card's form closes. A dialog does
+  // that itself.
   let opener: HTMLElement | null = null
 
-  // The form for a new item. The key changes with every opening, so the panel
-  // starts afresh even if it was open already.
+  // The form for a new item. The key changes with every opening and closing,
+  // so the card starts afresh even if it showed a new item already.
   const newItemOpen = ref(false)
   const newItemName = ref('')
   const newItemKey = ref(0)
@@ -55,8 +56,8 @@ function createItemFormControl(list: () => List | undefined) {
   let editingName = ''
   const editing = computed(() => (editingId.value ? items.byId(editingId.value) : undefined))
 
-  // The panel stays open while the list is used beside it, so opening the
-  // form for something else just switches it.
+  // The card stays while the list is used beside it, so opening the form for
+  // something else just switches it.
   function rememberOpener() {
     const active = document.activeElement
     if (active instanceof HTMLElement && active !== document.body) opener = active
@@ -66,7 +67,7 @@ function createItemFormControl(list: () => List | undefined) {
     rememberOpener()
     newItemOpen.value = false
     if (editingId.value === item.id) {
-      panel.value?.focusName()
+      card.value?.focusName()
       return
     }
     editingName = item.name
@@ -81,12 +82,13 @@ function createItemFormControl(list: () => List | undefined) {
     newItemOpen.value = true
   }
 
-  // On the panel the focus goes back to where the form was opened from, if
+  // In the card the focus goes back to where the form was opened from, if
   // that is still there (a deleted item takes its row along).
   async function close() {
     newItemOpen.value = false
     editingId.value = null
-    if (!panelMode.value) return
+    newItemKey.value++
+    if (!columnMode.value) return
     const target = opener
     opener = null
     await nextTick()
@@ -107,6 +109,7 @@ function createItemFormControl(list: () => List | undefined) {
     () => {
       newItemOpen.value = false
       editingId.value = null
+      newItemKey.value++
     },
   )
 
@@ -132,8 +135,8 @@ function createItemFormControl(list: () => List | undefined) {
   })
 
   return {
-    panelMode,
-    panel,
+    columnMode,
+    card,
     newItemOpen,
     newItemName,
     newItemKey,
