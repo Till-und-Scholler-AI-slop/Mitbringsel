@@ -1,8 +1,11 @@
 name: Deploy
 
 # Deploys already built images to one environment on the VPS. Called by
-# ci.yml after a push to main (staging); can also be started by hand from the
-# Actions tab, e.g. to roll back to an older commit.
+# ci.yml after a push to main (staging) and by release.yml for a published
+# release (production). Can also be started by hand from the Actions tab,
+# e.g. to roll back staging to an older commit. For production, start
+# release.yml from the version's tag instead; the environment "production"
+# only allows tags v*.
 #
 # Server details are not in this file. They live in the GitHub Environment
 # of the same name:
@@ -27,7 +30,7 @@ on:
     inputs:
       environment:
         type: choice
-        options: [staging]
+        options: [staging, production]
         required: true
       image-tag:
         description: Full commit SHA on main whose images should be deployed
