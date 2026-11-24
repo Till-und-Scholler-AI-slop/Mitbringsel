@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -216,4 +216,24 @@ describe('GroupDangerSection', () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('disables leaving or deleting with a hint while offline, also inside the open dialog', async () => {
+    const { wrapper } = await mountSection('member')
+    await wrapper.get('button.open').trigger('click')
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(wrapper.get('button.open').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.danger > [role="status"]').text()).toBe('Requires an internet connection.')
+    expect(wrapper.get('dialog [role="status"]').text()).toBe('Requires an internet connection.')
+    expect(wrapper.get('dialog .confirm').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('dialog .cancel').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })

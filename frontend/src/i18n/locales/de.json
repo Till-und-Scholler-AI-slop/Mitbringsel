@@ -115,7 +115,8 @@
     "failed": {
       "title": "Das hat nicht geklappt",
       "card": "Die Einladung konnte nicht geladen werden"
-    }
+    },
+    "offline": "Ohne Internet kannst du die Einladung gerade nicht öffnen oder annehmen. Sobald du wieder online bist, geht es weiter."
   },
   "login": {
     "title": "Anmelden",
@@ -374,6 +375,7 @@
   "settings": {
     "title": "Haushalt verwalten",
     "back": "Zurück zum Haushalt",
+    "offline": "Du kannst die Angaben ansehen, aber Änderungen und Einladungen gehen erst wieder mit Internetverbindung.",
     "loading": "Haushalt wird geladen …",
     "loadFailed": "Der Haushalt konnte nicht geladen werden.",
     "missing": {
@@ -464,6 +466,7 @@
         "title": "Offene Links",
         "count": "{count} von {max}",
         "empty": "Keine offenen Links.",
+        "offline": "Offene Links sind nur mit Internetverbindung sichtbar.",
         "loadFailed": "Die offenen Links konnten nicht geladen werden.",
         "createdBy": "Erstellt von {name}",
         "createdByYou": "Erstellt von dir",

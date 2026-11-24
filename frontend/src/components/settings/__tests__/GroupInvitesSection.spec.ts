@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -148,4 +148,27 @@ describe('GroupInvitesSection', () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     expect(wrapper.find('.link').exists()).toBe(true)
   })
+
+  it('disables creating while offline and loads open links once back online', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const wrapper = await mountSection()
+
+    expect(service.list).not.toHaveBeenCalled()
+    expect(wrapper.get('button.create').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('[role="status"]').map((n) => n.text())).toEqual([
+      'Requires an internet connection.',
+      'Open links are only visible with an internet connection.',
+    ])
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    window.dispatchEvent(new Event('online'))
+    await flushPromises()
+
+    expect(service.list).toHaveBeenCalledWith('g1')
+    expect(wrapper.get('button.create').attributes('disabled')).toBeUndefined()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })

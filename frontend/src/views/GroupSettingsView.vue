@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import GroupInvitesSection from '@/components/settings/GroupInvitesSection.vue'
 import GroupDangerSection from '@/components/settings/GroupDangerSection.vue'
@@ -16,6 +17,7 @@ import SettingsCard from '@/components/settings/SettingsCard.vue'
 import SyncStatus from '@/components/layout/SyncStatus.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { canManage, memberActions, sortMembers } from '@/services/groupRoles'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
@@ -29,6 +31,7 @@ const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 const groups = useGroupsStore()
+const { online } = useOnlineStatus()
 const loadError = useErrorMessage(() => groups.errorCode)
 
 const renameOpen = ref(false)
@@ -58,6 +61,13 @@ const state = computed<ViewState>(() => {
 // of the URL has to load them first.
 onMounted(() => {
   if (groups.status === 'idle') groups.load()
+})
+
+// The load that failed offline is repeated once the connection is back.
+watch(online, (isOnline) => {
+  if (isOnline && groups.status === 'error') {
+    groups.load()
+  }
 })
 
 useLeaveRemovedGroup(() => props.groupId)
@@ -108,6 +118,8 @@ function goBack() {
       </BaseEmptyState>
 
       <template v-else-if="group">
+        <BaseOfflineNotice v-if="!online" :text="t('settings.offline')" />
+
         <!-- Two columns side by side on a wide screen (design
              "verwalten-desktop-*"), one below the other on a phone. The
              order in the DOM is the reading order in both. -->
@@ -120,6 +132,7 @@ function goBack() {
                   type="button"
                   class="rename"
                   aria-haspopup="dialog"
+                  :disabled="!online"
                   @click="renameOpen = true"
                 >
                   <BaseIcon name="pencil" :size="18" /> {{ t('settings.name.rename') }}
@@ -150,6 +163,7 @@ function goBack() {
                   :member="member"
                   :is-me="member.userId === auth.user?.id"
                   :can-act="canAct(member.userId, member.role)"
+                  :offline="!online"
                   @act="selectedId = member.userId"
                 />
               </ul>
@@ -295,7 +309,6 @@ function goBack() {
   color: var(--color-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
-  cursor: pointer;
 }
 
 .name-row {

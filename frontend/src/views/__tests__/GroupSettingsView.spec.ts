@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -338,4 +338,59 @@ describe('GroupSettingsView', () => {
     expect(wrapper.text()).toContain('not found')
     wrapper.unmount()
   })
+
+  it('shows an offline card, disables management actions and reloads open links when back online', async () => {
+    const { useGroupsStore } = await import('@/stores/groups')
+    service.list.mockResolvedValue([group('owner', [member('u-mehmet', 'Mehmet', 'member')])])
+    await useGroupsStore().load()
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('.offline-notice--card').text()).toContain(
+      'You can view these details, but changes and invites require an internet connection.',
+    )
+    expect(wrapper.get('.name').text()).toBe('WG Kaiserstraße')
+    expect(wrapper.findAll('.member .name').map((e) => e.text())).toEqual(['Jonas (You)', 'Mehmet'])
+    expect(wrapper.get('button.rename').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.member button.act').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.invites button.create').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.danger button.open').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.invites [role="alert"]').exists()).toBe(false)
+    expect(wrapper.get('.invites .list [role="status"]').text()).toBe(
+      'Open links are only visible with an internet connection.',
+    )
+    expect(invitesService.list).not.toHaveBeenCalled()
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    window.dispatchEvent(new Event('online'))
+    await flushPromises()
+
+    expect(wrapper.find('.offline-notice--card').exists()).toBe(false)
+    expect(wrapper.get('button.rename').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('.member button.act').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('.invites button.create').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('.danger button.open').attributes('disabled')).toBeUndefined()
+    expect(invitesService.list).toHaveBeenCalledWith('g1')
+    wrapper.unmount()
+  })
+
+  it('reloads the household automatically when back online after a failed load', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { wrapper } = await mountView()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+
+    service.list.mockResolvedValueOnce([group('member')])
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    window.dispatchEvent(new Event('online'))
+    await flushPromises()
+
+    expect(wrapper.get('.name').text()).toBe('WG Kaiserstraße')
+    wrapper.unmount()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })

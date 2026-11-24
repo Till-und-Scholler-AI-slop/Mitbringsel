@@ -9,8 +9,12 @@ import type { GroupMember } from '@/types/api'
 const AVATAR_SIZE = 44
 
 // canAct: the viewer may do something with this member; the button then
-// opens the actions, which the parent shows.
-defineProps<{ member: GroupMember; isMe: boolean; canAct: boolean }>()
+// opens the actions, which the parent shows. offline disables it while the
+// page shows its offline notice above.
+withDefaults(
+  defineProps<{ member: GroupMember; isMe: boolean; canAct: boolean; offline?: boolean }>(),
+  { offline: false },
+)
 defineEmits<{ act: [] }>()
 
 const { t } = useI18n()
@@ -32,6 +36,7 @@ const { t } = useI18n()
       class="act"
       :aria-label="t('settings.members.actionsFor', { name: member.displayName })"
       aria-haspopup="dialog"
+      :disabled="offline"
       @click="$emit('act')"
     >
       <BaseIcon name="ellipsis" :size="22" :stroke-width="3" />
@@ -89,6 +94,5 @@ const { t } = useI18n()
   border-radius: var(--radius-full);
   background: var(--color-surface);
   color: var(--color-text);
-  cursor: pointer;
 }
 </style>

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import { createAppI18n } from '@/i18n'
@@ -16,7 +16,9 @@ beforeEach(() => {
   }
 })
 
-function mountDialog(props: { loading?: boolean; error?: string | null } = {}) {
+function mountDialog(
+  props: { loading?: boolean; error?: string | null; requireOnline?: boolean } = {},
+) {
   const wrapper = mount(ConfirmDialog, {
     props: {
       open: true,
@@ -66,4 +68,24 @@ describe('ConfirmDialog', () => {
     expect(wrapper.get('.cancel').attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
+
+  it('disables confirm with an offline hint only when requireOnline is enabled', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+
+    // Default (used by LogoutConfirmDialog, #111): stays enabled offline.
+    const defaultDialog = mountDialog()
+    expect(defaultDialog.find('[role="status"]').exists()).toBe(false)
+    expect(defaultDialog.get('.confirm').attributes('disabled')).toBeUndefined()
+    defaultDialog.unmount()
+
+    const onlineOnly = mountDialog({ requireOnline: true })
+    expect(onlineOnly.get('[role="status"]').text()).toBe('Requires an internet connection.')
+    expect(onlineOnly.get('.confirm').attributes('disabled')).toBeDefined()
+    expect(onlineOnly.get('.cancel').attributes('disabled')).toBeUndefined()
+    onlineOnly.unmount()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })

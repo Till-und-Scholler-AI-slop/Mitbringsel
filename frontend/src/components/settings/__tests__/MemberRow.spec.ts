@@ -14,7 +14,7 @@ const MEMBER: GroupMember = {
   joinedAt: '2026-01-01T10:00:00Z',
 }
 
-function mountRow(props: { isMe?: boolean; canAct?: boolean } = {}) {
+function mountRow(props: { isMe?: boolean; canAct?: boolean; offline?: boolean } = {}) {
   return mount(MemberRow, {
     props: { member: MEMBER, isMe: false, canAct: false, ...props },
     global: { plugins: [createAppI18n(['en'], null)] },
@@ -44,5 +44,15 @@ describe('MemberRow', () => {
     await button.trigger('click')
 
     expect(wrapper.emitted('act')).toHaveLength(1)
+  })
+
+  it('disables the actions button while offline', async () => {
+    const wrapper = mountRow({ canAct: true, offline: true })
+    const button = wrapper.get('button')
+
+    expect(button.attributes('disabled')).toBeDefined()
+    await button.trigger('click')
+
+    expect(wrapper.emitted('act')).toBeUndefined()
   })
 })

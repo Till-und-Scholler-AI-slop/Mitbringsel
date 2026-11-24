@@ -6,9 +6,11 @@ import BaseAvatar from '@/components/base/BaseAvatar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import type { IconName } from '@/components/base/icons'
 import MemberRoleChip from '@/components/settings/MemberRoleChip.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { memberActions, type MemberAction } from '@/services/groupRoles'
 import { useGroupsStore } from '@/stores/groups'
@@ -29,6 +31,7 @@ const open = defineModel<boolean>('open', { required: true })
 
 const { t } = useI18n()
 const groups = useGroupsStore()
+const { online } = useOnlineStatus()
 
 // Removing a person needs a second look; the other actions run right away.
 const confirmingRemove = ref(false)
@@ -39,6 +42,7 @@ const errorMessage = useErrorMessage(errorCode)
 const actions = computed(() => memberActions(props.group.role, props.member.role))
 
 async function run(action: MemberAction) {
+  if (!online.value) return
   if (action === 'remove' && !confirmingRemove.value) {
     confirmingRemove.value = true
     return
@@ -76,6 +80,8 @@ async function run(action: MemberAction) {
         </span>
       </div>
 
+      <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.actionHint')" />
+
       <p v-if="errorCode" class="problem" role="alert">
         <BaseIcon name="alert" /> {{ errorMessage }}
       </p>
@@ -86,7 +92,7 @@ async function run(action: MemberAction) {
           :key="action"
           type="button"
           :class="['action', { 'action--danger': action === 'remove' }]"
-          :disabled="busy"
+          :disabled="busy || !online"
           @click="run(action)"
         >
           <span class="action-icon" aria-hidden="true">
@@ -114,7 +120,13 @@ async function run(action: MemberAction) {
           >
             {{ t('settings.member.confirm.back') }}
           </BaseButton>
-          <BaseButton variant="danger-solid" class="remove" :loading="busy" @click="run('remove')">
+          <BaseButton
+            variant="danger-solid"
+            class="remove"
+            :loading="busy"
+            :disabled="!online"
+            @click="run('remove')"
+          >
             {{ t('settings.member.confirm.remove') }}
           </BaseButton>
         </div>
@@ -168,12 +180,6 @@ async function run(action: MemberAction) {
   color: var(--color-text);
   font: inherit;
   text-align: left;
-  cursor: pointer;
-}
-
-.action:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
 }
 
 .action-icon {

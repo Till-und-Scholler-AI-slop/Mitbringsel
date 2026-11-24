@@ -4,9 +4,11 @@ import { useI18n } from 'vue-i18n'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import OpenInviteRow from '@/components/settings/OpenInviteRow.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { MAX_OPEN_INVITES } from '@/services/inviteLink'
 import { useAuthStore } from '@/stores/auth'
@@ -20,16 +22,19 @@ const emit = defineEmits<{ revoked: [] }>()
 const { t } = useI18n()
 const invites = useGroupInvitesStore()
 const auth = useAuthStore()
+const { online } = useOnlineStatus()
 const loadError = useErrorMessage(() => invites.errorCode)
 
 const revoking = ref<string | null>(null)
 const revokeFailed = ref<{ id: string; code: string } | null>(null)
 const revokeFailedMessage = useErrorMessage(() => revokeFailed.value?.code ?? null)
 
+const offlineEmpty = computed(() => !online.value && invites.invites.length === 0)
 const loading = computed(() => invites.status === 'loading' && invites.invites.length === 0)
 const failed = computed(() => invites.status === 'error' && invites.invites.length === 0)
 
 async function revoke(inviteId: string) {
+  if (!online.value) return
   revoking.value = inviteId
   revokeFailed.value = null
   try {
@@ -50,14 +55,20 @@ async function revoke(inviteId: string) {
   <div class="list">
     <div class="head">
       <h3 class="title">{{ t('settings.invites.open.title') }}</h3>
-      <span class="count">
+      <span v-if="!offlineEmpty" class="count">
         {{
           t('settings.invites.open.count', { count: invites.invites.length, max: MAX_OPEN_INVITES })
         }}
       </span>
     </div>
 
-    <p v-if="loading" class="status" role="status"><BaseSpinner /></p>
+    <BaseOfflineNotice
+      v-if="offlineEmpty"
+      variant="inline"
+      :text="t('settings.invites.open.offline')"
+    />
+
+    <p v-else-if="loading" class="status" role="status"><BaseSpinner /></p>
 
     <div v-else-if="failed" class="failed" role="alert">
       <p class="failed-title">{{ t('settings.invites.open.loadFailed') }}</p>
@@ -71,17 +82,21 @@ async function revoke(inviteId: string) {
       {{ t('settings.invites.open.empty') }}
     </p>
 
-    <ul v-else class="rows">
-      <OpenInviteRow
-        v-for="invite in invites.invites"
-        :key="invite.id"
-        :invite="invite"
-        :is-mine="invite.createdBy !== null && invite.createdBy === auth.user?.id"
-        :busy="revoking === invite.id"
-        :error="revokeFailed?.id === invite.id ? revokeFailedMessage : null"
-        @revoke="revoke(invite.id)"
-      />
-    </ul>
+    <template v-else>
+      <ul class="rows">
+        <OpenInviteRow
+          v-for="invite in invites.invites"
+          :key="invite.id"
+          :invite="invite"
+          :is-mine="invite.createdBy !== null && invite.createdBy === auth.user?.id"
+          :busy="revoking === invite.id"
+          :disabled="!online"
+          :error="revokeFailed?.id === invite.id ? revokeFailedMessage : null"
+          @revoke="revoke(invite.id)"
+        />
+      </ul>
+      <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.actionHint')" />
+    </template>
   </div>
 </template>
 

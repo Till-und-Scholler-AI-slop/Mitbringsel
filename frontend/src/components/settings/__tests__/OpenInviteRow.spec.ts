@@ -25,7 +25,13 @@ const INVITE: Invite = {
 }
 
 function mountRow(
-  props: { invite?: Invite; isMine?: boolean; busy?: boolean; error?: string | null } = {},
+  props: {
+    invite?: Invite
+    isMine?: boolean
+    busy?: boolean
+    disabled?: boolean
+    error?: string | null
+  } = {},
 ) {
   return mount(OpenInviteRow, {
     props: { invite: INVITE, isMine: false, busy: false, error: null, ...props },
@@ -74,5 +80,13 @@ describe('OpenInviteRow', () => {
 
     expect(wrapper.get('button').attributes('aria-busy')).toBe('true')
     expect(wrapper.get('[role="alert"]').text()).toContain('The server cannot be reached.')
+  })
+
+  it('disables revoking when disabled is true', async () => {
+    const wrapper = mountRow({ disabled: true })
+
+    expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+    await wrapper.get('button').trigger('click')
+    expect(wrapper.emitted('revoke')).toBeUndefined()
   })
 })
