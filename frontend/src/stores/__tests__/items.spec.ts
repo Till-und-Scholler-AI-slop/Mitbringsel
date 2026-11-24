@@ -3,7 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { ref } from 'vue'
 
-import { ApiError } from '@/services/api/client'
+import { ApiError, ERROR_CODE_NETWORK } from '@/services/api/client'
 import { MAX_REMOVE_CHECKED, type ItemsService } from '@/services/api/items'
 import { createClock, formatHLC } from '@/services/sync/hlc'
 import {
@@ -14,6 +14,7 @@ import {
   type OutboxEntry,
   type OutboxStorage,
 } from '@/services/sync/outbox'
+import { installPreload } from '@/services/sync/preload'
 import { createFakeOutbox, type FakeOutbox } from '@/services/sync/__tests__/fakeOutbox'
 import { createFakeServerEvents } from '@/services/sync/__tests__/fakeServerEvents'
 import type { CreateItemRequest, GroupItemList, Item, ServerMessage } from '@/types/api'
@@ -378,14 +379,18 @@ describe('items store: reset', () => {
   })
 
   it('stops listening when the store is disposed', () => {
-    const { store, events } = setup(fakeService())
+    const { store, events, outbox } = setup(fakeService())
     expect(events.count('itemChanged')).toBe(1)
+    expect(events.count('ready')).toBe(1)
 
     store.$dispose()
 
-    for (const type of ['itemChanged', 'itemDeleted', 'itemsDeleted'] as const) {
+    for (const type of ['ready', 'itemChanged', 'itemDeleted', 'itemsDeleted'] as const) {
       expect(events.count(type)).toBe(0)
     }
+    const triggersBefore = outbox.triggers
+    events.emit({ type: 'ready' })
+    expect(outbox.triggers).toBe(triggersBefore)
   })
 
   it('ignores a create that answers after the reset', async () => {
@@ -425,6 +430,25 @@ describe('items store: outbox lifecycle', () => {
     const { outbox } = setup(fakeService(), null)
 
     expect(outbox.opened).toEqual([])
+    expect(outbox.triggers).toBe(0)
+  })
+
+  it('triggers the outbox on every ready', () => {
+    const { events, outbox } = setup(fakeService(), ANNA)
+    expect(outbox.triggers).toBe(1)
+
+    events.emit({ type: 'ready' })
+    expect(outbox.triggers).toBe(2)
+
+    events.emit({ type: 'ready' })
+    expect(outbox.triggers).toBe(3)
+  })
+
+  it('ignores ready when nobody is signed in', () => {
+    const { events, outbox } = setup(fakeService(), null)
+
+    events.emit({ type: 'ready' })
+
     expect(outbox.triggers).toBe(0)
   })
 
@@ -1618,6 +1642,89 @@ describe('items store: loadGroup', () => {
     await store.loadGroup('g1')
 
     expect(names(store.itemsOf('l1'))).toEqual(['Milch'])
+  })
+
+  it('reloads an unloaded list once more when a server state for it arrived during loadGroup', async () => {
+    const unchecked = item('i1', 'Milch', 'l1', false)
+    const checked = later(item('i1', 'Milch', 'l1', true), 2)
+    const service = fakeService([checked])
+    const groupAnswer = deferred<GroupItemList>()
+    service.listGroup.mockReturnValueOnce(groupAnswer.promise)
+    const { store, outbox } = setup(service)
+
+    // Outbox has a pending check for an unloaded list (e.g. app reopened on StartView).
+    outbox.fromOtherTab({
+      kind: 'update',
+      itemId: 'i1',
+      change: { checked: true, clock: formatHLC(NOW, 0, 'prev') },
+    })
+    await flushPromises()
+
+    const loading = store.loadGroup('g1')
+    // Outbox finishes while loadGroup is in flight and l1 is still not in byList.
+    outbox.answer({ kind: 'update', item: checked })
+    await flushPromises()
+    expect(store.statusOf('l1')).toBe('idle')
+
+    // Older loadGroup snapshot arrives with the unchecked item; a single follow-up load catches up.
+    groupAnswer.resolve({ listIds: ['l1'], items: [unchecked] })
+    await loading
+    await flushPromises()
+
+    expect(service.list).toHaveBeenCalledTimes(1)
+    expect(service.list).toHaveBeenCalledWith('l1')
+    expect(store.statusOf('l1')).toBe('ready')
+    expect(store.byId('i1')).toMatchObject({ checked: true, serverSeq: 2 })
+  })
+
+  it('does not trigger a follow-up load when no server state was missed during loadGroup', async () => {
+    const checked = later(item('i1', 'Milch', 'l1', true), 2)
+    const service = fakeService([checked])
+    const { store, outbox } = setup(service)
+
+    // An answer that arrived BEFORE loadGroup started is already covered by loadGroup.
+    outbox.fromOtherTab({
+      kind: 'update',
+      itemId: 'i1',
+      change: { checked: true, clock: formatHLC(NOW, 0, 'prev') },
+    })
+    await flushPromises()
+    outbox.answer({ kind: 'update', item: checked })
+    await flushPromises()
+
+    await store.loadGroup('g1')
+    await flushPromises()
+
+    expect(service.list).not.toHaveBeenCalled()
+    expect(store.byId('i1')).toMatchObject({ checked: true, serverSeq: 2 })
+  })
+
+  it('does not bring back items deleted by removeChecked for an unloaded list during loadGroup', async () => {
+    const milch = item('i1', 'Milch', 'l1', true)
+    const brot = item('i2', 'Brot', 'l1', false)
+    const service = fakeService([brot])
+    const groupAnswer = deferred<GroupItemList>()
+    service.listGroup.mockReturnValueOnce(groupAnswer.promise)
+    const { store, outbox } = setup(service)
+
+    outbox.fromOtherTab({
+      kind: 'removeChecked',
+      listId: 'l1',
+      itemIds: ['i1'],
+    })
+    await flushPromises()
+
+    const loading = store.loadGroup('g1')
+    outbox.answer({ kind: 'removeChecked', deleted: [{ itemId: 'i1', serverSeq: 5 }] })
+    await flushPromises()
+    expect(store.statusOf('l1')).toBe('idle')
+
+    groupAnswer.resolve({ listIds: ['l1'], items: [milch, brot] })
+    await loading
+    await flushPromises()
+
+    expect(service.list).not.toHaveBeenCalled()
+    expect(names(store.itemsOf('l1'))).toEqual(['Brot'])
   })
 })
 
@@ -2856,6 +2963,242 @@ describe('items store: real outbox integration', () => {
     } finally {
       store.$dispose()
       otherTab.stop()
+    }
+  })
+
+  it('wakes a retry-delayed outbox at once on ready', async () => {
+    vi.useFakeTimers({ now: NOW })
+    const service = fakeService([item('i1', 'Milch')])
+    service.update.mockRejectedValueOnce(new ApiError(ERROR_CODE_NETWORK))
+    const outboxStorage = ramOutboxStorage()
+    const events = createFakeServerEvents()
+    const store = defineItemsStore(service, () => ANNA, events, fakeStorage(), {
+      openOutbox: (options) =>
+        createOutbox({
+          ...options,
+          storage: outboxStorage,
+          items: service,
+          locks: (_, fn) => fn(),
+          random: () => 1,
+        }),
+      clock: createClock('tab', () => NOW),
+    })()
+
+    try {
+      await store.load('l1')
+      await store.setChecked('i1', true)
+      await vi.advanceTimersByTimeAsync(0)
+
+      // First try failed with NETWORK; outbox is now waiting for its retry timer.
+      expect(service.update).toHaveBeenCalledTimes(1)
+      expect(store.pendingCount).toBe(1)
+
+      // Without advancing timers, ready wakes the outbox and sends at once.
+      events.emit({ type: 'ready' })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(service.update).toHaveBeenCalledTimes(2)
+      expect(store.pendingCount).toBe(0)
+      expect(await outboxStorage.readOutbox(ANNA)).toEqual([])
+      expect(store.byId('i1')?.checked).toBe(true)
+    } finally {
+      store.$dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('resumes an outbox paused by 401 on ready', async () => {
+    vi.useFakeTimers({ now: NOW })
+    const service = fakeService([item('i1', 'Milch'), item('i2', 'Brot')])
+    service.update.mockRejectedValueOnce(new ApiError('UNAUTHENTICATED', 401))
+    const outboxStorage = ramOutboxStorage()
+    const events = createFakeServerEvents()
+    const store = defineItemsStore(service, () => ANNA, events, fakeStorage(), {
+      openOutbox: (options) =>
+        createOutbox({
+          ...options,
+          storage: outboxStorage,
+          items: service,
+          locks: (_, fn) => fn(),
+        }),
+      clock: createClock('tab', () => NOW),
+    })()
+
+    try {
+      await store.load('l1')
+      await store.setChecked('i1', true)
+      await vi.advanceTimersByTimeAsync(0)
+      // Paused after 401: neither time nor another change resumes sending.
+      await store.setChecked('i2', true)
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+
+      expect(service.update).toHaveBeenCalledTimes(1)
+      expect(store.pendingCount).toBe(2)
+
+      // Socket reaches ready (valid session): 401 pause ends and both changes send.
+      events.emit({ type: 'ready' })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(service.update).toHaveBeenCalledTimes(3)
+      expect(store.pendingCount).toBe(0)
+      expect(await outboxStorage.readOutbox(ANNA)).toEqual([])
+      expect(store.byId('i1')?.checked).toBe(true)
+      expect(store.byId('i2')?.checked).toBe(true)
+    } finally {
+      store.$dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps pending changes over a concurrent preload reload on ready', async () => {
+    vi.useFakeTimers({ now: NOW })
+    const milch = item('i1', 'Milch')
+    const brot = item('i2', 'Brot')
+    const service = fakeService([milch, brot])
+    const outboxStorage = ramOutboxStorage()
+    const events = createFakeServerEvents()
+    const store = defineItemsStore(service, () => ANNA, events, fakeStorage(), {
+      openOutbox: (options) =>
+        createOutbox({
+          ...options,
+          storage: outboxStorage,
+          items: service,
+          locks: (_, fn) => fn(),
+          random: () => 1,
+        }),
+      clock: createClock('tab', () => NOW),
+      newId: () => 'new-1',
+    })()
+    const stopPreload = installPreload(events, {
+      userId: () => ANNA,
+      loadGroups: () => Promise.resolve(),
+      groupIds: () => ['g1'],
+      loadLists: () => Promise.resolve(),
+      loadGroupItems: (groupId) => store.loadGroup(groupId),
+      reloadItems: (skip) => store.reloadLoaded(skip),
+    })
+
+    try {
+      await store.load('l1')
+      // Offline: first outbox try fails with NETWORK and waits in backoff.
+      service.update.mockRejectedValueOnce(new ApiError(ERROR_CODE_NETWORK))
+      await store.setChecked('i1', true)
+      await store.create('l1', { name: 'Käse' })
+      await store.remove('i2')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(store.pendingCount).toBe(3)
+
+      // On ready, loadGroup resolves first (with another member's rename + new item),
+      // while the outbox writes are still in flight.
+      const updateAnswer = deferred<Item>()
+      const createAnswer = deferred<Item>()
+      const removeAnswer = deferred<void>()
+      service.update.mockReturnValueOnce(updateAnswer.promise)
+      service.create.mockReturnValueOnce(createAnswer.promise)
+      service.remove.mockReturnValueOnce(removeAnswer.promise)
+      service.listGroup.mockResolvedValueOnce({
+        listIds: ['l1'],
+        items: [
+          later(milch, 2, { name: 'Hafermilch' }),
+          brot,
+          { ...item('i3', 'Eier'), createdAt: '2026-01-01T11:00:00Z', serverSeq: 3 },
+        ],
+      })
+
+      events.emit({ type: 'ready' })
+      await vi.advanceTimersByTimeAsync(0)
+
+      // Pending fields stay on top of the reloaded state; other member's changes appear.
+      expect(names(store.itemsOf('l1'))).toEqual(['Hafermilch', 'Eier', 'Käse'])
+      expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: true })
+      expect(store.byId('i2')).toBeUndefined()
+      expect(store.pendingCount).toBe(3)
+
+      // Outbox answers arrive one by one.
+      updateAnswer.resolve(later(milch, 4, { name: 'Hafermilch', checked: true }))
+      await vi.advanceTimersByTimeAsync(0)
+      createAnswer.resolve({
+        ...item('new-1', 'Käse'),
+        createdAt: CREATED_LATER,
+        serverSeq: 5,
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      removeAnswer.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(names(store.itemsOf('l1'))).toEqual(['Hafermilch', 'Eier', 'Käse'])
+      expect(store.byId('i1')).toMatchObject({ name: 'Hafermilch', checked: true, serverSeq: 4 })
+      expect(store.byId('new-1')?.serverSeq).toBe(5)
+      expect(store.pendingCount).toBe(0)
+    } finally {
+      stopPreload()
+      store.$dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps settled outbox changes when an older concurrent loadGroup answers later', async () => {
+    vi.useFakeTimers({ now: NOW })
+    const milch = item('i1', 'Milch')
+    const brot = item('i2', 'Brot')
+    const service = fakeService([milch, brot])
+    const outboxStorage = ramOutboxStorage()
+    const events = createFakeServerEvents()
+    const store = defineItemsStore(service, () => ANNA, events, fakeStorage(), {
+      openOutbox: (options) =>
+        createOutbox({
+          ...options,
+          storage: outboxStorage,
+          items: service,
+          locks: (_, fn) => fn(),
+          random: () => 1,
+        }),
+      clock: createClock('tab', () => NOW),
+      newId: () => 'new-1',
+    })()
+    const stopPreload = installPreload(events, {
+      userId: () => ANNA,
+      loadGroups: () => Promise.resolve(),
+      groupIds: () => ['g1'],
+      loadLists: () => Promise.resolve(),
+      loadGroupItems: (groupId) => store.loadGroup(groupId),
+      reloadItems: (skip) => store.reloadLoaded(skip),
+    })
+
+    try {
+      await store.load('l1')
+      service.update.mockRejectedValueOnce(new ApiError(ERROR_CODE_NETWORK))
+      await store.setChecked('i1', true)
+      await store.create('l1', { name: 'Käse' })
+      await store.remove('i2')
+      await vi.advanceTimersByTimeAsync(0)
+
+      // On ready, loadGroup stays in flight while the outbox settles all three changes first.
+      const groupAnswer = deferred<GroupItemList>()
+      service.listGroup.mockReturnValueOnce(groupAnswer.promise)
+      service.update.mockResolvedValueOnce(later(milch, 4, { checked: true }))
+      service.create.mockResolvedValueOnce({
+        ...item('new-1', 'Käse'),
+        createdAt: CREATED_LATER,
+        serverSeq: 5,
+      })
+
+      events.emit({ type: 'ready' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(store.pendingCount).toBe(0)
+
+      // Now the older loadGroup snapshot (predating all three writes) resolves.
+      groupAnswer.resolve({ listIds: ['l1'], items: [milch, brot] })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(names(store.itemsOf('l1'))).toEqual(['Milch', 'Käse'])
+      expect(store.byId('i1')).toMatchObject({ checked: true, serverSeq: 4 })
+      expect(store.byId('new-1')?.serverSeq).toBe(5)
+      expect(store.byId('i2')).toBeUndefined()
+    } finally {
+      stopPreload()
+      store.$dispose()
+      vi.useRealTimers()
     }
   })
 })
