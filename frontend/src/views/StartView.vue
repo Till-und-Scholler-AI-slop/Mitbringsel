@@ -47,6 +47,7 @@ const {
   confirmOpen: logoutConfirmOpen,
   pendingCount,
   busy: loggingOut,
+  error: logoutError,
   confirmLogout,
 } = useLogout()
 
@@ -160,6 +161,7 @@ watch(online, (isOnline) => {
         v-model:open="logoutConfirmOpen"
         :pending-count="pendingCount"
         :loading="loggingOut"
+        :error="logoutError"
         @confirm="confirmLogout"
       />
     </div>

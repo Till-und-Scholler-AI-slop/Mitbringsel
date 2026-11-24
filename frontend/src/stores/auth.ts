@@ -188,23 +188,24 @@ export function defineAuthStore(
     }
 
     /**
-     * Logs out on the server. The local state is cleared even if that fails:
-     * the backend clears the cookie in that case as well. The data on the
-     * device goes too, the device may be shared.
+     * Logs out on the server and clears local state and device data only after
+     * the server confirms. If the request fails (offline, proxy error, 5xx),
+     * the HttpOnly session cookie and server session may still be active:
+     * clearing local state anyway would falsely appear signed out on a shared
+     * device and silently drop pending outbox entries. Keeping state lets the
+     * user see the error and retry (even after a backend 500 that already
+     * cleared the cookie, a retry returns 204 and clears the device cleanly).
      */
     async function logout() {
+      await service.logout()
       signOuts++
-      try {
-        await service.logout()
-      } finally {
-        user.value = null
-        fromCache.value = false
-        status.value = 'anonymous'
-        // Logged out on purpose: no "your session ran out" next time.
-        sessionExpired.value = false
-        marker.clear()
-        await local.clear()
-      }
+      user.value = null
+      fromCache.value = false
+      status.value = 'anonymous'
+      // Logged out on purpose: no "your session ran out" next time.
+      sessionExpired.value = false
+      marker.clear()
+      await local.clear()
     }
 
     // Lets the login page offer the dev login again after a logout, without

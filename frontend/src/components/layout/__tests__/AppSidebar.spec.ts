@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { createAppI18n } from '@/i18n'
+import { ApiError } from '@/services/api/client'
 import type { AuthService } from '@/services/api/auth'
 import type { GroupsService } from '@/services/api/groups'
 import type { ItemsService } from '@/services/api/items'
@@ -13,6 +14,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
+import { useToastsStore } from '@/stores/toasts'
 import { STICKERS } from '@/components/base/stickers'
 import type { Group, Item, List } from '@/types/api'
 
@@ -487,7 +489,7 @@ describe('AppSidebar', () => {
     onStart.wrapper.unmount()
   })
 
-  it('disables creating a household and shows an offline hint when offline', async () => {
+  it('disables creating a household and signing out with offline hints when offline', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     const { wrapper } = await mountSidebar({ groupId: 'g1', listId: 'l1' })
 
@@ -499,7 +501,53 @@ describe('AppSidebar', () => {
       'Creating a household requires a connection.',
     )
     expect(wrapper.findAll('.groups a').length).toBeGreaterThan(0)
-    vi.restoreAllMocks()
+
+    await wrapper.get('.profile .toggle').trigger('click')
+    expect(wrapper.get('.profile .panel button').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.profile .panel [role="status"]').text()).toBe(
+      'Signing out requires an internet connection so your session actually ends.',
+    )
+    wrapper.unmount()
+  })
+
+  it('shows a persistent error toast when signing out fails without pending changes', async () => {
+    authService.logout.mockRejectedValue(new ApiError('NETWORK'))
+    const { wrapper, router } = await mountSidebar()
+
+    await wrapper.get('.profile .toggle').trigger('click')
+    await wrapper.get('.profile .panel button').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('home')
+    expect(useAuthStore().user?.id).toBe('u1')
+    expect(useToastsStore().toasts).toEqual([
+      expect.objectContaining({
+        kind: 'error',
+        timed: false,
+        text: 'Signing out didn’t work. You are still signed in.',
+        detail: 'The server cannot be reached.',
+      }),
+    ])
+    wrapper.unmount()
+  })
+
+  it('keeps the logout dialog open with an error when confirming fails', async () => {
+    vi.spyOn(localData, 'readOutbox').mockResolvedValue([
+      { seq: 1, queuedAt: 1, change: { kind: 'remove', itemId: 'i1' } },
+    ])
+    authService.logout.mockRejectedValue(new ApiError('NETWORK'))
+    const { wrapper, router } = await mountSidebar()
+
+    await wrapper.get('.profile .toggle').trigger('click')
+    await wrapper.get('.profile .panel button').trigger('click')
+    await flushPromises()
+    await wrapper.get('dialog[open] .confirm').trigger('click')
+    await flushPromises()
+
+    const dialog = wrapper.get('dialog[open]')
+    expect(dialog.get('[role="alert"]').text()).toContain('The server cannot be reached.')
+    expect(useAuthStore().user?.id).toBe('u1')
+    expect(router.currentRoute.value.name).toBe('home')
     wrapper.unmount()
   })
 })

@@ -21,7 +21,8 @@
     "actionHint": "Geht nur mit Internetverbindung.",
     "householdHint": "Haushalte gründen oder beitreten geht nur online.",
     "createHouseholdHint": "Haushalt gründen geht nur online.",
-    "listHint": "Listen lassen sich nur online anlegen oder ändern."
+    "listHint": "Listen lassen sich nur online anlegen oder ändern.",
+    "logoutHint": "Abmelden geht nur mit Internetverbindung, damit deine Sitzung wirklich beendet wird."
   },
   "start": {
     "greeting": "Hallo {name}",
@@ -152,6 +153,7 @@
     }
   },
   "logout": {
+    "failed": "Abmelden hat nicht geklappt. Du bist weiterhin angemeldet.",
     "confirm": {
       "title": "Abmelden?",
       "body": "{count} Änderung ist noch nicht beim Server angekommen. Wenn du dich jetzt abmeldest, geht sie verloren. | {count} Änderungen sind noch nicht beim Server angekommen. Wenn du dich jetzt abmeldest, gehen sie verloren.",

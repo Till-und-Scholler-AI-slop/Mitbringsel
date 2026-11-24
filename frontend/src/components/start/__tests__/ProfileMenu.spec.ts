@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import { createAppI18n } from '@/i18n'
 
 import ProfileMenu from '../ProfileMenu.vue'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function mountMenu(row = false) {
   return mount(ProfileMenu, {
@@ -78,6 +82,33 @@ describe('ProfileMenu', () => {
 
     expect(wrapper.emitted('logout')).toHaveLength(1)
     expect(wrapper.find('.panel').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it.each([
+    { name: 'header variant', row: false },
+    { name: 'sidebar row variant', row: true },
+  ])('disables logout with an offline hint in the $name and re-enables online', async ({ row }) => {
+    const spy = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const wrapper = mountMenu(row)
+    await wrapper.get('.toggle').trigger('click')
+
+    const button = wrapper.get('.panel button')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.panel [role="status"]').text()).toBe(
+      'Signing out requires an internet connection so your session actually ends.',
+    )
+
+    await button.trigger('click')
+    expect(wrapper.emitted('logout')).toBeUndefined()
+    expect(wrapper.find('.panel').exists()).toBe(true)
+
+    spy.mockReturnValue(true)
+    window.dispatchEvent(new Event('online'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('.panel button').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('.panel [role="status"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

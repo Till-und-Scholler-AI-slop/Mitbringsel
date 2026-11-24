@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/settings/ConfirmDialog.vue'
 defineProps<{
   pendingCount: number
   loading?: boolean
+  error?: string | null
 }>()
 defineEmits<{ confirm: [] }>()
 
@@ -25,6 +26,9 @@ const { t } = useI18n()
     :confirm-label="t('logout.confirm.confirm')"
     :cancel-label="t('logout.confirm.cancel')"
     :loading="loading"
+    :error="error"
+    require-online
+    :offline-hint="t('offline.logoutHint')"
     @confirm="$emit('confirm')"
   />
 </template>
