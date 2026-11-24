@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import InviteCard from '@/components/invite/InviteCard.vue'
@@ -12,6 +13,7 @@ import InviteNotice from '@/components/invite/InviteNotice.vue'
 import GoogleSignInButton from '@/components/login/GoogleSignInButton.vue'
 import { useCountdown } from '@/composables/useCountdown'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { INVITE_PATH } from '@/services/inviteLink'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { googleLoginUrl } from '@/services/googleLogin'
@@ -26,7 +28,7 @@ const SHOPS = ['supermarket', 'drugstore', 'hardware'] as const
 // How long to wait after a rate limit if the server did not say.
 const DEFAULT_WAIT_SECONDS = 30
 
-type ViewState = 'loading' | 'ready' | 'invalid' | 'limit' | 'failed'
+type ViewState = 'loading' | 'ready' | 'invalid' | 'limit' | 'failed' | 'offline'
 
 const props = defineProps<{ token: string }>()
 
@@ -36,6 +38,7 @@ const auth = useAuthStore()
 const invites = useInvitesStore()
 const groups = useGroupsStore()
 const countdown = useCountdown()
+const { online } = useOnlineStatus()
 
 // The error of the last "Join" click. Errors of loading the invite are in the store.
 const acceptError = ref<{ code: string; retryAfter: number | null } | null>(null)
@@ -56,8 +59,10 @@ const state = computed<ViewState>(() => {
   if (errorCode.value === 'INVITE_NOT_FOUND' || errorCode.value === 'INVITE_EXPIRED') {
     return 'invalid'
   }
+  if (invites.status === 'ready') return 'ready'
+  if (!online.value) return 'offline'
   if (invites.status === 'error') return 'failed'
-  return invites.status === 'ready' ? 'ready' : 'loading'
+  return 'loading'
 })
 
 // Any other error of "Join" (e.g. no connection) shows below the button and
@@ -65,7 +70,7 @@ const state = computed<ViewState>(() => {
 const joinProblem = computed(() => state.value === 'ready' && acceptError.value !== null)
 
 const title = computed(() =>
-  state.value === 'loading' || state.value === 'ready'
+  state.value === 'loading' || state.value === 'ready' || state.value === 'offline'
     ? t('invite.title')
     : t(`invite.${state.value}.title`),
 )
@@ -75,10 +80,21 @@ watch(
   async (token) => {
     acceptError.value = null
     // The join dialog has loaded the invite already; then nothing to do.
-    if (!invites.has(token)) await invites.load(token)
+    if (!invites.has(token) && online.value) await invites.load(token)
   },
   { immediate: true },
 )
+
+// Reload the invite once the connection returns after an offline open or network failure.
+watch(online, (isOnline) => {
+  if (
+    isOnline &&
+    !invites.has(props.token) &&
+    (invites.status === 'idle' || invites.errorCode === 'NETWORK')
+  ) {
+    void invites.load(props.token)
+  }
+})
 
 watch(
   state,
@@ -92,6 +108,7 @@ watch(
 onBeforeUnmount(() => invites.clear())
 
 async function join() {
+  if (!online.value) return
   joining.value = true
   acceptError.value = null
   try {
@@ -110,6 +127,7 @@ async function join() {
 }
 
 function signInToJoin() {
+  if (!online.value) return
   redirecting.value = true
   redirectTo(googleLoginUrl(`${INVITE_PATH}${props.token}`))
 }
@@ -123,6 +141,7 @@ onMounted(() => window.addEventListener('pageshow', onPageShow))
 onBeforeUnmount(() => window.removeEventListener('pageshow', onPageShow))
 
 async function retry() {
+  if (!online.value) return
   const loadFailed = invites.status === 'error'
   acceptError.value = null
   if (loadFailed) await invites.load(props.token)
@@ -154,6 +173,7 @@ async function retry() {
 
       <template v-else-if="state === 'ready' && invites.preview">
         <InviteCard :preview="invites.preview" />
+        <BaseOfflineNotice v-if="!online" :text="t('invite.offline')" />
         <p v-if="joinProblem" class="problem" role="alert">
           <BaseIcon name="alert" /> {{ errorMessage }}
         </p>
@@ -162,14 +182,19 @@ async function retry() {
           <p class="sign-in-note">{{ t('invite.signInNote') }}</p>
           <GoogleSignInButton
             class="action"
+            :disabled="!online"
             :busy="redirecting"
             :label="t('invite.joinWithGoogle')"
             @click="signInToJoin"
           />
         </template>
-        <BaseButton v-else class="action" :loading="joining" @click="join">
+        <BaseButton v-else class="action" :loading="joining" :disabled="!online" @click="join">
           {{ t('invite.join') }}
         </BaseButton>
+      </template>
+
+      <template v-else-if="state === 'offline'">
+        <BaseOfflineNotice :text="t('invite.offline')" />
       </template>
 
       <template v-else-if="state === 'invalid'">
@@ -192,8 +217,9 @@ async function retry() {
           </p>
           <p class="stays-valid">{{ t('invite.limit.stillValid') }}</p>
         </InviteNotice>
+        <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.actionHint')" />
         <div class="spacer" />
-        <BaseButton class="action" :disabled="countdown.running.value" @click="retry">
+        <BaseButton class="action" :disabled="countdown.running.value || !online" @click="retry">
           {{
             countdown.running.value
               ? t('invite.limit.retryIn', { seconds: countdown.remaining.value })
