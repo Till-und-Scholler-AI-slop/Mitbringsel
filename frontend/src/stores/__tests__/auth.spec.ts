@@ -190,18 +190,23 @@ describe('auth store', () => {
     expect(store.user).toBeNull()
   })
 
-  it('clears the local state even if logout fails', async () => {
+  it.each([
+    { name: 'network error', err: new ApiError('NETWORK') },
+    { name: 'server error', err: new ApiError('INTERNAL_ERROR', 500) },
+  ])('keeps the user signed in when logout fails with a $name', async ({ err }) => {
+    const marker = fakeMarker()
     const service = {
       ...fakeService('anna@example.com'),
-      logout: vi.fn(() => Promise.reject(new ApiError('INTERNAL_ERROR', 500))),
+      logout: vi.fn(() => Promise.reject(err)),
     }
-    const store = defineAuthStore(service, null)()
+    const store = defineAuthStore(service, null, marker)()
     await store.load()
 
     await expect(store.logout()).rejects.toThrow()
 
-    expect(store.status).toBe('anonymous')
-    expect(store.user).toBeNull()
+    expect(store.status).toBe('authenticated')
+    expect(store.user?.email).toBe('anna@example.com')
+    expect(marker.value).toBe(true)
   })
 })
 
@@ -440,17 +445,45 @@ describe('local profile', () => {
     expect(local.stored).toBeNull()
   })
 
-  it('clears the device even if logout fails on the server', async () => {
+  it.each([
+    { name: 'network error', err: new ApiError('NETWORK') },
+    { name: 'server error', err: new ApiError('INTERNAL_ERROR', 500) },
+  ])('keeps device data when logout fails with a $name', async ({ err }) => {
     const service = {
       ...fakeService('anna@example.com'),
-      logout: vi.fn(() => Promise.reject(new ApiError('NETWORK'))),
+      logout: vi.fn(() => Promise.reject(err)),
     }
-    const { store, local } = setup(service, null)
+    const { store, local, marker } = setup(service, null)
     await store.load()
 
     await expect(store.logout()).rejects.toThrow()
 
-    expect(local.clear).toHaveBeenCalled()
+    expect(local.clear).not.toHaveBeenCalled()
+    expect(local.stored).toEqual(me('anna@example.com'))
+    expect(store.status).toBe('authenticated')
+    expect(marker.value).toBe(true)
+  })
+
+  it('still accepts an in-flight check when logout fails', async () => {
+    const answer = pending<MeResponse>()
+    const service = {
+      ...fakeService(),
+      getMe: vi.fn(() => answer.promise),
+      logout: vi.fn(() => Promise.reject(new ApiError('NETWORK'))),
+    }
+    const { store, local } = setup(service, me('anna@example.com'))
+    await store.load()
+
+    await expect(store.logout()).rejects.toThrow()
+
+    const renamed = { ...me('anna@example.com'), displayName: 'Anna B.' }
+    answer.resolve(renamed)
+    await flushPromises()
+
+    expect(store.status).toBe('authenticated')
+    expect(store.user).toEqual(renamed)
+    expect(store.fromCache).toBe(false)
+    expect(local.claim).toHaveBeenCalledWith(renamed)
   })
 
   it('does not sign in again when a check answers after the logout', async () => {
