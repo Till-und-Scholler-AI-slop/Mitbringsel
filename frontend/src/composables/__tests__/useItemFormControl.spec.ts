@@ -89,7 +89,7 @@ function stubPanelMode(matches: boolean) {
 
 // A view that provides the control, with a child that takes it, as ListView
 // and ListItems do. The opener is a button that keeps the focus to return to.
-function setup() {
+function setup(hasOverview = false) {
   const current = ref<List | undefined>(list('l1'))
   let provided: ItemFormControl | undefined
   let injected: ItemFormControl | undefined
@@ -101,7 +101,10 @@ function setup() {
   })
   const View = defineComponent({
     setup() {
-      provided = provideItemFormControl(() => current.value)
+      provided = provideItemFormControl(
+        () => current.value,
+        () => hasOverview,
+      )
       return () => h(Child)
     },
   })
@@ -313,5 +316,108 @@ describe('useItemFormControl', () => {
         .map((i) => i.name),
     ).toEqual(['Brot'])
     expect(useToastsStore().toasts).toMatchObject([{ text: '“Milch” removed' }])
+  })
+
+  describe('with an overview card', () => {
+    it('has the overview open after loading, the form open without one', () => {
+      const withOverview = setup(true)
+      expect(withOverview.form.expanded.value).toBe('overview')
+      expect(withOverview.form.formExpanded.value).toBe(false)
+
+      const without = setup(false)
+      expect(without.form.formExpanded.value).toBe(true)
+    })
+
+    it('opens the form for a new or an edited item', async () => {
+      const { form } = setup(true)
+      await loadItems(item('i1', 'Milch'))
+
+      form.openNew('Tomaten')
+      expect(form.formExpanded.value).toBe(true)
+
+      await form.close()
+      expect(form.formExpanded.value).toBe(false)
+
+      form.startEdit(item('i1', 'Milch'))
+      expect(form.formExpanded.value).toBe(true)
+    })
+
+    it('opens the overview again when the form closes and gives the focus back', async () => {
+      stubPanelMode(true)
+      const { form, opener } = setup(true)
+      const focusStart = vi.fn()
+      form.overviewCard.value = { focusStart }
+
+      opener.focus()
+      form.openNew('Tomaten')
+      await form.close()
+
+      expect(form.expanded.value).toBe('overview')
+      expect(document.activeElement).toBe(opener)
+      expect(focusStart).not.toHaveBeenCalled()
+    })
+
+    it('focuses the overview when the opener is gone', async () => {
+      stubPanelMode(true)
+      const { form, opener } = setup(true)
+      const focusStart = vi.fn()
+      form.overviewCard.value = { focusStart }
+
+      opener.focus()
+      form.openNew('Tomaten')
+      opener.remove()
+      await form.close()
+
+      expect(focusStart).toHaveBeenCalledOnce()
+    })
+
+    it('keeps what was typed when the collapsed card is opened by the new item button', async () => {
+      stubPanelMode(true)
+      const { form } = setup(true)
+      const focusName = vi.fn()
+      form.card.value = { focusName }
+
+      form.openNew('')
+      const key = form.newItemKey.value
+      form.expandOverview()
+      await flushPromises()
+      expect(form.formExpanded.value).toBe(false)
+
+      form.openNew('')
+      await flushPromises()
+
+      expect(form.formExpanded.value).toBe(true)
+      expect(form.newItemKey.value).toBe(key)
+      expect(focusName).toHaveBeenCalledTimes(2)
+    })
+
+    it('expands the form with the focus in the name, and back to the overview', async () => {
+      const { form } = setup(true)
+      const focusName = vi.fn()
+      const focusStart = vi.fn()
+      form.card.value = { focusName }
+      form.overviewCard.value = { focusStart }
+
+      form.expandForm()
+      await flushPromises()
+      expect(form.formExpanded.value).toBe(true)
+      expect(focusName).toHaveBeenCalledOnce()
+
+      await form.expandOverview()
+      expect(form.formExpanded.value).toBe(false)
+      expect(focusStart).toHaveBeenCalledOnce()
+    })
+
+    it('does not reset the form when the cards switch', async () => {
+      const { form } = setup(true)
+      form.openNew('Tomaten')
+      const key = form.newItemKey.value
+
+      await form.expandOverview()
+      form.expandForm()
+
+      expect(form.newItemKey.value).toBe(key)
+      expect(form.newItemName.value).toBe('Tomaten')
+    })
   })
 })

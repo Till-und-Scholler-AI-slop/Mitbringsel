@@ -21,11 +21,12 @@ import type { List } from '@/types/api'
 // The green navigation on the left of the desktop layout: start, the
 // households, the lists of the open household, founding one, the profile.
 //
-// groupId, listId: what is open; neither on the start page. The dialogs for
+// groupId, listId: what is open; neither on the start page. pinnedListId: the
+// list pinned in the context column (#176), marked with a pin. The dialogs for
 // founding and list actions belong to the parents, so they stay open when the
 // sidebar is hidden. List actions open on right click or the context menu key
 // (ContextMenu / Shift+F10) on a list entry; normal clicks navigate as usual.
-const props = defineProps<{ groupId?: string; listId?: string }>()
+const props = defineProps<{ groupId?: string; listId?: string; pinnedListId?: string }>()
 const emit = defineEmits<{ create: []; listActions: [list: List] }>()
 
 const { t } = useI18n()
@@ -112,6 +113,14 @@ function onListKeydown(event: KeyboardEvent, list: List) {
                 <!-- 40 px: its art is about as large as the 32 px dot in the design. -->
                 <BaseSticker :icon="list.icon" :size="40" />
                 <span class="list-name">{{ list.name }}</span>
+                <span
+                  v-if="list.id === pinnedListId"
+                  class="list-pin"
+                  role="img"
+                  :aria-label="t('nav.pinned')"
+                >
+                  <BaseIcon name="pin" :size="16" />
+                </span>
                 <template v-if="listOpenCount !== null">
                   <span class="list-count" aria-hidden="true">{{ listOpenCount }}</span>
                   <span class="sr-only">, {{ t('nav.openItems', { count: listOpenCount }) }}</span>
@@ -317,6 +326,11 @@ function onListKeydown(event: KeyboardEvent, list: List) {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.list-pin {
+  flex: none;
+  display: inline-flex;
 }
 
 .list-count {

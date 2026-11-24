@@ -15,15 +15,25 @@ const MAX_NAME_LENGTH = 100
 // is false when that form is a card next to the list; there the button shows
 // with `pressed` whether the card offers a new item. Without `pressed` it is
 // no toggle and gets no aria-pressed.
+// compact: the bar of the pinned list in the context column: only the pill,
+// without the details button and the Enter hint. label: what the field is
+// called for screen readers, e.g. "Add item to Bakery" there.
 const props = withDefaults(
-  defineProps<{ listId: string; opensDialog?: boolean; pressed?: boolean }>(),
-  { opensDialog: true, pressed: undefined },
+  defineProps<{
+    listId: string
+    opensDialog?: boolean
+    pressed?: boolean
+    compact?: boolean
+    label?: string
+  }>(),
+  { opensDialog: true, pressed: undefined, compact: false, label: undefined },
 )
 const emit = defineEmits<{ details: [name: string] }>()
 
 const { t } = useI18n()
 const items = useItemsStore()
 const name = ref('')
+const input = ref<HTMLInputElement | null>(null)
 
 // The field empties at once, so the next item can be typed while this one
 // is on its way; the item shows at once.
@@ -36,6 +46,11 @@ const detailsLabel = computed(() =>
   t(props.opensDialog ? 'list.quickAdd.details' : 'list.quickAdd.detailsCard'),
 )
 
+function focus() {
+  input.value?.focus()
+}
+defineExpose({ focus })
+
 function add() {
   const trimmed = name.value.trim()
   if (!trimmed) return
@@ -47,22 +62,26 @@ function add() {
 <template>
   <!-- A form, so Enter (and the Enter key of a phone keyboard) adds, and
        the browser leaves Enter alone while an input method composes text. -->
-  <form class="quick-add" @submit.prevent="add">
+  <form :class="['quick-add', { 'quick-add--compact': compact }]" @submit.prevent="add">
     <!-- The whole pill focuses the field. -->
     <label class="field">
-      <BaseIcon name="plus" :size="22" />
+      <BaseIcon name="plus" :size="compact ? 18 : 22" />
       <input
+        ref="input"
         v-model="name"
         type="text"
-        :aria-label="t('list.quickAdd.label')"
+        :aria-label="label ?? t('list.quickAdd.label')"
         :placeholder="t('list.quickAdd.placeholder')"
         :maxlength="MAX_NAME_LENGTH"
         enterkeyhint="done"
         autocomplete="off"
       />
-      <span class="hint" aria-hidden="true">{{ t('list.quickAdd.enterHint') }}</span>
+      <span v-if="!compact" class="hint" aria-hidden="true">{{
+        t('list.quickAdd.enterHint')
+      }}</span>
     </label>
     <button
+      v-if="!compact"
       type="button"
       class="details press-sticker"
       :aria-label="detailsLabel"
@@ -187,5 +206,23 @@ input::placeholder {
     width: 1.5rem;
     height: 1.5rem;
   }
+}
+
+/* The pinned list: a smaller pill. After the media queries, so it wins at
+   every width. */
+.quick-add--compact {
+  gap: var(--space-2);
+}
+
+.quick-add--compact .field {
+  gap: var(--space-2);
+  min-height: 3.25rem;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border-width: var(--border-width-sm);
+}
+
+.quick-add--compact input {
+  height: 2.5rem;
+  font-size: var(--font-size-md);
 }
 </style>

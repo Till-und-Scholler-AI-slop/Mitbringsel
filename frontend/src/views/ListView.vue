@@ -9,6 +9,7 @@ import ListDialogs from '@/components/list/ListDialogs.vue'
 import ListHeader from '@/components/list/ListHeader.vue'
 import ListItems from '@/components/list/ListItems.vue'
 import ListStateNotice, { type ListNoticeState } from '@/components/list/ListStateNotice.vue'
+import { provideContextOverview } from '@/composables/useContextOverview'
 import { provideItemFormControl } from '@/composables/useItemFormControl'
 import { useLeaveDeletedList } from '@/composables/useLeaveDeletedList'
 import { useLeaveRemovedGroup } from '@/composables/useLeaveRemovedGroup'
@@ -43,10 +44,20 @@ const list = computed<List | undefined>(() => {
   return found?.groupId === props.groupId ? found : undefined
 })
 
+// The overview card of the context column; its pinned list is marked in the
+// sidebar.
+const overview = provideContextOverview(
+  () => props.groupId,
+  () => list.value,
+)
+
 // The item form of this screen; ListItems opens it, ItemFormHost shows it.
 // columnMode: from the width of the context column on, the chips sit in the
 // list column instead of the header.
-const { columnMode } = provideItemFormControl(() => list.value)
+const { columnMode } = provideItemFormControl(
+  () => list.value,
+  () => overview.available.value,
+)
 
 const active = computed(() => lists.activeLists(props.groupId))
 const archived = computed(() => lists.archivedLists(props.groupId))
@@ -122,6 +133,7 @@ useLeaveRemovedGroup(() => props.groupId)
   <AppFrame
     :group-id="groupId"
     :list-id="listId"
+    :pinned-list-id="overview.sidebarPinId.value"
     :bottom-bar="list !== undefined"
     @list-actions="dialogs?.openActions($event.id)"
   >

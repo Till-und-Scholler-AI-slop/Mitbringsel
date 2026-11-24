@@ -26,7 +26,7 @@ const { t } = useI18n()
 const items = useItemsStore()
 const recentChanges = useRecentChangesStore()
 const { removeChecked } = useRemoveItems()
-const { columnMode, editingId, startEdit, openNew } = useItemFormControl()
+const { columnMode, editingId, formExpanded, startEdit, openNew } = useItemFormControl()
 
 const itemsError = useErrorMessage(() => items.errorCodeOf(props.list.id))
 
@@ -72,7 +72,7 @@ function toggle(item: Item) {
       class="add-bar"
       :list-id="list.id"
       :opens-dialog="!columnMode"
-      :pressed="columnMode ? editingId === null : undefined"
+      :pressed="columnMode ? formExpanded && editingId === null : undefined"
       @details="openNew"
     />
 

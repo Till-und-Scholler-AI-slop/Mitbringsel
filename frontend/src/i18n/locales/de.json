@@ -279,6 +279,28 @@
       "details": "Mit Details hinzufügen",
       "detailsCard": "Artikel mit Menge und Notiz hinzufügen"
     },
+    "context": {
+      "collapse": "Einklappen",
+      "overview": {
+        "label": "Überblick: {name}",
+        "collapse": "Überblick einklappen und Erstellen öffnen"
+      },
+      "second": {
+        "choose": "Welche Liste daneben",
+        "open": "nichts offen | {count} offen | {count} offen",
+        "summary": "{open} · zuletzt {name}",
+        "add": "Artikel zu {list} hinzufügen",
+        "empty": "Hier ist nichts offen."
+      },
+      "form": {
+        "labelNew": "Erstellen",
+        "labelEdit": "Bearbeiten",
+        "collapseNew": "Erstellen einklappen und Überblick öffnen",
+        "collapseEdit": "Bearbeiten einklappen und Überblick öffnen",
+        "barSummaryNew": "In {list} · mit Menge, Einheit und Notiz",
+        "barTitleEdit": "{name} bearbeiten"
+      }
+    },
     "itemForm": {
       "newTitle": "Neuer Artikel",
       "newIn": "Neu in {list}",
@@ -489,7 +511,8 @@
     "households": "Haushalte",
     "lists": "Listen von {name}",
     "listActionsHint": "Rechtsklick oder Kontextmenütaste (Umschalt+F10) zum Bearbeiten, Archivieren oder Löschen",
-    "openItems": "{count} offener Artikel | {count} offene Artikel"
+    "openItems": "{count} offener Artikel | {count} offene Artikel",
+    "pinned": "angepinnt"
   },
   "sync": {
     "synced": "Synchron",

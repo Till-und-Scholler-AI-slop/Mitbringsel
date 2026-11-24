@@ -279,6 +279,28 @@
       "details": "Add with details",
       "detailsCard": "Add item with quantity and note"
     },
+    "context": {
+      "collapse": "Collapse",
+      "overview": {
+        "label": "Overview: {name}",
+        "collapse": "Collapse overview and open create"
+      },
+      "second": {
+        "choose": "Which list beside it",
+        "open": "nothing open | {count} open | {count} open",
+        "summary": "{open} · latest {name}",
+        "add": "Add item to {list}",
+        "empty": "Nothing open here."
+      },
+      "form": {
+        "labelNew": "Create",
+        "labelEdit": "Edit",
+        "collapseNew": "Collapse create and open overview",
+        "collapseEdit": "Collapse edit and open overview",
+        "barSummaryNew": "In {list} · with quantity, unit and note",
+        "barTitleEdit": "Edit {name}"
+      }
+    },
     "itemForm": {
       "newTitle": "New item",
       "newIn": "New in {list}",
@@ -489,7 +511,8 @@
     "households": "Households",
     "lists": "Lists of {name}",
     "listActionsHint": "Right-click or press Context Menu (Shift+F10) to edit, archive or delete",
-    "openItems": "{count} open item | {count} open items"
+    "openItems": "{count} open item | {count} open items",
+    "pinned": "pinned"
   },
   "sync": {
     "synced": "Synced",

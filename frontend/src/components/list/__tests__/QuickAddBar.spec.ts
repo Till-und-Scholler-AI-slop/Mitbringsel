@@ -61,9 +61,14 @@ function item(id: string, name: string): Item {
   }
 }
 
-function mountBar(locale: 'de' | 'en' = 'en', opensDialog?: boolean, pressed?: boolean) {
+function mountBar(
+  locale: 'de' | 'en' = 'en',
+  opensDialog?: boolean,
+  pressed?: boolean,
+  extra: { compact?: boolean; label?: string; listId?: string } = {},
+) {
   return mount(QuickAddBar, {
-    props: { listId: 'l1', opensDialog, pressed },
+    props: { listId: 'l1', opensDialog, pressed, ...extra },
     global: { plugins: [createAppI18n([locale], null)] },
     attachTo: document.body,
   })
@@ -176,5 +181,48 @@ describe('QuickAddBar', () => {
     expect(pressed.get('.details').attributes('title')).toBe('Add item with quantity and note')
     pressed.unmount()
     released.unmount()
+  })
+
+  describe('compact', () => {
+    it('has no details button and no hint, and the usual label by default', () => {
+      const wrapper = mountBar('en', undefined, undefined, { compact: true })
+
+      expect(wrapper.find('.details').exists()).toBe(false)
+      expect(wrapper.find('.hint').exists()).toBe(false)
+      expect(wrapper.get('input').attributes('aria-label')).toBe('Add item')
+      wrapper.unmount()
+    })
+
+    it('takes its own label', () => {
+      const wrapper = mountBar('de', undefined, undefined, {
+        compact: true,
+        label: 'Artikel zu Bäcker hinzufügen',
+      })
+
+      expect(wrapper.get('input').attributes('aria-label')).toBe('Artikel zu Bäcker hinzufügen')
+      wrapper.unmount()
+    })
+
+    it('adds to the list it was given', async () => {
+      const wrapper = mountBar('en', undefined, undefined, { compact: true, listId: 'l2' })
+
+      await type(wrapper, 'Brötchen')
+      await flushPromises()
+
+      expect(itemsService.create).toHaveBeenCalledWith(
+        'l2',
+        expect.objectContaining({ name: 'Brötchen' }),
+      )
+      expect(wrapper.get('input').element.value).toBe('')
+      wrapper.unmount()
+    })
+
+    it('leaves the normal bar as it was', () => {
+      const wrapper = mountBar()
+
+      expect(wrapper.find('.details').exists()).toBe(true)
+      expect(wrapper.find('.hint').exists()).toBe(true)
+      wrapper.unmount()
+    })
   })
 })
