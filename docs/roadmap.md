@@ -8,7 +8,7 @@ Der Agent spricht sie an, sobald der betroffene Schritt ansteht, und hakt sie hi
 - [x] Styling-Ansatz nach Claude Design: eigenes CSS mit Tokens, kein Tailwind (siehe [ADR 0003](adr/0003-eigenes-css-mit-tokens.md))
 - [x] API-Vertrag: OpenAPI-Spezifikation (`api/openapi.yaml`), daraus generierte Typen für Go und TypeScript (siehe [ADR 0002](adr/0002-openapi-als-api-vertrag.md))
 - [ ] Bestätigung der vorgeschlagenen Libraries aus dem [Tech-Stack](tech-stack.md); WebSocket: entschieden, [ADR 0005](adr/0005-live-sync-phase-5.md)
-- [x] Domain und VPS: bestehender eigener VPS hinter Traefik, `mitbringsel.tinowolter.com` und `mitbringsel-dev.tinowolter.com` (siehe [ADR 0001](adr/0001-staging-und-production.md))
+- [x] Domain und VPS: bestehender eigener VPS hinter Traefik, Production unter `tuolino.de`, Staging unter `mitbringsel-dev.tinowolter.com` (siehe [ADR 0001](adr/0001-staging-und-production.md) und [ADR 0009](adr/0009-production-unter-tuolino-de.md))
 - [x] Große Bildschirme: Breakpoints, Aktivität auf dem Server, Verschieben per `listId` (siehe [ADR 0008](adr/0008-grosse-bildschirme.md))
 - [ ] Datenschutzerklärung und Impressum, da die App öffentlich nutzbar ist und personenbezogene Daten (Google-Profil) verarbeitet ([#97](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/97))
 
@@ -68,7 +68,13 @@ Jede Phase endet mit einem lauffähigen, getesteten Stand. Offene Schritte haben
     10. Prüfung auf echten Monitoren ([#186](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/186))
 
     Die Schritte 2, 4 und 5 brauchen kein Backend und können nach Schritt 3 in beliebiger Reihenfolge laufen; 6, 8.1 und 9.1 parallel zu den Frontend-Schritten.
-8. **Deployment:** Compose für Staging und Production hinter dem bestehenden Traefik, Authelia-Schutz für Staging, Backups, automatisches Deployment: `main` auf Staging, GitHub Release auf Production (siehe [ADR 0001](adr/0001-staging-und-production.md)). Vorgezogen und parallel zu Phase 2, damit jeder weitere Stand früh unter echten Bedingungen auf Staging läuft. Schritte: Container-Images, Compose mit Traefik-Labels, Images nach GHCR, Deploy auf Staging, Promote nach Production, Backups.
+8. **Deployment:** Compose für Staging und Production hinter dem bestehenden Traefik, Authelia-Schutz für Staging, Backups, automatisches Deployment: `main` auf Staging, GitHub Release auf Production (siehe [ADR 0001](adr/0001-staging-und-production.md)). Vorgezogen und parallel zu Phase 2, damit jeder weitere Stand früh unter echten Bedingungen auf Staging läuft. Erledigt: Container-Images, Compose mit Traefik-Labels, Images nach GHCR, Deploy auf Staging. Production unter `tuolino.de` (siehe [ADR 0009](adr/0009-production-unter-tuolino-de.md)), Schritte, je ein PR:
+    1. Production-Namen dokumentieren ([#197](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/197))
+    2. Release-Workflow: Images mit der Version taggen und nach Production deployen ([#198](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/198))
+    3. Tägliche Backups der Production-Datenbank ([#199](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/199))
+    4. Einrichtung auf dem VPS, bei Google und GitHub, erster Release `v0.1.0` ([#200](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/200))
+
+    2 und 3 können parallel laufen; 4 braucht alle drei und den Zugriff auf die Domain. Production startet nur für Google-Testnutzer; vor dem öffentlichen Start kommen [#97](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/97) und [#98](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/98).
 
 ## Später
 
