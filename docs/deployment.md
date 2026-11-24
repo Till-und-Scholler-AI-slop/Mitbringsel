@@ -13,7 +13,7 @@ Die App läuft auf einem VPS mit Docker Compose in zwei Umgebungen: Staging und 
 | Image-Tag | Commit-SHA | Commit-SHA und Version (deployt wird per SHA) |
 | `APP_ENV` (fest in den Compose-Dateien, nicht in der `.env`) | `staging` | `production` |
 | Zugriff | Authelia (Traefik-ForwardAuth), dann Google-Login | Google-Login, vorerst nur für die Testnutzer der OAuth-App |
-| Backups | keine | täglich |
+| Backups | keine | täglich um 03:00 UTC, 14 Tage (siehe [Backups](#backups)) |
 
 Production-Images werden nie neu gebaut: Ein Release taggt das Image, das vorher auf Staging lief, zusätzlich mit der Version ("build once, promote"). Deshalb heißen die Images in beiden Umgebungen `mitbringsel-backend` und `mitbringsel-web`; Staging und die Images bekommen den neuen Namen erst mit [#195](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/195).
 
@@ -37,6 +37,7 @@ Im Repo unter `deploy/`:
 | --- | --- |
 | `docker-compose.yml` | Basis für beide Umgebungen: `web`, `backend`, `db`, Traefik-Labels, Healthchecks |
 | `docker-compose.staging.yml` | Nur der Unterschied für Staging: Authelia-Middleware an beiden Routern |
+| `docker-compose.production.yml` | Nur der Unterschied für Production: Service `backup` (siehe [Backups](#backups)) |
 | `.env.example` | Vorlage für die `.env` auf dem Server, Werte für Staging, Abweichungen für Production als Kommentar |
 | `deploy.sh` | Läuft beim Deployment auf dem Server: Dateien installieren, Images ziehen, starten, bei Fehler zurückrollen |
 | `docker-compose.dev.yml` | Nur lokale Entwicklung (Postgres), kommt nie auf den Server |
@@ -46,7 +47,7 @@ Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im Git
 ```
 /opt/personal-projects/slop/
 ├── mitbringsel/staging/   docker-compose.yml, docker-compose.staging.yml, .env, previous/
-└── tuolino/prod/          docker-compose.yml, .env, previous/
+└── tuolino/prod/          docker-compose.yml, docker-compose.production.yml, .env, previous/, backups/
 ```
 
 `previous/` hält die Compose-Dateien des vorherigen Deployments für den automatischen Rollback.
@@ -70,7 +71,7 @@ Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im Git
 - Healthcheck-Endpunkt `GET /api/v1/health` für Compose und das Deployment. Das distroless-Image hat kein `curl`, deshalb prüft der Container sich mit `/server -healthcheck` selbst; der Befehl ruft den Endpunkt auf und endet mit Exit-Code 0 oder 1. Beide Images bringen ihren `HEALTHCHECK` mit, sodass `docker compose up --wait` erst bei gesunden Containern zurückkehrt.
 - nginx im `web`-Image: SPA-Fallback auf `index.html` für Deep-Links, gehashte Dateien unter `/assets/` mit `Cache-Control: immutable`, alles andere mit `no-cache` (wichtig für den späteren Service Worker), gzip.
 - `make docker-build` baut beide Images lokal (Tag `dev`, änderbar per `IMAGE_TAG`).
-- Tägliches Backup der Production-Datenbank per `pg_dump` mit Aufbewahrung von 14 Tagen.
+- Tägliches Backup der Production-Datenbank per `pg_dump` mit Aufbewahrung von 14 Tagen (siehe [Backups](#backups)).
 - Für lokale Entwicklung gibt es eine eigene `docker-compose.dev.yml` (nur Postgres) und ein `Makefile` mit `make dev`, `make test`, `make seed`, `make migrate`, `make docker-build`. Der Seed-Befehl (`backend/cmd/seed`) ist nicht im Backend-Image, weil das Dockerfile nur `./cmd/server` baut; auf Staging und Production lässt er sich damit nicht starten.
 
 ## CI/CD mit GitHub Actions
@@ -111,6 +112,34 @@ Secrets liegen ausschließlich in den GitHub Environments `staging` und `product
 **Staging manuell deployen oder zurückrollen:** Im Tab *Actions* den Workflow *Deploy* starten, Umgebung `staging` wählen und den vollen SHA eines Commits auf `main` angeben. Die Images aller Commits auf `main` liegen in GHCR.
 
 **Production zurückrollen:** Im Tab *Actions* den Workflow *Release* starten und unter *Use workflow from* den Tag der gewünschten Version wählen (z.B. `v0.1.0`), nicht `main`. Version und Commit kommen aus dem Tag, eine Eingabe gibt es nicht. Das geht für jede Version, deren Tag `release.yml` schon enthält. Der Workflow *Deploy* mit `production` funktioniert auch, aber nur von einem Tag `v*` aus (Regel des Environments) und mit dem SHA von Hand.
+
+## Backups
+
+Nur Production. Der Service `backup` in `docker-compose.production.yml` nutzt dasselbe Image `postgres:18` wie `db`: `pg_dump` passt so immer zur Server-Version und bekommt dieselben Updates, ein fremdes Backup-Image ist nicht nötig. Ein kurzes Shell-Skript in der Compose-Datei wartet bis 03:00 UTC, schreibt den Dump und löscht Dumps, die 14 Tage oder älter sind.
+
+- **Wo:** `BACKUP_DIR` aus der `.env`, standardmäßig `backups/` im Ordner der Umgebung, also `/opt/personal-projects/slop/tuolino/prod/backups/`. Ein Ordner auf dem Host statt eines Volumes, damit die Dumps `docker compose down -v` überstehen und sich einfach vom Server kopieren lassen.
+- **Datei:** `<datenbank>-<UTC-Zeit>.dump` im Custom-Format von `pg_dump` (komprimiert, Wiederherstellung mit `pg_restore`). Geschrieben wird erst in eine `.tmp`-Datei, ein abgebrochener Lauf sieht also nie wie ein gültiger Dump aus.
+- **Rechte:** Der Container läuft als `BACKUP_USER` (UID:GID von `deploy`), die Dumps gehören also `deploy`. Er hängt nur am Netz `internal` und läuft wie die anderen Services schreibgeschützt (außer `/backups`), ohne Capabilities und mit `no-new-privileges`.
+- **Fehler** stehen im Log (`docker compose logs backup`); der nächste Versuch folgt einen Tag später. Eine Warnung, wenn ein Backup ausbleibt, gibt es noch nicht ([#204](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/204)).
+- **Nur auf dem VPS:** Geht der Server verloren, sind die Dumps mit weg. Eine Kopie außerhalb fehlt noch ([#203](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/203)).
+
+**Dump von Hand**, z.B. vor einer riskanten Migration (im Ordner der Umgebung):
+
+```bash
+docker compose run --rm backup now
+```
+
+**Wiederherstellen** (lokal ausprobiert, November 2026: Dump, `down -v`, Restore in die leere Datenbank, und Restore über bestehende Daten):
+
+```bash
+cd /opt/personal-projects/slop/tuolino/prod
+docker compose stop backend        # keine Schreibzugriffe während des Restores
+docker compose exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < backups/tuolino-<zeit>.dump
+docker compose start backend
+```
+
+`--clean --if-exists` löscht vorher alle Objekte, die im Dump vorkommen, und legt sie neu an; Daten, die nach dem Dump geschrieben wurden, sind danach weg. Nach einem kompletten Verlust der Datenbank (`down -v` oder neuer Server) zuerst nur `db` starten (`docker compose up -d --wait db`), dann wie oben zurückspielen und erst danach alles starten. Das Backend wendet beim Start nur Migrationen an, die im Dump noch fehlen.
 
 ## Einrichtung
 
@@ -161,7 +190,7 @@ Unter *Deployment branches and tags* nur `main` erlauben, damit kein anderer Bra
 
 Wie Staging, mit diesen Unterschieden (Checkliste: [#200](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/200)):
 
-- **Server:** Ordner `/opt/personal-projects/slop/tuolino/prod` (Owner `deploy`), `.env` aus `deploy/.env.example` mit den Production-Werten aus den Kommentaren (`tuolino-prod`, `tuolino.de`, Datenbank `tuolino`) und einem eigenen Passwort, `chmod 600`. Der SSH-Key und der Server-User können dieselben sein wie bei Staging.
+- **Server:** Ordner `/opt/personal-projects/slop/tuolino/prod` (Owner `deploy`), `.env` aus `deploy/.env.example` mit den Production-Werten aus den Kommentaren (`tuolino-prod`, `tuolino.de`, Datenbank `tuolino`, `COMPOSE_FILE` mit `docker-compose.production.yml`, `BACKUP_USER`) und einem eigenen Passwort, `chmod 600`. Den Ordner für die Dumps vorher als `deploy` anlegen (`mkdir backups`); sonst legt Docker ihn als root an, und der Backup-Container darf nicht hineinschreiben. Der SSH-Key und der Server-User können dieselben sein wie bei Staging.
 - **Google:** eigener OAuth-Client für Production mit der Redirect-URI `https://tuolino.de/api/v1/auth/google/callback`. Solange die OAuth-App im Testmodus ist, können sich nur die dort eingetragenen Testnutzer anmelden. Vor dem öffentlichen Start: Datenschutzerklärung und Impressum ([#97](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/97)), dann die App veröffentlichen ([#98](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/98)).
 - **GitHub Environment** `production` mit denselben Secrets und Variablen wie Staging; `DEPLOY_DIR` ist `/opt/personal-projects/slop/tuolino/prod`, `APP_URL` `https://tuolino.de`. Unter *Deployment branches and tags* nur Tags `v*` erlauben, nicht `main`.
 - **DNS:** `A`- und `AAAA`-Eintrag von `tuolino.de` auf den VPS. Das TLS-Zertifikat holt Traefik beim ersten Request. `www.tuolino.de` gibt es vorerst nicht.
