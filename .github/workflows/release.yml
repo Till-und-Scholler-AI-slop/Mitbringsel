@@ -1,0 +1,105 @@
+name: Release
+
+# Promotes a released version to production: adds the version tag to the
+# images that CI already built for the release commit (no rebuild, "build once,
+# promote"), then deploys them with deploy.yml.
+#
+# Runs when a GitHub Release is published. To roll back, start it by hand
+# from the Actions tab and pick the tag of the older version under
+# "Use workflow from"; version and commit both come from that tag.
+#
+# The GitHub Environment "production" only allows tags v*, so the deploy job
+# never runs from a branch.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One release at a time, and never cancel one halfway. Not named like the
+# group in deploy.yml, which runs inside this workflow.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # Image names must be lowercase, the GitHub organization name is not.
+  REGISTRY: ghcr.io/till-und-scholler-ai-slop
+
+jobs:
+  promote:
+    name: Promote images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REF_TYPE: ${{ github.ref_type }}
+      VERSION: ${{ github.ref_name }}
+      SHA: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # The version ends up in image tags; only accept plain vX.Y.Z tags.
+      # Pre-release tags like v1.0.0-rc.1 do not match.
+      - name: Validate version
+        run: |
+          if [[ $REF_TYPE != tag || ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Run this from a release tag vX.Y.Z, not from '$VERSION'"
+            exit 1
+          fi
+
+      # Only published, non-pre-release versions go to production. The API
+      # does not return draft releases by tag, so a draft fails here as well.
+      - name: Check the release
+        run: |
+          if ! prerelease=$(gh api "repos/$GH_REPO/releases/tags/$VERSION" --jq .prerelease); then
+            echo "::error::No published release for $VERSION"
+            exit 1
+          fi
+          if [[ $prerelease != false ]]; then
+            echo "::error::$VERSION is a pre-release"
+            exit 1
+          fi
+
+      # CI builds images only for commits on main. "ahead" or "identical"
+      # means main contains the release commit.
+      - name: Check that the commit is on main
+        run: |
+          status=$(gh api "repos/$GH_REPO/compare/$SHA...main" --jq .status)
+          if [[ $status != ahead && $status != identical ]]; then
+            echo "::error::$VERSION ($SHA) is not on main (compare status: $status)"
+            exit 1
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # imagetools only writes a new tag that points to the existing image in
+      # the registry. It fails if CI never pushed an image for this commit.
+      - name: Tag the images with the version
+        run: |
+          for image in backend web; do
+            docker buildx imagetools create \
+              --tag "$REGISTRY/mitbringsel-$image:$VERSION" \
+              "$REGISTRY/mitbringsel-$image:$SHA"
+          done
+
+  deploy-production:
+    name: Deploy production
+    needs: promote
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      image-tag: ${{ github.sha }}
+    secrets: inherit
