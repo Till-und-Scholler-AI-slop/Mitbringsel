@@ -40,6 +40,7 @@ const {
   confirmOpen: logoutConfirmOpen,
   pendingCount,
   busy: loggingOut,
+  error: logoutError,
   confirmLogout,
 } = useLogout()
 const listHintId = useId()
@@ -169,6 +170,7 @@ function onListKeydown(event: KeyboardEvent, list: List) {
       v-model:open="logoutConfirmOpen"
       :pending-count="pendingCount"
       :loading="loggingOut"
+      :error="logoutError"
       @confirm="confirmLogout"
     />
   </nav>

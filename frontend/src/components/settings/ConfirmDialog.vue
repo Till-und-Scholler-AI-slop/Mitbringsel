@@ -12,7 +12,7 @@ import { useOnlineStatus } from '@/composables/useOnlineStatus'
 // the action on `confirm` and closes the dialog when it worked; a failure
 // goes in `error` and the dialog stays open.
 // requireOnline: opt-in for actions that need a connection (household leave
-// and delete); off by default so LogoutConfirmDialog (#111) stays unaffected.
+// and delete, logout); offlineHint overrides the default inline notice text.
 const props = withDefaults(
   defineProps<{
     title: string
@@ -22,8 +22,9 @@ const props = withDefaults(
     loading?: boolean
     error?: string | null
     requireOnline?: boolean
+    offlineHint?: string
   }>(),
-  { loading: false, error: null, requireOnline: false },
+  { loading: false, error: null, requireOnline: false, offlineHint: undefined },
 )
 defineEmits<{ confirm: [] }>()
 
@@ -42,7 +43,11 @@ const blockedOffline = computed(() => props.requireOnline && !online.value)
         </span>
         <p class="message-text">{{ message }}</p>
       </div>
-      <BaseOfflineNotice v-if="blockedOffline" variant="inline" :text="t('offline.actionHint')" />
+      <BaseOfflineNotice
+        v-if="blockedOffline"
+        variant="inline"
+        :text="offlineHint ?? t('offline.actionHint')"
+      />
       <p v-if="error" class="problem" role="alert"><BaseIcon name="alert" /> {{ error }}</p>
       <div class="buttons">
         <BaseButton variant="secondary" class="cancel" :disabled="loading" @click="open = false">

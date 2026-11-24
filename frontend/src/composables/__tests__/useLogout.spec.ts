@@ -4,10 +4,12 @@ import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
+import { createAppI18n } from '@/i18n'
 import { ApiError } from '@/services/api/client'
 import type { AuthService } from '@/services/api/auth'
 import type { OutboxEntry } from '@/services/sync/outbox'
 import { useAuthStore } from '@/stores/auth'
+import { useToastsStore } from '@/stores/toasts'
 
 import { useLogout, type OutboxReader } from '../useLogout'
 
@@ -54,13 +56,20 @@ async function setup(signedIn = true) {
       return () => null
     },
   })
-  const wrapper = mount(Probe, { global: { plugins: [router] } })
+  const wrapper = mount(Probe, {
+    global: { plugins: [createAppI18n(['en'], null), router] },
+  })
   return { wrapper, router, storage, ...result }
+}
+
+function setOnline(value: boolean) {
+  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(value)
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  setOnline(true)
   authService.getMe.mockResolvedValue({
     id: 'u1',
     email: 'lena@example.com',
@@ -148,16 +157,75 @@ describe('useLogout', () => {
     wrapper.unmount()
   })
 
-  it('still leaves to login when the logout request fails offline', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    authService.logout.mockRejectedValue(new ApiError('NETWORK'))
+  it('does nothing when offline', async () => {
+    setOnline(false)
+    const { wrapper, router, storage, logout, confirmOpen } = await setup()
+
+    await logout()
+
+    expect(storage.readOutbox).not.toHaveBeenCalled()
+    expect(authService.logout).not.toHaveBeenCalled()
+    expect(confirmOpen.value).toBe(false)
+    expect(useAuthStore().user?.id).toBe('u1')
+    expect(router.currentRoute.value.name).toBe('home')
+    wrapper.unmount()
+  })
+
+  it('does not confirm logout once the browser goes offline', async () => {
     const { wrapper, router, storage, logout, confirmOpen, confirmLogout } = await setup()
+    vi.mocked(storage.readOutbox).mockResolvedValue([entry(1)])
+
+    await logout()
+    expect(confirmOpen.value).toBe(true)
+
+    setOnline(false)
+    window.dispatchEvent(new Event('offline'))
+    await confirmLogout()
+
+    expect(authService.logout).not.toHaveBeenCalled()
+    expect(confirmOpen.value).toBe(true)
+    expect(useAuthStore().user?.id).toBe('u1')
+    expect(router.currentRoute.value.name).toBe('home')
+    wrapper.unmount()
+  })
+
+  it('stays signed in and shows a persistent error toast when logout fails with an empty outbox', async () => {
+    authService.logout.mockRejectedValue(new ApiError('NETWORK'))
+    const { wrapper, router, logout } = await setup()
+
+    await logout()
+
+    expect(useAuthStore().user?.id).toBe('u1')
+    expect(router.currentRoute.value.name).toBe('home')
+    expect(useToastsStore().toasts).toEqual([
+      expect.objectContaining({
+        kind: 'error',
+        timed: false,
+        text: 'Signing out didn’t work. You are still signed in.',
+        detail: 'The server cannot be reached.',
+      }),
+    ])
+    wrapper.unmount()
+  })
+
+  it('keeps the dialog open with an inline error when confirming logout fails, and succeeds on retry', async () => {
+    authService.logout.mockRejectedValueOnce(new ApiError('NETWORK'))
+    const { wrapper, router, storage, logout, confirmOpen, error, confirmLogout } = await setup()
     vi.mocked(storage.readOutbox).mockResolvedValue([entry(1)])
 
     await logout()
     await confirmLogout()
 
-    expect(warn).toHaveBeenCalled()
+    expect(confirmOpen.value).toBe(true)
+    expect(error.value).toBe('The server cannot be reached.')
+    expect(useToastsStore().toasts).toHaveLength(0)
+    expect(useAuthStore().user?.id).toBe('u1')
+    expect(router.currentRoute.value.name).toBe('home')
+
+    authService.logout.mockResolvedValueOnce()
+    await confirmLogout()
+
+    expect(error.value).toBeNull()
     expect(confirmOpen.value).toBe(false)
     expect(useAuthStore().user).toBeNull()
     expect(router.currentRoute.value.name).toBe('login')

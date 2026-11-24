@@ -21,7 +21,8 @@
     "actionHint": "Requires an internet connection.",
     "householdHint": "Creating or joining a household requires a connection.",
     "createHouseholdHint": "Creating a household requires a connection.",
-    "listHint": "Lists can only be created or changed online."
+    "listHint": "Lists can only be created or changed online.",
+    "logoutHint": "Signing out requires an internet connection so your session actually ends."
   },
   "start": {
     "greeting": "Hello {name}",
@@ -152,6 +153,7 @@
     }
   },
   "logout": {
+    "failed": "Signing out didn’t work. You are still signed in.",
     "confirm": {
       "title": "Sign out?",
       "body": "{count} change has not reached the server yet. If you sign out now, it will be lost. | {count} changes have not reached the server yet. If you sign out now, they will be lost.",

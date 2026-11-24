@@ -10,6 +10,7 @@ import type { GroupsService } from '@/services/api/groups'
 import type { ListsService } from '@/services/api/lists'
 import { localData } from '@/services/storage/localData'
 import { useAuthStore } from '@/stores/auth'
+import { useToastsStore } from '@/stores/toasts'
 import type { Group, List, MeResponse } from '@/types/api'
 
 import StartView from '../StartView.vue'
@@ -346,6 +347,60 @@ describe('StartView', () => {
 
     expect(authService.logout).toHaveBeenCalledTimes(1)
     expect(router.currentRoute.value.name).toBe('login')
+    wrapper.unmount()
+  })
+
+  it('disables logging out with an offline hint in the header menu when offline', async () => {
+    setOnline(false)
+    const { wrapper } = await mountView()
+
+    await wrapper.get('.bar .toggle').trigger('click')
+    expect(wrapper.get('.bar .panel button').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.bar .panel [role="status"]').text()).toBe(
+      'Signing out requires an internet connection so your session actually ends.',
+    )
+    wrapper.unmount()
+  })
+
+  it('shows a persistent error toast when logging out fails without pending changes', async () => {
+    authService.logout.mockRejectedValue(new ApiError('NETWORK'))
+    const { wrapper, router } = await mountView()
+
+    await wrapper.get('.bar .toggle').trigger('click')
+    await wrapper.get('.bar .panel button').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('home')
+    expect(useAuthStore().user?.id).toBe('user-1')
+    expect(useToastsStore().toasts).toEqual([
+      expect.objectContaining({
+        kind: 'error',
+        timed: false,
+        text: 'Signing out didn’t work. You are still signed in.',
+        detail: 'The server cannot be reached.',
+      }),
+    ])
+    wrapper.unmount()
+  })
+
+  it('keeps the logout confirm dialog open with an error when confirming fails', async () => {
+    vi.spyOn(localData, 'readOutbox').mockResolvedValue([
+      { seq: 1, queuedAt: 1, change: { kind: 'remove', itemId: 'i1' } },
+    ])
+    authService.logout.mockRejectedValue(new ApiError('NETWORK'))
+    const { wrapper, router } = await mountView()
+
+    await wrapper.get('.bar .toggle').trigger('click')
+    await wrapper.get('.bar .panel button').trigger('click')
+    await flushPromises()
+    await wrapper.get('dialog[open] .confirm').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('dialog[open] [role="alert"]').text()).toContain(
+      'The server cannot be reached.',
+    )
+    expect(useAuthStore().user?.id).toBe('user-1')
+    expect(router.currentRoute.value.name).toBe('home')
     wrapper.unmount()
   })
 })

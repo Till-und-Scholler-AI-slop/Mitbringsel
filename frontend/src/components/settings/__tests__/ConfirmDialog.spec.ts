@@ -17,7 +17,12 @@ beforeEach(() => {
 })
 
 function mountDialog(
-  props: { loading?: boolean; error?: string | null; requireOnline?: boolean } = {},
+  props: {
+    loading?: boolean
+    error?: string | null
+    requireOnline?: boolean
+    offlineHint?: string
+  } = {},
 ) {
   const wrapper = mount(ConfirmDialog, {
     props: {
@@ -72,7 +77,6 @@ describe('ConfirmDialog', () => {
   it('disables confirm with an offline hint only when requireOnline is enabled', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
 
-    // Default (used by LogoutConfirmDialog, #111): stays enabled offline.
     const defaultDialog = mountDialog()
     expect(defaultDialog.find('[role="status"]').exists()).toBe(false)
     expect(defaultDialog.get('.confirm').attributes('disabled')).toBeUndefined()
@@ -83,6 +87,13 @@ describe('ConfirmDialog', () => {
     expect(onlineOnly.get('.confirm').attributes('disabled')).toBeDefined()
     expect(onlineOnly.get('.cancel').attributes('disabled')).toBeUndefined()
     onlineOnly.unmount()
+
+    const customHint = mountDialog({
+      requireOnline: true,
+      offlineHint: 'Custom offline explanation.',
+    })
+    expect(customHint.get('[role="status"]').text()).toBe('Custom offline explanation.')
+    customHint.unmount()
   })
 })
 

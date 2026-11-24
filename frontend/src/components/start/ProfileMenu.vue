@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import BaseAvatar from '@/components/base/BaseAvatar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 
 const AVATAR_SIZE = 40
 const ROW_AVATAR_SIZE = 34
@@ -17,6 +19,7 @@ withDefaults(defineProps<{ name: string; avatarUrl: string | null; row?: boolean
 const emit = defineEmits<{ logout: [] }>()
 
 const { t } = useI18n()
+const { online } = useOnlineStatus()
 const root = useTemplateRef<HTMLElement>('root')
 const toggle = useTemplateRef<HTMLButtonElement>('toggle')
 const panelId = useId()
@@ -43,6 +46,7 @@ function onPointerDown(event: PointerEvent) {
 }
 
 function logout() {
+  if (!online.value) return
   close()
   emit('logout')
 }
@@ -77,10 +81,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown)
 
     <div v-if="open" :id="panelId" class="panel">
       <p class="name">{{ name }}</p>
-      <BaseButton variant="secondary" @click="logout">
+      <BaseButton variant="secondary" :disabled="!online" @click="logout">
         <BaseIcon name="logOut" />
         {{ t('start.profile.logout') }}
       </BaseButton>
+      <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.logoutHint')" />
     </div>
   </div>
 </template>
@@ -115,6 +120,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown)
   flex-direction: column;
   gap: var(--space-3);
   min-width: 14rem;
+  max-width: min(17rem, calc(100vw - 2 * var(--space-4)));
   padding: var(--space-4);
   border: var(--border-width-md) solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -160,9 +166,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown)
 
 .profile--row .panel {
   top: auto;
-  right: auto;
+  right: 0;
   bottom: calc(100% + var(--space-2));
   left: 0;
+  min-width: 0;
 }
 
 .name {
