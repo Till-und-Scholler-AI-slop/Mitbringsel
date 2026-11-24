@@ -10,11 +10,14 @@ import SyncStatus from '@/components/layout/SyncStatus.vue'
 import HouseholdSwitcher from '@/components/list/HouseholdSwitcher.vue'
 import CreateGroupDialog from '@/components/start/CreateGroupDialog.vue'
 import JoinGroupDialog from '@/components/start/JoinGroupDialog.vue'
+import { CONTEXT_COLUMN_QUERY } from '@/components/list/contextColumn'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useGroupsStore } from '@/stores/groups'
 import type { Group } from '@/types/api'
 
 const MAX_AVATARS = 4
 const AVATAR_SIZE = 30
+const AVATAR_SIZE_LARGE = 34
 
 // The head of the list view: on the phone a green bar with the way home and
 // the sync state; then the household with its members. The default slot
@@ -23,6 +26,8 @@ const AVATAR_SIZE = 30
 const props = defineProps<{ group?: Group }>()
 
 const { t } = useI18n()
+// Larger avatars once the header spans the context column too.
+const large = useMediaQuery(CONTEXT_COLUMN_QUERY)
 const router = useRouter()
 const groups = useGroupsStore()
 
@@ -65,7 +70,7 @@ function openCreatedGroup(created: Group) {
           class="member"
           :name="member.displayName"
           :src="member.avatarUrl"
-          :size="AVATAR_SIZE"
+          :size="large ? AVATAR_SIZE_LARGE : AVATAR_SIZE"
         />
       </span>
     </div>

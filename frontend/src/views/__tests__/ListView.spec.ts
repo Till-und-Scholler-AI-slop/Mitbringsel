@@ -1053,6 +1053,13 @@ describe('ListView: context column on a wide screen', () => {
     wrapper.unmount()
   })
 
+  it('shows the member avatars larger in the header', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('header .member').attributes('style')).toContain('width: 34px')
+    wrapper.unmount()
+  })
+
   it('offers an empty form for a new item next to the list, without taking the focus', async () => {
     itemsService.list.mockResolvedValue(makeItems())
     const { wrapper } = await mountView()
