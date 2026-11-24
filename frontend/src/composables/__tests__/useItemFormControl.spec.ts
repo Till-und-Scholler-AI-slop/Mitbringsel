@@ -164,6 +164,43 @@ describe('useItemFormControl', () => {
     expect(form.newItemKey.value).not.toBe(firstKey)
   })
 
+  it('keeps what was typed in the card when the new item button is pressed again', () => {
+    stubPanelMode(true)
+    const { form } = setup()
+    const focusName = vi.fn()
+    form.card.value = { focusName }
+
+    form.openNew('')
+    const key = form.newItemKey.value
+    form.openNew('')
+
+    expect(form.newItemKey.value).toBe(key)
+    expect(form.newItemOpen.value).toBe(true)
+    expect(focusName).toHaveBeenCalledTimes(2)
+  })
+
+  it('hands a typed name to the card even if it shows a new item already', () => {
+    stubPanelMode(true)
+    const { form } = setup()
+
+    form.openNew('')
+    const key = form.newItemKey.value
+    form.openNew('Tomaten')
+
+    expect(form.newItemKey.value).not.toBe(key)
+    expect(form.newItemName.value).toBe('Tomaten')
+  })
+
+  it('starts the dialog afresh each time, even without a typed name', () => {
+    const { form } = setup()
+
+    form.openNew('')
+    const key = form.newItemKey.value
+    form.openNew('')
+
+    expect(form.newItemKey.value).not.toBe(key)
+  })
+
   it('switches between editing and a new item', async () => {
     const { form } = setup()
     await loadItems(item('i1', 'Milch'))

@@ -439,6 +439,7 @@ describe('ListView: header', () => {
 
     expect(wrapper.find('header nav.chips').exists()).toBe(true)
     expect(wrapper.find('main nav.chips').exists()).toBe(false)
+    expect(wrapper.get('.add-bar .details').attributes('aria-pressed')).toBeUndefined()
     wrapper.unmount()
   })
 
@@ -1057,6 +1058,36 @@ describe('ListView: context column on a wide screen', () => {
     const { wrapper } = await mountView()
 
     expect(wrapper.get('header .member').attributes('style')).toContain('width: 34px')
+    wrapper.unmount()
+  })
+
+  it('shows the round button pressed while the card offers a new item', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+    const details = () => wrapper.get('.add-bar .details')
+
+    expect(details().attributes('aria-pressed')).toBe('true')
+    expect(details().attributes('aria-label')).toBe('Add item with quantity and note')
+
+    await openEdit(wrapper, 0)
+    expect(details().attributes('aria-pressed')).toBe('false')
+
+    await cardOf(wrapper).get('input').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(details().attributes('aria-pressed')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('keeps what was typed in the card when the pressed round button is pressed again', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await typeName(wrapper, 'Tomaten')
+    await wrapper.get('.add-bar .details').trigger('click')
+    await flushPromises()
+
+    expect(nameField(wrapper).value).toBe('Tomaten')
+    expect(document.activeElement).toBe(nameField(wrapper))
     wrapper.unmount()
   })
 

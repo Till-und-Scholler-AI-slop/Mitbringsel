@@ -267,7 +267,8 @@
       "label": "Add item",
       "placeholder": "What do we need?",
       "enterHint": "Enter ↵",
-      "details": "Add with details"
+      "details": "Add with details",
+      "detailsCard": "Add item with quantity and note"
     },
     "itemForm": {
       "newTitle": "New item",

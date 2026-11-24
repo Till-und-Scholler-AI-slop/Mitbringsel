@@ -74,8 +74,16 @@ function createItemFormControl(list: () => List | undefined) {
     editingId.value = item.id
   }
 
+  // In the card, pressing "new item" while it already shows the form for a new
+  // item and nothing was typed in the quick-add bar only moves the focus into
+  // it: what was typed in the card stays. Otherwise the form starts afresh.
   function openNew(name: string) {
     rememberOpener()
+    if (columnMode.value && editingId.value === null && name === '') {
+      newItemOpen.value = true
+      card.value?.focusName()
+      return
+    }
     editingId.value = null
     newItemName.value = name
     newItemKey.value++

@@ -72,6 +72,7 @@ function toggle(item: Item) {
       class="add-bar"
       :list-id="list.id"
       :opens-dialog="!columnMode"
+      :pressed="columnMode ? editingId === null : undefined"
       @details="openNew"
     />
 

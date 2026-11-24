@@ -267,7 +267,8 @@
       "label": "Artikel hinzufügen",
       "placeholder": "Was brauchen wir?",
       "enterHint": "Enter ↵",
-      "details": "Mit Details hinzufügen"
+      "details": "Mit Details hinzufügen",
+      "detailsCard": "Artikel mit Menge und Notiz hinzufügen"
     },
     "itemForm": {
       "newTitle": "Neuer Artikel",
