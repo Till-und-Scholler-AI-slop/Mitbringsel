@@ -44,7 +44,9 @@ const list = computed<List | undefined>(() => {
 })
 
 // The item form of this screen; ListItems opens it, ItemFormHost shows it.
-provideItemFormControl(() => list.value)
+// columnMode: from the width of the context column on, the chips sit in the
+// list column instead of the header.
+const { columnMode } = provideItemFormControl(() => list.value)
 
 const active = computed(() => lists.activeLists(props.groupId))
 const archived = computed(() => lists.archivedLists(props.groupId))
@@ -60,6 +62,23 @@ const state = computed<ViewState>(() => {
 })
 
 const openCount = computed(() => items.openItems(listKey.value).length)
+
+// The chips render in the header or, in column mode, at the top of the list
+// column; one instance at a time, so both places share these bindings.
+const chipsShown = computed(() => list.value !== undefined || state.value === 'noLists')
+const chipProps = computed(() => ({
+  groupId: props.groupId,
+  lists: active.value,
+  currentId: listKey.value,
+  openCount: openCount.value,
+  archivedCount: archived.value.length,
+  currentArchived: list.value?.archivedAt != null,
+}))
+const chipListeners = {
+  create: () => dialogs.value?.openCreate(),
+  actions: (target: List) => dialogs.value?.openActions(target.id),
+  archive: () => dialogs.value?.openArchive(),
+}
 const members = computed(() => group.value?.members ?? [])
 
 // A direct visit of the URL has to load what the screens before would have
@@ -108,23 +127,14 @@ useLeaveRemovedGroup(() => props.groupId)
   >
     <div class="page">
       <ListHeader class="header" :group="group">
-        <ListChips
-          v-if="list || state === 'noLists'"
-          :group-id="groupId"
-          :lists="active"
-          :current-id="listKey"
-          :open-count="openCount"
-          :archived-count="archived.length"
-          :current-archived="list?.archivedAt != null"
-          @create="dialogs?.openCreate()"
-          @actions="dialogs?.openActions($event.id)"
-          @archive="dialogs?.openArchive()"
-        />
+        <ListChips v-if="chipsShown && !columnMode" v-bind="chipProps" v-on="chipListeners" />
       </ListHeader>
 
       <main class="content" :class="{ 'content--bar': list }">
         <h1 v-if="list" class="sr-only">{{ list.name }}</h1>
         <h1 v-else-if="group" class="sr-only">{{ group.name }}</h1>
+
+        <ListChips v-if="chipsShown && columnMode" v-bind="chipProps" v-on="chipListeners" />
 
         <ListItems v-if="list" :list="list" :members="members" />
         <ListStateNotice
@@ -201,6 +211,7 @@ useLeaveRemovedGroup(() => props.groupId)
     max-width: none;
     margin: 0;
     padding: 0;
+    gap: 1.375rem;
   }
 }
 

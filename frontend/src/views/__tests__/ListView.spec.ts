@@ -434,6 +434,14 @@ describe('ListView: header', () => {
     wrapper.unmount()
   })
 
+  it('keeps the chips in the header below the context column width', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.find('header nav.chips').exists()).toBe(true)
+    expect(wrapper.find('main nav.chips').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('marks an archived list', async () => {
     listsService.list.mockResolvedValue([list('l1', 'Supermarkt', '2026-02-01T10:00:00Z')])
     const { wrapper } = await mountView()
@@ -1031,6 +1039,19 @@ describe('ListView: context column on a wide screen', () => {
     nameField(w).value = value
     await cardOf(w).get('input').trigger('input')
   }
+
+  it('puts the chips at the top of the list column, not in the header', async () => {
+    const { wrapper, router } = await mountView()
+
+    expect(wrapper.find('header nav.chips').exists()).toBe(false)
+    expect(wrapper.findAll('main nav.chips')).toHaveLength(1)
+
+    await wrapper.findAll('main nav.chips .chip--list')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.params).toMatchObject({ listId: 'l2' })
+    wrapper.unmount()
+  })
 
   it('offers an empty form for a new item next to the list, without taking the focus', async () => {
     itemsService.list.mockResolvedValue(makeItems())

@@ -198,6 +198,14 @@ function toggle(item: Item) {
   font-weight: var(--font-weight-black);
 }
 
+/* Large screens: the gap between quick-add, list and done section, as between
+   the chips above (80rem: CONTEXT_COLUMN_QUERY). */
+@media (min-width: 80rem) {
+  .list-items {
+    gap: 1.375rem;
+  }
+}
+
 @media (min-width: 48rem) {
   /* Above the list, where the design puts it. */
   .add-bar {
