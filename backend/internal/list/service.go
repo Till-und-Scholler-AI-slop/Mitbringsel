@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/group"
+	"tuolino/internal/group"
 )
 
 // Publisher tells the members of a group about a list change once it is

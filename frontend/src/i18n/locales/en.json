@@ -14,7 +14,7 @@
     "unknown": "You are no longer in ‘{name}’"
   },
   "app": {
-    "name": "Mitbringsel"
+    "name": "Tuolino"
   },
   "start": {
     "greeting": "Hello {name}",
@@ -62,7 +62,7 @@
     "paste": "Paste",
     "submit": "Open invite",
     "wait": "Wait {seconds} s",
-    "notALink": "That is not a Mitbringsel invite link. It ends in “/invite/” and a long string of characters.",
+    "notALink": "That is not a Tuolino invite link. It ends in “/invite/” and a long string of characters.",
     "limit": {
       "title": "Take a breath",
       "body": "Too many tries in a short time. You can try again in {seconds} seconds."

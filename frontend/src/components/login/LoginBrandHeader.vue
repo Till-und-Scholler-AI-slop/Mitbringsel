@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import type { IconName } from '@/components/base/icons'
+import BrandLogo from '@/components/BrandLogo.vue'
 
 const { t } = useI18n()
 
@@ -19,7 +20,7 @@ const SHOPS: { key: string; icon: IconName }[] = [
   <!-- Phone: a slim bar with logo and icon stack (design iteration 2).
        Desktop: the left half of the card with slogan and labelled chips. -->
   <div class="brand">
-    <span class="logo">{{ t('app.name') }}</span>
+    <BrandLogo class="logo" />
 
     <span class="stack" aria-hidden="true">
       <span v-for="shop in SHOPS" :key="shop.key" :class="['stack-item', `shop--${shop.key}`]">
@@ -48,20 +49,6 @@ const SHOPS: { key: string; icon: IconName }[] = [
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   background: var(--color-brand);
   color: var(--color-on-brand);
-}
-
-.logo {
-  display: inline-block;
-  padding: var(--space-1-5) var(--space-4);
-  border-radius: var(--radius-full);
-  background: var(--color-accent-tomato);
-  color: var(--color-on-accent);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-black);
-  line-height: var(--line-height-tight);
-  letter-spacing: -0.01em;
-  box-shadow: var(--shadow-sticker);
-  transform: rotate(-3deg);
 }
 
 /* Overlapping round stickers, each slightly turned. */
@@ -122,9 +109,9 @@ const SHOPS: { key: string; icon: IconName }[] = [
     border-radius: 0;
   }
 
-  .logo {
-    padding: var(--space-2) var(--space-5);
-    font-size: var(--font-size-2xl);
+  /* With .brand in front, this wins over BrandLogo's own root class. */
+  .brand .logo {
+    font-size: 2.5rem;
   }
 
   .stack {

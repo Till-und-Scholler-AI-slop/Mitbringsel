@@ -11,10 +11,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mitbringsel/internal/group"
-	"mitbringsel/internal/list"
-	"mitbringsel/internal/platform/db/dbtest"
-	"mitbringsel/internal/platform/db/sqlcgen"
+	"tuolino/internal/group"
+	"tuolino/internal/list"
+	"tuolino/internal/platform/db/dbtest"
+	"tuolino/internal/platform/db/sqlcgen"
 )
 
 // newTestUser stores a user and returns its ID. name keeps subjects unique

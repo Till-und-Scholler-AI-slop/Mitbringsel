@@ -14,8 +14,8 @@ describe('PWA configuration', () => {
     expect(manifest).toBeTruthy()
     if (!manifest || typeof manifest === 'boolean') return
 
-    expect(manifest.name).toBe('Mitbringsel')
-    expect(manifest.short_name).toBe('Mitbringsel')
+    expect(manifest.name).toBe('Tuolino')
+    expect(manifest.short_name).toBe('Tuolino')
     expect(manifest.lang).toBe('de')
     expect(manifest.display).toBe('standalone')
     expect(manifest.start_url).toBe('/')

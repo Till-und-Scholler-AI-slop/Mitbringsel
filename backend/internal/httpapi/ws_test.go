@@ -16,12 +16,12 @@ import (
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/auth"
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/group"
-	"mitbringsel/internal/item"
-	"mitbringsel/internal/list"
-	"mitbringsel/internal/realtime"
+	"tuolino/internal/auth"
+	"tuolino/internal/config"
+	"tuolino/internal/group"
+	"tuolino/internal/item"
+	"tuolino/internal/list"
+	"tuolino/internal/realtime"
 )
 
 // These tests open real connections to an httptest server: a WebSocket needs

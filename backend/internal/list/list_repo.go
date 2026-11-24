@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"mitbringsel/internal/platform/db/sqlcgen"
+	"tuolino/internal/platform/db/sqlcgen"
 )
 
 // PostgresRepository implements Repository with the sqlc queries. It only

@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/httpapi/apigen"
+	"tuolino/internal/config"
+	"tuolino/internal/httpapi/apigen"
 )
 
 // sweepInterval is how often the limiter drops the keys it has forgotten.

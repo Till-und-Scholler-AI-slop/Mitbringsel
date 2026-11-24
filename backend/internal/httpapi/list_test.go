@@ -13,10 +13,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/list"
-	"mitbringsel/internal/user"
+	"tuolino/internal/config"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/list"
+	"tuolino/internal/user"
 )
 
 var (

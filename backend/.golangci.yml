@@ -13,4 +13,4 @@ formatters:
     goimports:
       # Keep our own packages in a separate import group after third-party ones.
       local-prefixes:
-        - mitbringsel
+        - tuolino

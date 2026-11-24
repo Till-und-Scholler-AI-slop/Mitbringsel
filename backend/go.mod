@@ -1,4 +1,4 @@
-module mitbringsel
+module tuolino
 
 go 1.27.3
 

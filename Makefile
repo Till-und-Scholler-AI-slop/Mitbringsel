@@ -75,5 +75,5 @@ frontend-build:
 
 ## docker-build: build the backend and web container images (tag: IMAGE_TAG, default dev)
 docker-build:
-	docker build -t mitbringsel-backend:$(IMAGE_TAG) backend
-	docker build -t mitbringsel-web:$(IMAGE_TAG) frontend
+	docker build -t tuolino-backend:$(IMAGE_TAG) backend
+	docker build -t tuolino-web:$(IMAGE_TAG) frontend

@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mitbringsel/internal/platform/db/sqlcgen"
+	"tuolino/internal/platform/db/sqlcgen"
 )
 
 // txStarter is the part of *pgxpool.Pool that begins transactions.

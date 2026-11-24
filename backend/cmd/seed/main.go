@@ -10,9 +10,9 @@ import (
 	"os"
 	"os/signal"
 
-	"mitbringsel/db/seed"
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/platform/db"
+	"tuolino/db/seed"
+	"tuolino/internal/config"
+	"tuolino/internal/platform/db"
 )
 
 // devUserParam is the URL parameter the frontend reads to pick the dev user

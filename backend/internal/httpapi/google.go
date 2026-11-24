@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"mitbringsel/internal/auth"
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/user"
+	"tuolino/internal/auth"
+	"tuolino/internal/config"
+	"tuolino/internal/user"
 )
 
 const (

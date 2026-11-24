@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/list"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/list"
 )
 
 var _ list.Publisher = (*Broadcaster)(nil)

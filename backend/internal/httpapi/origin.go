@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"mitbringsel/internal/httpapi/apigen"
+	"tuolino/internal/httpapi/apigen"
 )
 
 // originAllowed reports whether origin may open a live connection: true if

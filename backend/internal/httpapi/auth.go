@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/user"
+	"tuolino/internal/config"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/user"
 )
 
 const (

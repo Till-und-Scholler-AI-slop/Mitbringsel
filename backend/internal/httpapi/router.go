@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/config"
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/realtime"
-	"mitbringsel/internal/user"
+	"tuolino/internal/config"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/realtime"
+	"tuolino/internal/user"
 )
 
 // Requests per minute and key (see newLimiter). Generous for real people:

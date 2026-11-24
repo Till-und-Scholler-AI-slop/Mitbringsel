@@ -14,7 +14,7 @@
     "unknown": "Du bist nicht mehr in ‚{name}‘"
   },
   "app": {
-    "name": "Mitbringsel"
+    "name": "Tuolino"
   },
   "start": {
     "greeting": "Hallo {name}",
@@ -62,7 +62,7 @@
     "paste": "Einfügen",
     "submit": "Einladung öffnen",
     "wait": "Noch {seconds} s warten",
-    "notALink": "Das ist kein Mitbringsel-Einladungslink. Er endet auf „/invite/“ und einer langen Zeichenfolge.",
+    "notALink": "Das ist kein Tuolino-Einladungslink. Er endet auf „/invite/“ und einer langen Zeichenfolge.",
     "limit": {
       "title": "Kurz durchatmen",
       "body": "Zu viele Versuche in kurzer Zeit. In {seconds} Sekunden kannst du es noch einmal versuchen."

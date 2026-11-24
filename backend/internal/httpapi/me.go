@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/user"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/user"
 )
 
 const mePath = "/api/v1/me"

@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mitbringsel/internal/platform/db/dbtest"
-	"mitbringsel/internal/platform/db/sqlcgen"
+	"tuolino/internal/platform/db/dbtest"
+	"tuolino/internal/platform/db/sqlcgen"
 )
 
 // TestPostgresSessionRepository shares one container across its subtests,

@@ -6,12 +6,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/auth"
-	"mitbringsel/internal/group"
-	"mitbringsel/internal/item"
-	"mitbringsel/internal/platform/db/dbtest"
-	"mitbringsel/internal/platform/db/sqlcgen"
-	"mitbringsel/internal/user"
+	"tuolino/internal/auth"
+	"tuolino/internal/group"
+	"tuolino/internal/item"
+	"tuolino/internal/platform/db/dbtest"
+	"tuolino/internal/platform/db/sqlcgen"
+	"tuolino/internal/user"
 )
 
 const (

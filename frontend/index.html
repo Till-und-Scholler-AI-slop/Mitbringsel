@@ -2,13 +2,15 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8">
-    <link rel="icon" href="/icon.svg" type="image/svg+xml">
-    <link rel="icon" href="/favicon.ico" sizes="32x32">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <!-- Browsers keep favicons in their own cache, whatever the server says.
+         Raise ?v= whenever the icons change, so they load the new files. -->
+    <link rel="icon" href="/icon.svg?v=2" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#1F7A3A" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#1A5A32" media="(prefers-color-scheme: dark)">
-    <title>Mitbringsel</title>
+    <title>Tuolino</title>
   </head>
   <body>
     <div id="app"></div>

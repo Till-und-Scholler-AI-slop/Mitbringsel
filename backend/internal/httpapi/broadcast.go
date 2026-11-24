@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/httpapi/apigen"
-	"mitbringsel/internal/item"
-	"mitbringsel/internal/realtime"
+	"tuolino/internal/httpapi/apigen"
+	"tuolino/internal/item"
+	"tuolino/internal/realtime"
 )
 
 // broadcastHub is the part of *realtime.Hub the Broadcaster uses.

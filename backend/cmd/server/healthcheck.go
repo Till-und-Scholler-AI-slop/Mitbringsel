@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"mitbringsel/internal/httpapi"
+	"tuolino/internal/httpapi"
 )
 
 const healthcheckTimeout = 3 * time.Second

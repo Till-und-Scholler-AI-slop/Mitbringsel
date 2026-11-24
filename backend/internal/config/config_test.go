@@ -8,7 +8,7 @@ import (
 
 const (
 	dbURL        = "postgres://user:pass@localhost:5432/db"
-	baseURL      = "https://mitbringsel.example.com"
+	baseURL      = "https://tuolino.example.com"
 	clientID     = "123-abc.apps.googleusercontent.com"
 	clientSecret = "GOCSPX-secret"
 )
@@ -125,7 +125,7 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			name:    "plain http outside development",
-			env:     with(deployedEnv("production"), map[string]string{"PUBLIC_BASE_URL": "http://mitbringsel.example.com"}),
+			env:     with(deployedEnv("production"), map[string]string{"PUBLIC_BASE_URL": "http://tuolino.example.com"}),
 			wantErr: true,
 		},
 		{
@@ -135,7 +135,7 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			name:    "public base url without scheme",
-			env:     with(deployedEnv("production"), map[string]string{"PUBLIC_BASE_URL": "mitbringsel.example.com"}),
+			env:     with(deployedEnv("production"), map[string]string{"PUBLIC_BASE_URL": "tuolino.example.com"}),
 			wantErr: true,
 		},
 		{

@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"mitbringsel/internal/group"
+	"tuolino/internal/group"
 )
 
 var errRepo = errors.New("repository failure")

@@ -114,8 +114,8 @@ afterEach(() => {
 
 describe('socketUrl', () => {
   it('uses wss on https', () => {
-    expect(socketUrl({ protocol: 'https:', host: 'mitbringsel.example' })).toBe(
-      'wss://mitbringsel.example/api/v1/ws',
+    expect(socketUrl({ protocol: 'https:', host: 'tuolino.example' })).toBe(
+      'wss://tuolino.example/api/v1/ws',
     )
   })
 
