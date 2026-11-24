@@ -51,6 +51,11 @@ var (
 	// ErrTooManyItems means a RemoveChecked names more than MaxRemoveItems
 	// items.
 	ErrTooManyItems = errors.New("too many items")
+	// ErrListNotFound means the target list of a move does not exist, belongs
+	// to another household or the actor cannot see it.
+	ErrListNotFound = errors.New("target list not found")
+	// ErrListArchived means the target list of a move is archived.
+	ErrListArchived = errors.New("target list archived")
 )
 
 // Unit is how a quantity is measured. The set is fixed (docs/data-model.md);
@@ -235,7 +240,8 @@ type Repository interface {
 	ListForList(ctx context.Context, listID uuid.UUID) ([]Item, error)
 	// ListForLists does the same for several lists at once.
 	ListForLists(ctx context.Context, listIDs []uuid.UUID) ([]Item, error)
-	// Apply writes the update and draws a new server_seq.
+	// Apply writes the update and draws a new server_seq. It returns
+	// ErrListNotFound if the target list of a move vanished meanwhile.
 	Apply(ctx context.Context, itemID uuid.UUID, update Update) (Item, error)
 	// MarkDeleted turns the item into a tombstone. For a tombstone already,
 	// it changes nothing.

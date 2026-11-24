@@ -610,6 +610,162 @@ func TestPostgresRepository(t *testing.T) {
 		}
 	})
 
+	t.Run("a move writes list_id and merges the listId clock", func(t *testing.T) {
+		anna, first := newList(t, "move-anna")
+		l, err := lists.Get(ctx, anna, first)
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := lists.Create(ctx, anna, l.GroupID, "Baumarkt", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		it, err := svc.Create(ctx, anna, first, NewItem{ID: newItemID(t), Name: "Schrauben"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		moveClock := clock(t, time.Minute, "anna")
+
+		got, err := svc.Update(ctx, anna, it.ID, Change{ListID: Some(second.ID)}, moveClock)
+
+		if err != nil {
+			t.Fatalf("Update() error = %v", err)
+		}
+		if got.ListID != second.ID || got.Clocks[FieldList] != moveClock || got.Clocks[FieldName] != clock(t, 0, "anna") {
+			t.Errorf("Update() = %+v, want the second list and the listId clock next to the other clocks", got)
+		}
+		if got.ServerSeq <= it.ServerSeq || got.UpdatedBy == nil || *got.UpdatedBy != anna {
+			t.Errorf("Update() = %+v, want a new server_seq and the mover as updater", got)
+		}
+		if old, err := svc.ListForList(ctx, anna, first); err != nil || len(old) != 0 {
+			t.Errorf("ListForList(old) = %+v, %v, want none", old, err)
+		}
+		if moved, err := svc.ListForList(ctx, anna, second.ID); err != nil || len(moved) != 1 || moved[0].ID != it.ID {
+			t.Errorf("ListForList(new) = %+v, %v, want the item", moved, err)
+		}
+		all, err := svc.ListForGroup(ctx, anna, l.GroupID)
+		if err != nil || len(all.Items) != 1 || all.Items[0].ID != it.ID || all.Items[0].ListID != second.ID {
+			t.Errorf("ListForGroup() = %+v, %v, want the item once, in the second list", all, err)
+		}
+	})
+
+	t.Run("moving into an archived list is refused, out of one is allowed", func(t *testing.T) {
+		anna, first := newList(t, "move-archived-anna")
+		l, err := lists.Get(ctx, anna, first)
+		if err != nil {
+			t.Fatal(err)
+		}
+		archived, err := lists.Create(ctx, anna, l.GroupID, "Weihnachten", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		it, err := svc.Create(ctx, anna, first, NewItem{ID: newItemID(t), Name: "Kerzen"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lists.Archive(ctx, anna, archived.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = svc.Update(ctx, anna, it.ID, Change{ListID: Some(archived.ID), Name: Some("Neu")}, clock(t, time.Minute, "anna"))
+
+		if !errors.Is(err, ErrListArchived) {
+			t.Fatalf("Update() into an archived list error = %v, want %v", err, ErrListArchived)
+		}
+		if stored, err := repo.Get(ctx, it.ID); err != nil || stored.ListID != first || stored.Name != "Kerzen" {
+			t.Errorf("stored item = %+v, %v, want it untouched", stored, err)
+		}
+
+		// Archive the list the item is in: it can still move out.
+		if _, err := lists.Unarchive(ctx, anna, archived.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := lists.Archive(ctx, anna, first); err != nil {
+			t.Fatal(err)
+		}
+		got, err := svc.Update(ctx, anna, it.ID, Change{ListID: Some(archived.ID)}, clock(t, 2*time.Minute, "anna"))
+		if err != nil || got.ListID != archived.ID {
+			t.Errorf("Update() out of an archived list = %+v, %v, want the item in the other list", got, err)
+		}
+	})
+
+	t.Run("a target of another household is not found, also for a member of both", func(t *testing.T) {
+		anna, first := newList(t, "move-foreign-anna")
+		other, err := groups.Create(ctx, anna, "Büro")
+		if err != nil {
+			t.Fatal(err)
+		}
+		foreign, err := lists.Create(ctx, anna, other.ID, "Büro", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ben, benList := newList(t, "move-foreign-ben")
+		it, err := svc.Create(ctx, anna, first, NewItem{ID: newItemID(t), Name: "Kaffee"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for name, target := range map[string]uuid.UUID{"own other household": foreign.ID, "not a member": benList, "unknown": newItemID(t)} {
+			_, err := svc.Update(ctx, anna, it.ID, Change{ListID: Some(target)}, clock(t, time.Minute, "anna"))
+			if !errors.Is(err, ErrListNotFound) {
+				t.Errorf("%s: Update() error = %v, want %v", name, err, ErrListNotFound)
+			}
+		}
+		if _, err := svc.Update(ctx, ben, it.ID, Change{ListID: Some(benList)}, clock(t, time.Minute, "ben")); !errors.Is(err, ErrNotFound) {
+			t.Errorf("an outsider's Update() error = %v, want %v", err, ErrNotFound)
+		}
+	})
+
+	// The service checks the target first; this is the rare case that the
+	// list is deleted between that check and the write.
+	t.Run("a move to a list that is gone is ErrListNotFound", func(t *testing.T) {
+		anna, listID := newList(t, "move-gone-anna")
+		it, err := svc.Create(ctx, anna, listID, NewItem{ID: newItemID(t), Name: "Milch"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = repo.Apply(ctx, it.ID, Update{
+			Change: Change{ListID: Some(uuid.New())},
+			Clocks: Clocks{FieldList: clock(t, time.Minute, "anna")},
+		})
+
+		if !errors.Is(err, ErrListNotFound) {
+			t.Errorf("Apply() error = %v, want %v", err, ErrListNotFound)
+		}
+		if stored, err := repo.Get(ctx, it.ID); err != nil || stored.ListID != listID {
+			t.Errorf("stored item = %+v, %v, want it in its list", stored, err)
+		}
+	})
+
+	t.Run("remove checked on the old list skips a moved item", func(t *testing.T) {
+		anna, first := newList(t, "move-remove-anna")
+		l, err := lists.Get(ctx, anna, first)
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := lists.Create(ctx, anna, l.GroupID, "Baumarkt", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		it, err := svc.Create(ctx, anna, first, NewItem{ID: newItemID(t), Name: "Schrauben"}, clock(t, 0, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Update(ctx, anna, it.ID, Change{Checked: Some(true), ListID: Some(second.ID)}, clock(t, time.Minute, "anna")); err != nil {
+			t.Fatal(err)
+		}
+
+		removed, err := svc.RemoveChecked(ctx, anna, first, []uuid.UUID{it.ID})
+
+		if err != nil || len(removed) != 0 {
+			t.Errorf("RemoveChecked() = %+v, %v, want nothing: the item is in another list now", removed, err)
+		}
+		if stored, err := repo.Get(ctx, it.ID); err != nil || stored.Deleted() || stored.ListID != second.ID {
+			t.Errorf("stored item = %+v, %v, want it alive in the second list", stored, err)
+		}
+	})
+
 	t.Run("unknown items are not found", func(t *testing.T) {
 		unknown := uuid.New()
 		if _, err := repo.Get(ctx, unknown); !errors.Is(err, ErrNotFound) {

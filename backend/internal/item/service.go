@@ -229,6 +229,15 @@ func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Ch
 			result = current
 			return nil
 		}
+		// The target is only checked if the move wins: an outdated move is
+		// no error (docs/sync.md). A move within the same list needs no
+		// check. l.GroupID stays right even if someone moved the item
+		// meanwhile, because moves never leave the household.
+		if _, moves := won[FieldList]; moves && change.ListID.Value != current.ListID {
+			if err := s.requireTarget(ctx, actor, l.GroupID, change.ListID.Value); err != nil {
+				return err
+			}
+		}
 		changed = true
 
 		update := Update{
@@ -245,7 +254,8 @@ func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Ch
 		return err
 	})
 	if err != nil {
-		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalidHLC) || errors.Is(err, ErrUnknownField) {
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalidHLC) || errors.Is(err, ErrUnknownField) ||
+			errors.Is(err, ErrListNotFound) || errors.Is(err, ErrListArchived) {
 			return Item{}, err
 		}
 		return Item{}, fmt.Errorf("update item: %w", err)
@@ -334,6 +344,25 @@ func (s *Service) requireList(ctx context.Context, actor, listID uuid.UUID) (lis
 		return list.List{}, fmt.Errorf("get list: %w", err)
 	}
 	return l, nil
+}
+
+// requireTarget checks the list an item moves to: one the actor can see, of
+// the same household, and active.
+func (s *Service) requireTarget(ctx context.Context, actor, groupID, listID uuid.UUID) error {
+	t, err := s.lists.Get(ctx, actor, listID)
+	if errors.Is(err, list.ErrNotFound) {
+		return ErrListNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("get target list: %w", err)
+	}
+	if t.GroupID != groupID {
+		return ErrListNotFound
+	}
+	if t.Archived() {
+		return ErrListArchived
+	}
+	return nil
 }
 
 // validateNew checks and cleans the fields of a new item.

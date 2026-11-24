@@ -43,9 +43,11 @@ WHERE deleted_at < sqlc.arg(cutoff)::timestamptz;
 -- name: ApplyItemUpdate :one
 -- Writes only the fields that won the merge: a set_* flag says whether the
 -- field is part of the update, so "leave as is" and "set to NULL" differ.
--- The new clocks are merged into field_clocks (|| keeps the other keys).
+-- A move changes list_id (the caller has checked the target list). The new
+-- clocks are merged into field_clocks (|| keeps the other keys).
 UPDATE items
-SET name         = CASE WHEN sqlc.arg(set_name)::boolean THEN sqlc.arg(name)::text ELSE name END,
+SET list_id      = CASE WHEN sqlc.arg(set_list_id)::boolean THEN sqlc.arg(list_id)::uuid ELSE list_id END,
+    name         = CASE WHEN sqlc.arg(set_name)::boolean THEN sqlc.arg(name)::text ELSE name END,
     quantity     = CASE WHEN sqlc.arg(set_quantity)::boolean THEN sqlc.narg(quantity)::numeric ELSE quantity END,
     unit         = CASE WHEN sqlc.arg(set_unit)::boolean THEN sqlc.narg(unit)::text ELSE unit END,
     note         = CASE WHEN sqlc.arg(set_note)::boolean THEN sqlc.narg(note)::text ELSE note END,
