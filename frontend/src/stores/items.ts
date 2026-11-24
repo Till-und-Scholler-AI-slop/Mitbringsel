@@ -114,8 +114,9 @@ interface ListItems {
  * outbox sends later, maybe after a reload. If the server refuses a change,
  * the item shows the state of the server again and onRejected() tells the
  * listeners (the toasts, useItemRejections). The store owns the outbox of
- * the signed-in user: it opens one at the sign-in and stops it when the
- * user changes.
+ * the signed-in user: it opens one at the sign-in, triggers it again on
+ * every `ready` of the socket (reconnect, end of a 401 pause) and stops it
+ * when the user changes.
  *
  * What the user sees is the state of the server with the pending changes
  * on top (services/sync/pending.ts): the changes in the outbox, including
@@ -200,6 +201,10 @@ export function defineItemsStore(
     // When forgetList() dropped a list. The answer of a household that
     // started before must not bring the list back: the list is gone.
     const forgottenAt = new Map<string, number>()
+    // When takeServerItem() dropped a server state because its list was not
+    // in byList yet. A load or loadGroup that started before may hold an
+    // older snapshot, so it triggers one follow-up load(listId).
+    const missedAt = new Map<string, number>()
 
     // Items of a pending single-item removal while its undo toast runs. Read
     // by the readers, so reactive. They stay hidden whatever happens to them
@@ -250,6 +255,7 @@ export function defineItemsStore(
       touchedAt.clear()
       appliedLoadStart.clear()
       forgottenAt.clear()
+      missedAt.clear()
       hidden.value = new Set()
       holdsState.clear()
       persistQueue.clear()
@@ -511,10 +517,15 @@ export function defineItemsStore(
      */
     function takeServerItem(item: Item, mode: 'event' | 'answer') {
       observeItem(item)
+      if (tombstones.has(item.id)) {
+        return
+      }
       const entry = byList.value[item.listId]
       // A list we do not show: nothing to update, and loading it later gets
-      // the current state anyway.
-      if (!entry || tombstones.has(item.id)) {
+      // the current state anyway. Remember when this happened, so a load
+      // already in flight (e.g. loadGroup on reconnect) reloads it once more.
+      if (!entry) {
+        missedAt.set(item.listId, ++clock)
         return
       }
       const index = entry.items.findIndex((i) => i.id === item.id)
@@ -553,8 +564,15 @@ export function defineItemsStore(
      * know that the item is gone, not when.
      */
     function takeDeletion(listId: string, itemId: string, serverSeq: number | null) {
+      if (tombstones.has(itemId)) {
+        return
+      }
       const entry = byList.value[listId]
-      if (!entry || tombstones.has(itemId)) {
+      if (!entry) {
+        // Deleting wins forever, so remembering the tombstone keeps an
+        // in-flight loadGroup() from putting the item back without needing a
+        // follow-up load or creating an entry for an idle list.
+        tombstones.add(itemId)
         return
       }
       const held = entry.items.find((item) => item.id === itemId)
@@ -638,11 +656,19 @@ export function defineItemsStore(
         mergeLoaded(entry, loaded, startedAt)
         // Not for a list forgotten meanwhile: forgetList removed its stored
         // items, and this late answer must not bring them back.
-        if (byList.value[listId] === entry) {
+        const current = byList.value[listId] === entry
+        if (current) {
           holdsState.add(listId)
           persist(listId)
         }
         entry.status = 'ready'
+        if (current) {
+          const missed = (missedAt.get(listId) ?? 0) > startedAt
+          missedAt.delete(listId)
+          if (missed) {
+            void load(listId)
+          }
+        }
       } catch (err) {
         // Offline the request fails at once: wait for the stored items, so
         // the screen does not show the error before they are there.
@@ -695,6 +721,11 @@ export function defineItemsStore(
         persist(listId)
         entry.status = 'ready'
         entry.errorCode = null
+        const missed = (missedAt.get(listId) ?? 0) > startedAt
+        missedAt.delete(listId)
+        if (missed) {
+          void load(listId)
+        }
       }
       return answer.listIds
     }
@@ -1008,6 +1039,7 @@ export function defineItemsStore(
       }
       delete byList.value[listId]
       appliedLoadStart.delete(listId)
+      missedAt.delete(listId)
       forgottenAt.set(listId, ++clock)
     }
 
@@ -1052,6 +1084,7 @@ export function defineItemsStore(
     // onScopeDispose() runs at $dispose(): the handlers must not outlive the
     // store, as the socket outlives it.
     const unsubscribes = [
+      events.on('ready', () => outbox?.trigger()),
       events.on('itemChanged', ({ payload }) => takeServerItem(payload.item, 'event')),
       events.on('itemDeleted', ({ payload }) =>
         takeDeletion(payload.listId, payload.itemId, payload.serverSeq),
