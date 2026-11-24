@@ -820,6 +820,14 @@ paths:
         Without a `clock` the server gives the request the newest clock, so
         the latest request wins. Sending the same change with the same
         `clock` again changes nothing.
+
+        Moving: send `listId` to move the item to another list of the same
+        household. Other fields may come along in the same request; the
+        checked state, the author and the creation date stay. The target is
+        only checked if the move wins the merge: an outdated move is no
+        error. A rejected move rejects the whole request: `404`
+        `LIST_NOT_FOUND` if the target does not exist, is deleted or belongs
+        to another household, `409` `LIST_ARCHIVED` if it is archived.
       tags: [items]
       security:
         - sessionCookie: []
@@ -841,6 +849,8 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
         "500":
           $ref: "#/components/responses/Error"
@@ -1375,6 +1385,11 @@ components:
           type: string
         checked:
           type: string
+        listId:
+          type: string
+          description: |
+            Missing for items created before moving existed and never moved
+            since.
 
     ItemList:
       type: object
@@ -1493,6 +1508,18 @@ components:
           nullable: true
         checked:
           type: boolean
+        listId:
+          type: string
+          format: uuid
+          x-go-type: uuid.UUID
+          x-go-type-import:
+            path: github.com/google/uuid
+          description: |
+            Moves the item to another list of the same household. The list
+            must be active: an unknown, deleted or another household's list
+            is `LIST_NOT_FOUND`, an archived one `LIST_ARCHIVED`. Merged
+            with its own clock like the other fields; a move that loses the
+            merge is not checked and not an error. Cannot be `null`.
         clock:
           type: string
           description: |
@@ -1688,6 +1715,7 @@ components:
         - ITEM_UNIT_INVALID
         - ITEM_NOTE_INVALID
         - ITEM_ID_TAKEN
+        - LIST_ARCHIVED
       # Go constant names; without them oapi-codegen would turn NOT_FOUND
       # into NOTFOUND.
       x-enum-varnames:
@@ -1719,6 +1747,7 @@ components:
         - ItemUnitInvalid
         - ItemNoteInvalid
         - ItemIDTaken
+        - ListArchived
 
     # WebSocket messages (see GET /ws). Every message has a `type` with a
     # single allowed value, so the TypeScript types narrow on it and the

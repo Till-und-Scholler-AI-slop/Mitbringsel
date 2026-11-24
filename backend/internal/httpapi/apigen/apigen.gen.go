@@ -28,6 +28,7 @@ const (
 	ErrorCodeItemNoteInvalid     ErrorCode = "ITEM_NOTE_INVALID"
 	ErrorCodeItemQuantityInvalid ErrorCode = "ITEM_QUANTITY_INVALID"
 	ErrorCodeItemUnitInvalid     ErrorCode = "ITEM_UNIT_INVALID"
+	ErrorCodeListArchived        ErrorCode = "LIST_ARCHIVED"
 	ErrorCodeListIconInvalid     ErrorCode = "LIST_ICON_INVALID"
 	ErrorCodeListNameInvalid     ErrorCode = "LIST_NAME_INVALID"
 	ErrorCodeListNotFound        ErrorCode = "LIST_NOT_FOUND"
@@ -77,6 +78,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeItemQuantityInvalid:
 		return true
 	case ErrorCodeItemUnitInvalid:
+		return true
+	case ErrorCodeListArchived:
 		return true
 	case ErrorCodeListIconInvalid:
 		return true
@@ -744,11 +747,15 @@ type ItemChangedPayload struct {
 // field, `<wall>-<counter>-<node>` (docs/sync.md). Clients need them to
 // merge changes per field.
 type ItemClocks struct {
-	Checked  string `json:"checked"`
-	Name     string `json:"name"`
-	Note     string `json:"note"`
-	Quantity string `json:"quantity"`
-	Unit     string `json:"unit"`
+	Checked string `json:"checked"`
+
+	// ListID Missing for items created before moving existed and never moved
+	// since.
+	ListID   *string `json:"listId,omitempty"`
+	Name     string  `json:"name"`
+	Note     string  `json:"note"`
+	Quantity string  `json:"quantity"`
+	Unit     string  `json:"unit"`
 }
 
 // ItemDeletedMessage Server to client: an item was deleted.
@@ -967,11 +974,18 @@ type UpdateItemRequest struct {
 	// made it. Without it the server stamps the change itself. A clock
 	// more than 5 minutes ahead of the server is set to the server
 	// time. Otherwise `INVALID_REQUEST`.
-	Clock    *string  `json:"clock,omitempty"`
-	Name     *string  `json:"name,omitempty"`
-	Note     *string  `json:"note,omitempty"`
-	Quantity *float64 `json:"quantity,omitempty"`
-	Unit     *Unit    `json:"unit,omitempty"`
+	Clock *string `json:"clock,omitempty"`
+
+	// ListID Moves the item to another list of the same household. The list
+	// must be active: an unknown, deleted or another household's list
+	// is `LIST_NOT_FOUND`, an archived one `LIST_ARCHIVED`. Merged
+	// with its own clock like the other fields; a move that loses the
+	// merge is not checked and not an error. Cannot be `null`.
+	ListID   *uuid.UUID `json:"listId,omitempty"`
+	Name     *string    `json:"name,omitempty"`
+	Note     *string    `json:"note,omitempty"`
+	Quantity *float64   `json:"quantity,omitempty"`
+	Unit     *Unit      `json:"unit,omitempty"`
 }
 
 // GroupID defines model for GroupId.
