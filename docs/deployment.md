@@ -1,23 +1,25 @@
 # Deployment und CI/CD
 
-Die App läuft auf einem VPS mit Docker Compose in zwei Umgebungen: Staging und Production (siehe [ADR 0001](adr/0001-staging-und-production.md)). GitHub Actions testet jeden Pull Request, deployt `main` automatisch auf Staging und einen veröffentlichten GitHub Release auf Production.
+Die App läuft auf einem VPS mit Docker Compose in zwei Umgebungen: Staging und Production (siehe [ADR 0001](adr/0001-staging-und-production.md) und [ADR 0009](adr/0009-production-unter-tuolino-de.md)). GitHub Actions testet jeden Pull Request, deployt `main` automatisch auf Staging und einen veröffentlichten GitHub Release auf Production.
 
 ## Umgebungen
 
 | | Staging | Production |
 | --- | --- | --- |
-| Domain | `mitbringsel-dev.tinowolter.com` | `mitbringsel.tinowolter.com` |
+| Domain | `mitbringsel-dev.tinowolter.com` | `tuolino.de` (ohne `www`) |
+| Compose-Projekt | `mitbringsel-staging` | `tuolino-prod` |
+| Datenbank (User und Name) | `mitbringsel` | `tuolino` |
 | Auslöser | Push auf `main` (nach grüner CI) | Veröffentlichter GitHub Release `vX.Y.Z` |
 | Image-Tag | Commit-SHA | Commit-SHA und Version |
 | `APP_ENV` (fest in den Compose-Dateien, nicht in der `.env`) | `staging` | `production` |
-| Zugriff | Authelia (Traefik-ForwardAuth), dann Google-Login | Google-Login |
+| Zugriff | Authelia (Traefik-ForwardAuth), dann Google-Login | Google-Login, vorerst nur für die Testnutzer der OAuth-App |
 | Backups | keine | täglich |
 
-Production-Images werden nie neu gebaut: Ein Release taggt das Image, das vorher auf Staging lief, zusätzlich mit der Version ("build once, promote").
+Production-Images werden nie neu gebaut: Ein Release taggt das Image, das vorher auf Staging lief, zusätzlich mit der Version ("build once, promote"). Deshalb heißen die Images in beiden Umgebungen `mitbringsel-backend` und `mitbringsel-web`; Staging und die Images bekommen den neuen Namen erst mit [#195](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/195).
 
 ## Container
 
-Je Umgebung ein Compose-Projekt (`mitbringsel-staging`, `mitbringsel-prod`) mit eigenem `web`, `backend` und `db`. Davor steht der auf dem VPS bereits laufende **Traefik**; er gehört nicht zu diesem Repo. `web` und `backend` hängen an Traefiks Docker-Netzwerk, das Routing steht als Labels in den Compose-Dateien:
+Je Umgebung ein Compose-Projekt (`mitbringsel-staging`, `tuolino-prod`) mit eigenem `web`, `backend` und `db`. Davor steht der auf dem VPS bereits laufende **Traefik**; er gehört nicht zu diesem Repo. `web` und `backend` hängen an Traefiks Docker-Netzwerk, das Routing steht als Labels in den Compose-Dateien:
 
 - `Host(<domain>) && PathPrefix(/api)` → `backend` (REST und WebSocket)
 - `Host(<domain>)` → `web`
@@ -42,16 +44,16 @@ Im Repo unter `deploy/`:
 Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im GitHub Environment). Der Deploy-Workflow kopiert die Compose-Dateien aus dem deployten Commit dorthin und überschreibt sie dabei; auf dem Server wird nur die `.env` von Hand gepflegt.
 
 ```
-/opt/personal-projects/slop/mitbringsel/
-├── staging/   docker-compose.yml, docker-compose.staging.yml, .env, previous/
-└── prod/      docker-compose.yml, .env, previous/
+/opt/personal-projects/slop/
+├── mitbringsel/staging/   docker-compose.yml, docker-compose.staging.yml, .env, previous/
+└── tuolino/prod/          docker-compose.yml, .env, previous/
 ```
 
 `previous/` hält die Compose-Dateien des vorherigen Deployments für den automatischen Rollback.
 
 `COMPOSE_PROJECT_NAME` und `COMPOSE_FILE` stehen in der `.env`, deshalb reicht in beiden Ordnern ein schlichtes `docker compose up -d --wait`.
 
-- **Eindeutige Namen:** Traefik-Router und -Services tragen den Projektnamen (`mitbringsel-staging-api`), weil beide Umgebungen am selben Traefik hängen. Die Datenbank ist über den Alias `<projekt>-db` erreichbar statt über `db`, weil im gemeinsamen `proxy`-Netz andere Projekte ebenfalls einen `db`-Container haben können.
+- **Eindeutige Namen:** Traefik-Router und -Services tragen den Projektnamen (`mitbringsel-staging-api`, `tuolino-prod-api`), weil beide Umgebungen am selben Traefik hängen. Die Datenbank ist über den Alias `<projekt>-db` erreichbar statt über `db`, weil im gemeinsamen `proxy`-Netz andere Projekte ebenfalls einen `db`-Container haben können.
 - **Netze:** `db` hängt nur am projekteigenen Netz `internal` (`internal: true`, also auch ohne Internetzugang). `backend` hängt an `internal` und `proxy`, `web` nur an `proxy`.
 - **Härtung:** `backend` und `web` laufen mit schreibgeschütztem Dateisystem (`web` mit `tmpfs` für `/tmp`), ohne Linux-Capabilities und mit `no-new-privileges`.
 - **Logs** werden rotiert (3 × 10 MB je Container).
@@ -76,7 +78,7 @@ Auf dem VPS liegt je Umgebung ein Ordner (der Pfad steht als `DEPLOY_DIR` im Git
 1. **Bei jedem Pull Request und Push auf `main`** (Workflow `.github/workflows/ci.yml`, auch manuell startbar): Lint (`golangci-lint`, ESLint, Prettier), Typprüfung (`vue-tsc`), Backend-Tests mit Postgres über `testcontainers-go`, Frontend-Tests, Build beider Teile. Dazu `docker compose config` für Staging und Production mit `deploy/.env.example` (Job `deploy-config`) und ein Build beider Container-Images ohne Push (Job `images`), damit kaputte Compose-Dateien oder Dockerfiles schon im PR auffallen. Feature-Branches ohne PR laufen nicht, damit ein PR nicht doppelt geprüft wird. Lokal entsprechen dem `make lint`, `make test`, `make frontend-lint`, `make frontend-test` und `make frontend-build`.
 2. **Push auf `main`, CI grün:** Der Job `images` läuft erst nach den Backend- und Frontend-Jobs und pusht `ghcr.io/till-und-scholler-ai-slop/mitbringsel-backend` und `…-web`, getaggt mit dem vollen Commit-SHA (kein `latest`). Nur dieser Job hat `packages: write`; angemeldet wird mit dem automatischen `GITHUB_TOKEN`. Der Layer-Cache liegt im GitHub-Actions-Cache (je Image ein eigener Bereich), sodass unveränderte Abhängigkeiten nicht neu gebaut werden. Die Images sind privat, obwohl das Repo öffentlich ist: Ihre Sichtbarkeit wird in den Package-Settings von GHCR festgelegt, nicht vom Repo übernommen.
 3. **Deploy Staging:** Der Job `deploy-staging` läuft nach `images` und `deploy-config` und ruft den wiederverwendbaren Workflow `.github/workflows/deploy.yml` auf (siehe [Deployment-Ablauf](#deployment-ablauf)). Läufe auf `main` werden nicht abgebrochen, damit kein Deployment mittendrin stoppt; bei PRs bricht ein neuer Push den alten Lauf weiterhin ab.
-4. **GitHub Release veröffentlicht:** Die Images des Release-Commits zusätzlich mit der Version taggen und genauso in `mitbringsel-prod` deployen. Rollback heißt: die vorherige Version deployen.
+4. **GitHub Release veröffentlicht:** Die Images des Release-Commits zusätzlich mit der Version taggen und genauso in `tuolino-prod` deployen. Rollback heißt: die vorherige Version deployen.
 5. **E2E-Tests** laufen zunächst nur nightly oder manuell, um die Pipeline schnell zu halten.
 
 **KI-Review** (Workflow `.github/workflows/claude-review.yml`): Claude Code prüft einen PR, sobald er geöffnet oder als fertig markiert wird, und kommentiert Funde inline auf Deutsch, mit einer Zusammenfassung am Ende. Ein erneutes Review fordert man mit dem Label `claude-review` an; der Workflow entfernt es danach wieder. Übersprungen werden Drafts, PRs aus Forks und PRs, die nur `docs/` ändern (außer per Label). Das Review ist nur beratend, kein Pflicht-Check. Es läuft mit Sonnet über das Claude-Pro-Abo eines Maintainers (Repo-Secret `CLAUDE_CODE_OAUTH_TOKEN`, erzeugt mit `claude setup-token`) und verbraucht dessen Kontingent; deshalb nicht bei jedem Push. Die Kommentare schreibt die Claude-GitHub-App, die für die Organisation installiert sein muss. Was geprüft wird, steht im Prompt des Workflows: Korrektheit, Sicherheit, Sync-Reihenfolgen und Abweichungen von `AGENTS.md` und `docs/`, nicht was die CI schon prüft.
@@ -110,7 +112,7 @@ Secrets liegen ausschließlich in den GitHub Environments `staging` und `product
 
 ## Einrichtung
 
-Einmalig je Umgebung, hier am Beispiel Staging.
+Einmalig je Umgebung, hier am Beispiel Staging; die Unterschiede für Production stehen [darunter](#production).
 
 **Auf dem Server** (User `deploy`, Mitglied der Gruppe `docker`; Docker Compose als System-Plugin, z.B. Paket `docker-compose-plugin`):
 
@@ -152,3 +154,13 @@ Danach die lokale Datei `mitbringsel-deploy` löschen, sobald sie in GitHub hint
 Unter *Deployment branches and tags* nur `main` erlauben, damit kein anderer Branch an die Secrets kommt.
 
 **Authelia:** eine `access_control`-Regel für `mitbringsel-dev.tinowolter.com` (siehe [ADR 0001](adr/0001-staging-und-production.md)).
+
+### Production
+
+Wie Staging, mit diesen Unterschieden (Checkliste: [#200](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/200)):
+
+- **Server:** Ordner `/opt/personal-projects/slop/tuolino/prod` (Owner `deploy`), `.env` aus `deploy/.env.example` mit den Production-Werten aus den Kommentaren (`tuolino-prod`, `tuolino.de`, Datenbank `tuolino`) und einem eigenen Passwort, `chmod 600`. Der SSH-Key und der Server-User können dieselben sein wie bei Staging.
+- **Google:** eigener OAuth-Client für Production mit der Redirect-URI `https://tuolino.de/api/v1/auth/google/callback`. Solange die OAuth-App im Testmodus ist, können sich nur die dort eingetragenen Testnutzer anmelden. Vor dem öffentlichen Start: Datenschutzerklärung und Impressum ([#97](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/97)), dann die App veröffentlichen ([#98](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/98)).
+- **GitHub Environment** `production` mit denselben Secrets und Variablen wie Staging; `DEPLOY_DIR` ist `/opt/personal-projects/slop/tuolino/prod`, `APP_URL` `https://tuolino.de`. Unter *Deployment branches and tags* nur Tags `v*` erlauben, nicht `main`.
+- **DNS:** `A`- und `AAAA`-Eintrag von `tuolino.de` auf den VPS. Das TLS-Zertifikat holt Traefik beim ersten Request. `www.tuolino.de` gibt es vorerst nicht.
+- **Authelia:** keine Regel nötig, Production ist öffentlich.

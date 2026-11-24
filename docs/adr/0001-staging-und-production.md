@@ -1,6 +1,6 @@
 # 0001: Staging und Production
 
-Status: akzeptiert
+Status: akzeptiert, Domain und Namen von Production geändert durch [0009](0009-production-unter-tuolino-de.md)
 
 ## Kontext
 
@@ -10,7 +10,7 @@ Auf dem VPS (Ubuntu) laufen bereits andere Dienste hinter **Traefik** (Docker-Co
 
 ## Entscheidung
 
-- **Zwei Umgebungen auf dem bestehenden VPS:** `staging` unter `mitbringsel-dev.tinowolter.com` und `production` unter `mitbringsel.tinowolter.com`. Beide sind getrennte Compose-Projekte (`mitbringsel-staging`, `mitbringsel-prod`) mit je eigenem `web`, `backend`, eigener Datenbank (eigenes Volume) und eigener `.env`.
+- **Zwei Umgebungen auf dem bestehenden VPS:** `staging` unter `mitbringsel-dev.tinowolter.com` und `production` unter `mitbringsel.tinowolter.com` (*Nachtrag: jetzt `tuolino.de`, siehe [ADR 0009](0009-production-unter-tuolino-de.md)*). Beide sind getrennte Compose-Projekte (`mitbringsel-staging`, `mitbringsel-prod`, *jetzt `tuolino-prod`*) mit je eigenem `web`, `backend`, eigener Datenbank (eigenes Volume) und eigener `.env`.
 - **Push auf `main` → Staging:** Nach grüner CI wird das Image gebaut, mit dem Commit-SHA getaggt, in die GitHub Container Registry gepusht und auf Staging deployt.
 - **Veröffentlichter GitHub Release → Production:** Das Image des Release-Commits wird zusätzlich mit der Version (`v1.2.0`) getaggt und auf Production deployt. Production-Images werden nie neu gebaut ("build once, promote"), Production bekommt also genau das, was auf Staging lief.
 - **Der bestehende Traefik ist der Reverse Proxy:** Mitbringsel bringt keinen eigenen Proxy mit. Die Compose-Dateien hängen `web` und `backend` an Traefiks Docker-Netzwerk und beschreiben das Routing über Container-Labels: `/api` (inklusive WebSocket) an `backend`, alles andere an `web`. TLS-Zertifikate kommen von Traefik.
