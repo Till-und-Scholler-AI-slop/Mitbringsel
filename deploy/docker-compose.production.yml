@@ -1,8 +1,8 @@
-# Production only, loaded on top of docker-compose.yml: a daily dump of the
-# database. Named after the GitHub Environment, because deploy.yml uploads
-# docker-compose.<environment>.yml.
+# Production only, loaded on top of docker-compose.yml: a redirect from
+# www.<APP_DOMAIN> and a daily dump of the database. Named after the GitHub
+# Environment, because deploy.yml uploads docker-compose.<environment>.yml.
 #
-# The service uses the same postgres image as db, so pg_dump always matches
+# The backup service uses the same postgres image as db, so pg_dump always matches
 # the server version and gets the same updates. Dumps go to a folder on the
 # host, not into a volume: they survive "docker compose down -v" and can be
 # copied off the server from there.
@@ -17,6 +17,25 @@ x-logging: &logging
     max-file: "3"
 
 services:
+  # www.<APP_DOMAIN> gets its own certificate and a permanent redirect to
+  # https://<APP_DOMAIN>, keeping path and query. The labels sit on web
+  # because Traefik only learns routers from container labels; the
+  # middleware answers before any request reaches web. http:// is already
+  # redirected to https:// by Traefik's own entrypoint. Compose merges these
+  # labels with the ones from docker-compose.yml.
+  web:
+    labels:
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-www.rule=Host(`www.${APP_DOMAIN}`)
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-www.entrypoints=${TRAEFIK_ENTRYPOINT}
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-www.tls=true
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-www.tls.certresolver=${TRAEFIK_CERTRESOLVER}
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-www.middlewares=${COMPOSE_PROJECT_NAME}-www
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-www.service=${COMPOSE_PROJECT_NAME}-web
+      # $$ keeps Compose from substituting; Traefik gets ${1}.
+      - traefik.http.middlewares.${COMPOSE_PROJECT_NAME}-www.redirectregex.regex=^https://www\.(.*)
+      - traefik.http.middlewares.${COMPOSE_PROJECT_NAME}-www.redirectregex.replacement=https://$${1}
+      - traefik.http.middlewares.${COMPOSE_PROJECT_NAME}-www.redirectregex.permanent=true
+
   backup:
     image: postgres:18
     restart: unless-stopped

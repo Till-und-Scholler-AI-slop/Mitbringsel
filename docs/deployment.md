@@ -6,7 +6,7 @@ Die App läuft auf einem VPS mit Docker Compose in zwei Umgebungen: Staging und 
 
 | | Staging | Production |
 | --- | --- | --- |
-| Domain | `mitbringsel-dev.tinowolter.com` | `tuolino.de` (ohne `www`) |
+| Domain | `mitbringsel-dev.tinowolter.com` | `tuolino.de` (`www.tuolino.de` leitet dorthin um) |
 | Compose-Projekt | `mitbringsel-staging` | `tuolino-prod` |
 | Datenbank (User und Name) | `mitbringsel` | `tuolino` |
 | Auslöser | Push auf `main` (nach grüner CI) | Veröffentlichter GitHub Release `vX.Y.Z` |
@@ -37,7 +37,7 @@ Im Repo unter `deploy/`:
 | --- | --- |
 | `docker-compose.yml` | Basis für beide Umgebungen: `web`, `backend`, `db`, Traefik-Labels, Healthchecks |
 | `docker-compose.staging.yml` | Nur der Unterschied für Staging: Authelia-Middleware an beiden Routern |
-| `docker-compose.production.yml` | Nur der Unterschied für Production: Service `backup` (siehe [Backups](#backups)) |
+| `docker-compose.production.yml` | Nur der Unterschied für Production: Weiterleitung von `www.<domain>` auf `<domain>`, Service `backup` (siehe [Backups](#backups)) |
 | `.env.example` | Vorlage für die `.env` auf dem Server, Werte für Staging, Abweichungen für Production als Kommentar |
 | `deploy.sh` | Läuft beim Deployment auf dem Server: Dateien installieren, Images ziehen, starten, bei Fehler zurückrollen |
 | `docker-compose.dev.yml` | Nur lokale Entwicklung (Postgres), kommt nie auf den Server |
@@ -193,5 +193,5 @@ Wie Staging, mit diesen Unterschieden (Checkliste: [#200](https://github.com/Til
 - **Server:** Ordner `/opt/personal-projects/slop/tuolino/prod` (Owner `deploy`), `.env` aus `deploy/.env.example` mit den Production-Werten aus den Kommentaren (`tuolino-prod`, `tuolino.de`, Datenbank `tuolino`, `COMPOSE_FILE` mit `docker-compose.production.yml`, `BACKUP_USER`) und einem eigenen Passwort, `chmod 600`. Den Ordner für die Dumps vorher als `deploy` anlegen (`mkdir backups`); sonst legt Docker ihn als root an, und der Backup-Container darf nicht hineinschreiben. Der SSH-Key und der Server-User können dieselben sein wie bei Staging.
 - **Google:** eigener OAuth-Client für Production mit der Redirect-URI `https://tuolino.de/api/v1/auth/google/callback`. Solange die OAuth-App im Testmodus ist, können sich nur die dort eingetragenen Testnutzer anmelden. Vor dem öffentlichen Start: Datenschutzerklärung und Impressum ([#97](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/97)), dann die App veröffentlichen ([#98](https://github.com/Till-und-Scholler-AI-slop/Mitbringsel/issues/98)).
 - **GitHub Environment** `production` mit denselben Secrets und Variablen wie Staging; `DEPLOY_DIR` ist `/opt/personal-projects/slop/tuolino/prod`, `APP_URL` `https://tuolino.de`. Unter *Deployment branches and tags* nur Tags `v*` erlauben, nicht `main`.
-- **DNS:** `A`- und `AAAA`-Eintrag von `tuolino.de` auf den VPS. Das TLS-Zertifikat holt Traefik beim ersten Request. `www.tuolino.de` gibt es vorerst nicht.
+- **DNS:** `A`- und `AAAA`-Eintrag von `tuolino.de` auf den VPS. Das TLS-Zertifikat holt Traefik beim ersten Request. Dazu ein `A`-Eintrag für `www`: `docker-compose.production.yml` leitet `www.tuolino.de` mit eigenem Zertifikat auf `tuolino.de` um.
 - **Authelia:** keine Regel nötig, Production ist öffentlich.
