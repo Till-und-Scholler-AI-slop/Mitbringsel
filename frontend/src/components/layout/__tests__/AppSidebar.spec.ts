@@ -6,17 +6,19 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { createAppI18n } from '@/i18n'
 import type { AuthService } from '@/services/api/auth'
 import type { GroupsService } from '@/services/api/groups'
+import type { ItemsService } from '@/services/api/items'
 import type { ListsService } from '@/services/api/lists'
 import { localData } from '@/services/storage/localData'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
+import { useItemsStore } from '@/stores/items'
 import { useListsStore } from '@/stores/lists'
 import { STICKERS } from '@/components/base/stickers'
-import type { Group, List } from '@/types/api'
+import type { Group, Item, List } from '@/types/api'
 
 import AppSidebar from '../AppSidebar.vue'
 
-const { authService, groupsService, listsService } = vi.hoisted(() => ({
+const { authService, groupsService, listsService, itemsService } = vi.hoisted(() => ({
   authService: {
     getMe: vi.fn<AuthService['getMe']>(),
     devLogin: vi.fn<AuthService['devLogin']>(),
@@ -37,13 +39,25 @@ const { authService, groupsService, listsService } = vi.hoisted(() => ({
     setArchived: vi.fn<ListsService['setArchived']>(),
     remove: vi.fn<ListsService['remove']>(),
   },
+  itemsService: {
+    list: vi.fn<ItemsService['list']>(),
+    listGroup: vi.fn<ItemsService['listGroup']>(),
+    create: vi.fn<ItemsService['create']>(),
+    update: vi.fn<ItemsService['update']>(),
+    remove: vi.fn<ItemsService['remove']>(),
+    removeChecked: vi.fn<ItemsService['removeChecked']>(),
+  },
 }))
 
 // A signed-in user would start the real live socket and outbox; the chip stays hidden by default.
 const syncState = vi.hoisted(() => ({ indicator: 'hidden' as 'hidden' | 'synced' | 'offline' }))
-const itemsState = vi.hoisted(() => ({ pendingCount: 0 }))
+const serverEvents = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeServerEvents')).createFakeServerEvents(),
+)
+const outbox = await vi.hoisted(async () =>
+  (await import('@/services/sync/__tests__/fakeOutbox')).createFakeOutbox(),
+)
 vi.mock('@/stores/sync', () => ({ useSyncStore: () => syncState }))
-vi.mock('@/stores/items', () => ({ useItemsStore: () => itemsState }))
 vi.mock('@/stores/auth', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/auth')>()
   return { ...original, useAuthStore: original.defineAuthStore(authService, null) }
@@ -55,6 +69,15 @@ vi.mock('@/stores/groups', async (importOriginal) => {
 vi.mock('@/stores/lists', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/stores/lists')>()
   return { ...original, useListsStore: original.defineListsStore(listsService, () => 'u1') }
+})
+vi.mock('@/stores/items', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/stores/items')>()
+  return {
+    ...original,
+    useItemsStore: original.defineItemsStore(itemsService, () => 'u1', serverEvents, undefined, {
+      openOutbox: outbox.open,
+    }),
+  }
 })
 
 function group(id: string, name: string, memberCount: number): Group {
@@ -74,10 +97,10 @@ function group(id: string, name: string, memberCount: number): Group {
   }
 }
 
-function list(id: string, name: string, archivedAt: string | null = null): List {
+function list(id: string, name: string, groupId = 'g1', archivedAt: string | null = null): List {
   return {
     id,
-    groupId: 'g1',
+    groupId,
     name,
     icon: 'general',
     archivedAt,
@@ -87,11 +110,32 @@ function list(id: string, name: string, archivedAt: string | null = null): List 
   }
 }
 
+function item(id: string, listId: string, checked = false): Item {
+  return {
+    id,
+    listId,
+    name: id,
+    quantity: null,
+    unit: null,
+    note: null,
+    checked,
+    checkedBy: checked ? 'u1' : null,
+    checkedAt: checked ? '2026-01-02T10:00:00Z' : null,
+    createdBy: 'u1',
+    createdAt: '2026-01-01T10:00:00Z',
+    updatedBy: 'u1',
+    updatedAt: '2026-01-01T10:00:00Z',
+    serverSeq: 1,
+    clocks: { name: 'c', quantity: 'c', unit: 'c', note: 'c', checked: 'c' },
+  }
+}
+
 beforeEach(async () => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   syncState.indicator = 'hidden'
-  itemsState.pendingCount = 0
+  serverEvents.clear()
+  outbox.clear()
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
     this.setAttribute('open', '')
   }
@@ -109,21 +153,57 @@ beforeEach(async () => {
   })
   authService.logout.mockResolvedValue()
   groupsService.list.mockResolvedValue([group('g1', 'WG Kaiserstraße', 4), group('g2', 'Home', 2)])
-  listsService.list.mockResolvedValue([
-    { ...list('l1', 'Supermarkt'), icon: 'supermarket' },
-    { ...list('l2', 'Baumarkt'), icon: 'hardware' },
-    list('l3', 'Alt', '2026-01-02T10:00:00Z'),
-  ])
+  listsService.list.mockImplementation(async (groupId) => {
+    if (groupId === 'g1') {
+      return [
+        { ...list('l1', 'Supermarkt', 'g1'), icon: 'supermarket' },
+        { ...list('l2', 'Baumarkt', 'g1'), icon: 'hardware' },
+        list('l3', 'Alt', 'g1', '2026-01-02T10:00:00Z'),
+      ]
+    }
+    return [list('l4', 'Wochenmarkt', 'g2')]
+  })
+  itemsService.listGroup.mockImplementation(async (groupId) => {
+    if (groupId === 'g1') {
+      return {
+        listIds: ['l1', 'l2'],
+        items: [
+          item('i1', 'l1', false),
+          item('i2', 'l1', false),
+          item('i3', 'l1', true),
+          item('i4', 'l2', false),
+        ],
+      }
+    }
+    return {
+      listIds: ['l4'],
+      items: [
+        item('i5', 'l4', false),
+        item('i6', 'l4', false),
+        item('i7', 'l4', false),
+        item('i8', 'l4', false),
+        item('i9', 'l4', false),
+      ],
+    }
+  })
   await useAuthStore().load()
   await useGroupsStore().load()
-  await useListsStore().load('g1')
+  await Promise.all([
+    useListsStore().load('g1'),
+    useListsStore().load('g2'),
+    useItemsStore().loadGroup('g1'),
+    useItemsStore().loadGroup('g2'),
+  ])
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function mountSidebar(props: { groupId?: string; listId?: string } = {}) {
+async function mountSidebar(
+  props: { groupId?: string; listId?: string } = {},
+  locale: 'en' | 'de' = 'en',
+) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -136,7 +216,7 @@ async function mountSidebar(props: { groupId?: string; listId?: string } = {}) {
   await router.push('/')
   const wrapper = mount(AppSidebar, {
     props,
-    global: { plugins: [createAppI18n(['en'], null), router] },
+    global: { plugins: [createAppI18n([locale], null), router] },
     attachTo: document.body,
   })
   return { wrapper, router }
@@ -156,8 +236,8 @@ describe('AppSidebar', () => {
     expect(
       households.map((h) => [h.get('.entry-name').text(), h.get('.entry-count').text()]),
     ).toEqual([
-      ['WG Kaiserstraße', '4'],
-      ['Home', '2'],
+      ['WG Kaiserstraße', '3'],
+      ['Home', '5'],
     ])
     expect(households.map((h) => h.attributes('href'))).toEqual(['/groups/g1', '/groups/g2'])
     expect(wrapper.find('.lists').exists()).toBe(false)
@@ -176,11 +256,65 @@ describe('AppSidebar', () => {
     const lists = wrapper.get('.lists')
     expect(lists.attributes('aria-label')).toBe('Lists of WG Kaiserstraße')
     const links = lists.findAll('a')
-    expect(links.map((l) => [l.text(), l.attributes('href')])).toEqual([
-      ['Supermarkt', '/groups/g1/lists/l1'],
-      ['Baumarkt', '/groups/g1/lists/l2'],
+    expect(
+      links.map((l) => [
+        l.get('.list-name').text(),
+        l.get('.list-count').text(),
+        l.attributes('href'),
+      ]),
+    ).toEqual([
+      ['Supermarkt', '2', '/groups/g1/lists/l1'],
+      ['Baumarkt', '1', '/groups/g1/lists/l2'],
     ])
     expect(links.map((l) => l.attributes('aria-current'))).toEqual([undefined, 'page'])
+    wrapper.unmount()
+  })
+
+  it('shows open item counts for households and lists with screen reader text', async () => {
+    const { wrapper } = await mountSidebar({ groupId: 'g1', listId: 'l2' })
+
+    const [, kaiser, home] = entries(wrapper)
+    expect(kaiser!.get('.entry-count').attributes('aria-hidden')).toBe('true')
+    expect(kaiser!.get('.entry-count').text()).toBe('3')
+    expect(kaiser!.get('.sr-only').text()).toBe(', 3 open items')
+    expect(home!.get('.entry-count').attributes('aria-hidden')).toBe('true')
+    expect(home!.get('.entry-count').text()).toBe('5')
+    expect(home!.get('.sr-only').text()).toBe(', 5 open items')
+
+    const [supermarket, hardware] = wrapper.get('.lists').findAll('a')
+    expect(supermarket!.get('.list-count').attributes('aria-hidden')).toBe('true')
+    expect(supermarket!.get('.list-count').text()).toBe('2')
+    expect(supermarket!.get('.sr-only').text()).toBe(', 2 open items')
+    expect(hardware!.get('.list-count').attributes('aria-hidden')).toBe('true')
+    expect(hardware!.get('.list-count').text()).toBe('1')
+    expect(hardware!.get('.sr-only').text()).toBe(', 1 open item')
+    wrapper.unmount()
+
+    const german = await mountSidebar({ groupId: 'g1', listId: 'l2' }, 'de')
+    const [deSupermarket, deHardware] = german.wrapper.get('.lists').findAll('a')
+    expect(deSupermarket!.get('.sr-only').text()).toBe(', 2 offene Artikel')
+    expect(deHardware!.get('.sr-only').text()).toBe(', 1 offener Artikel')
+    german.wrapper.unmount()
+  })
+
+  it('shows no counts while lists or items are not loaded yet', async () => {
+    setActivePinia(createPinia())
+    await useAuthStore().load()
+    await useGroupsStore().load()
+    await useListsStore().load('g1')
+
+    const { wrapper } = await mountSidebar({ groupId: 'g1', listId: 'l1' })
+
+    const [, kaiser, home] = entries(wrapper)
+    expect(kaiser!.find('.entry-count').exists()).toBe(false)
+    expect(kaiser!.find('.sr-only').exists()).toBe(false)
+    expect(home!.find('.entry-count').exists()).toBe(false)
+    expect(home!.find('.sr-only').exists()).toBe(false)
+
+    for (const link of wrapper.get('.lists').findAll('a')) {
+      expect(link.find('.list-count').exists()).toBe(false)
+      expect(link.find('.sr-only').exists()).toBe(false)
+    }
     wrapper.unmount()
   })
 
@@ -320,7 +454,8 @@ describe('AppSidebar', () => {
 
   it('names the open household in the pending sync hint, and stays neutral on the start page', async () => {
     syncState.indicator = 'synced'
-    itemsState.pendingCount = 1
+    outbox.fromOtherTab({ kind: 'remove', itemId: 'i1' })
+    await flushPromises()
 
     const inHousehold = await mountSidebar({ groupId: 'g1', listId: 'l1' })
     expect(inHousehold.wrapper.get('.sync .hint').text()).toBe('Sending to WG Kaiserstraße …')

@@ -365,7 +365,7 @@ describe('ListView: header', () => {
     const { wrapper } = await mountView('l2')
 
     const sidebarLists = wrapper.findAll('.side .lists a')
-    expect(sidebarLists.map((a) => a.text())).toEqual(['Supermarkt', 'Baumarkt'])
+    expect(sidebarLists.map((a) => a.get('.list-name').text())).toEqual(['Supermarkt', 'Baumarkt'])
     expect(sidebarLists.map((a) => a.attributes('aria-current'))).toEqual([undefined, 'page'])
     wrapper.unmount()
   })
@@ -596,7 +596,7 @@ describe('ListView: list actions', () => {
     await flushPromises()
 
     expect(listsService.update).toHaveBeenCalledWith('l2', 'Gartencenter', 'general')
-    expect(wrapper.findAll('.side .lists a').map((a) => a.text())).toEqual([
+    expect(wrapper.findAll('.side .lists a').map((a) => a.get('.list-name').text())).toEqual([
       'Supermarkt',
       'Gartencenter',
     ])
@@ -619,7 +619,9 @@ describe('ListView: list actions', () => {
 
     expect(listsService.setArchived).toHaveBeenCalledWith('l2', true)
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
-    expect(wrapper.findAll('.side .lists a').map((a) => a.text())).toEqual(['Supermarkt'])
+    expect(wrapper.findAll('.side .lists a').map((a) => a.get('.list-name').text())).toEqual([
+      'Supermarkt',
+    ])
     expect(wrapper.get('.chip--archive').text()).toBe('Archive (1)')
     wrapper.unmount()
   })
