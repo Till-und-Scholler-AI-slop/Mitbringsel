@@ -186,6 +186,7 @@
     "LIST_ICON_INVALID": "This icon does not exist.",
     "TOO_MANY_LISTS": "This household already has 100 lists, archived ones included. Delete one to create a new one.",
     "LIST_NOT_FOUND": "This list does not exist, or you are not a member of its household.",
+    "LIST_ARCHIVED": "This list is archived. Restore it to move items into it.",
     "METHOD_NOT_ALLOWED": "This action is not possible here.",
     "NETWORK": "The server cannot be reached.",
     "NOT_FOUND": "This does not exist (anymore).",

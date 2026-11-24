@@ -111,6 +111,9 @@ func describeChange(c item.Change) string {
 	if c.Checked.Set {
 		parts = append(parts, fmt.Sprintf("checked=%t", c.Checked.Value))
 	}
+	if c.ListID.Set {
+		parts = append(parts, "listId="+c.ListID.Value.String())
+	}
 	return strings.Join(parts, " ")
 }
 
@@ -122,6 +125,9 @@ func describePtr[T any](p *T) string {
 }
 
 // testItem is a checked item with every field set.
+// testMoveTargetID is the list a move in the tests goes to.
+var testMoveTargetID = uuid.MustParse("0190a8c4-0000-7000-8000-0000000000b2")
+
 func testItem() item.Item {
 	checkedAt := itemTime.Add(time.Hour)
 	checkedBy := testMemberID
@@ -288,6 +294,35 @@ func TestItemResponses(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("the listId clock is only there if the item has one", func(t *testing.T) {
+		moved := testItem()
+		moved.Clocks[item.FieldList] = "0000019a2b3c4d63-0000-anna"
+		tests := []struct {
+			name string
+			it   item.Item
+			want string // "" means the key is absent
+		}{
+			{"moved", moved, "0000019a2b3c4d63-0000-anna"},
+			{"never moved", testItem(), ""},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				rec := itemRequest(t, &fakeItems{items: []item.Item{tt.it}}, http.MethodGet, itemPathFor(), "")
+
+				var raw struct {
+					Clocks map[string]string `json:"clocks"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+					t.Fatalf("decode body %s: %v", rec.Body, err)
+				}
+				got, present := raw.Clocks["listId"]
+				if tt.want == "" && present || tt.want != "" && got != tt.want {
+					t.Errorf("clocks = %v, want listId %q (absent: %t)", raw.Clocks, tt.want, tt.want == "")
+				}
+			})
+		}
+	})
 
 	t.Run("an item without optional values has null, not missing", func(t *testing.T) {
 		plain := item.Item{ID: testItemID, ListID: testListID, Name: "Brot", CreatedAt: itemTime, UpdatedAt: itemTime, Clocks: item.Clocks{}}
@@ -460,6 +495,8 @@ func TestUpdateItemChange(t *testing.T) {
 		{"unchecked", `{"checked":false}`, "checked=false"},
 		{"several fields", `{"name":"A","quantity":null,"checked":false}`, "name=A quantity=null checked=false"},
 		{"fields that are left out are not touched", `{"note":"x"}`, "note=x"},
+		{"listId", `{"listId":"` + testMoveTargetID.String() + `"}`, "listId=" + testMoveTargetID.String()},
+		{"listId with other fields", `{"name":"A","listId":"` + testMoveTargetID.String() + `"}`, "name=A listId=" + testMoveTargetID.String()},
 		{"nothing at all", `{}`, ""},
 		{"unknown fields are ignored", `{"price":3,"name":"A"}`, "name=A"},
 	}
@@ -598,6 +635,8 @@ func TestItemErrors(t *testing.T) {
 		{"empty change", item.ErrEmptyChange, http.StatusBadRequest, "INVALID_REQUEST"},
 		{"too many items", item.ErrTooManyItems, http.StatusBadRequest, "INVALID_REQUEST"},
 		{"group not found", item.ErrGroupNotFound, http.StatusNotFound, "GROUP_NOT_FOUND"},
+		{"target list not found", fmt.Errorf("move: %w", item.ErrListNotFound), http.StatusNotFound, "LIST_NOT_FOUND"},
+		{"target list archived", item.ErrListArchived, http.StatusConflict, "LIST_ARCHIVED"},
 		{"database failure", errors.New("connection refused"), http.StatusInternalServerError, "INTERNAL_ERROR"},
 	}
 	routes := []struct {
@@ -652,6 +691,9 @@ func TestItemBadRequests(t *testing.T) {
 		// Neither can be removed, so null is an invalid request, not a change.
 		{"update with name null", http.MethodPatch, itemPathFor(), `{"name":null}`},
 		{"update with checked null", http.MethodPatch, itemPathFor(), `{"checked":null}`},
+		{"update with listId null", http.MethodPatch, itemPathFor(), `{"listId":null}`},
+		{"update with a listId that is no UUID", http.MethodPatch, itemPathFor(), `{"listId":"nope"}`},
+		{"update with a listId that is no string", http.MethodPatch, itemPathFor(), `{"listId":5}`},
 		{"update with oversized body", http.MethodPatch, itemPathFor(), `{"note":"` + strings.Repeat("a", maxGroupBodyBytes) + `"}`},
 		{"remove checked with list ID that is no UUID", http.MethodPost, "/api/v1/lists/nope/items/remove-checked", `{"itemIds":[]}`},
 		// itemIds is required; an empty array is fine, a missing one is not.

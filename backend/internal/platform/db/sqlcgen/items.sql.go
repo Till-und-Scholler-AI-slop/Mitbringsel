@@ -14,22 +14,25 @@ import (
 
 const applyItemUpdate = `-- name: ApplyItemUpdate :one
 UPDATE items
-SET name         = CASE WHEN $1::boolean THEN $2::text ELSE name END,
-    quantity     = CASE WHEN $3::boolean THEN $4::numeric ELSE quantity END,
-    unit         = CASE WHEN $5::boolean THEN $6::text ELSE unit END,
-    note         = CASE WHEN $7::boolean THEN $8::text ELSE note END,
-    checked      = CASE WHEN $9::boolean THEN $10::boolean ELSE checked END,
-    checked_by   = CASE WHEN $9::boolean THEN $11::uuid ELSE checked_by END,
-    checked_at   = CASE WHEN $9::boolean THEN $12::timestamptz ELSE checked_at END,
-    updated_by   = $13::uuid,
-    updated_at   = $14::timestamptz,
-    field_clocks = field_clocks || $15::jsonb,
+SET list_id      = CASE WHEN $1::boolean THEN $2::uuid ELSE list_id END,
+    name         = CASE WHEN $3::boolean THEN $4::text ELSE name END,
+    quantity     = CASE WHEN $5::boolean THEN $6::numeric ELSE quantity END,
+    unit         = CASE WHEN $7::boolean THEN $8::text ELSE unit END,
+    note         = CASE WHEN $9::boolean THEN $10::text ELSE note END,
+    checked      = CASE WHEN $11::boolean THEN $12::boolean ELSE checked END,
+    checked_by   = CASE WHEN $11::boolean THEN $13::uuid ELSE checked_by END,
+    checked_at   = CASE WHEN $11::boolean THEN $14::timestamptz ELSE checked_at END,
+    updated_by   = $15::uuid,
+    updated_at   = $16::timestamptz,
+    field_clocks = field_clocks || $17::jsonb,
     server_seq   = nextval('change_seq')
-WHERE id = $16
+WHERE id = $18
 RETURNING id, list_id, name, quantity, unit, note, checked, checked_by, checked_at, created_by, created_at, deleted_at, field_clocks, server_seq, updated_by, updated_at
 `
 
 type ApplyItemUpdateParams struct {
+	SetListID   bool
+	ListID      uuid.UUID
 	SetName     bool
 	Name        string
 	SetQuantity bool
@@ -50,9 +53,12 @@ type ApplyItemUpdateParams struct {
 
 // Writes only the fields that won the merge: a set_* flag says whether the
 // field is part of the update, so "leave as is" and "set to NULL" differ.
-// The new clocks are merged into field_clocks (|| keeps the other keys).
+// A move changes list_id (the caller has checked the target list). The new
+// clocks are merged into field_clocks (|| keeps the other keys).
 func (q *Queries) ApplyItemUpdate(ctx context.Context, arg ApplyItemUpdateParams) (Item, error) {
 	row := q.db.QueryRow(ctx, applyItemUpdate,
+		arg.SetListID,
+		arg.ListID,
 		arg.SetName,
 		arg.Name,
 		arg.SetQuantity,

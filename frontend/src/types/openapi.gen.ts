@@ -490,6 +490,14 @@ export interface paths {
          *     Without a `clock` the server gives the request the newest clock, so
          *     the latest request wins. Sending the same change with the same
          *     `clock` again changes nothing.
+         *
+         *     Moving: send `listId` to move the item to another list of the same
+         *     household. Other fields may come along in the same request; the
+         *     checked state, the author and the creation date stay. The target is
+         *     only checked if the move wins the merge: an outdated move is no
+         *     error. A rejected move rejects the whole request: `404`
+         *     `LIST_NOT_FOUND` if the target does not exist, is deleted or belongs
+         *     to another household, `409` `LIST_ARCHIVED` if it is archived.
          */
         patch: operations["updateItem"];
         trace?: never;
@@ -738,6 +746,11 @@ export interface components {
             unit: string;
             note: string;
             checked: string;
+            /**
+             * @description Missing for items created before moving existed and never moved
+             *     since.
+             */
+            listId?: string;
         };
         ItemList: {
             items: components["schemas"]["Item"][];
@@ -799,6 +812,15 @@ export interface components {
             unit?: components["schemas"]["Unit"] | null;
             note?: string | null;
             checked?: boolean;
+            /**
+             * Format: uuid
+             * @description Moves the item to another list of the same household. The list
+             *     must be active: an unknown, deleted or another household's list
+             *     is `LIST_NOT_FOUND`, an archived one `LIST_ARCHIVED`. Merged
+             *     with its own clock like the other fields; a move that loses the
+             *     merge is not checked and not an error. Cannot be `null`.
+             */
+            listId?: string;
             /**
              * @description Optional. The hybrid logical clock (HLC) of the change,
              *     `<wall>-<counter>-<node>` (docs/sync.md), from the device that
@@ -884,7 +906,7 @@ export interface components {
          * @description Machine-readable error; the frontend translates it.
          * @enum {string}
          */
-        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "TOO_MANY_GROUPS" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID" | "LIST_ICON_INVALID" | "TOO_MANY_LISTS" | "ITEM_NOT_FOUND" | "ITEM_NAME_INVALID" | "ITEM_QUANTITY_INVALID" | "ITEM_UNIT_INVALID" | "ITEM_NOTE_INVALID" | "ITEM_ID_TAKEN";
+        ErrorCode: "NOT_FOUND" | "METHOD_NOT_ALLOWED" | "DB_UNAVAILABLE" | "UNAUTHENTICATED" | "INTERNAL_ERROR" | "CROSS_ORIGIN_REQUEST" | "INVALID_REQUEST" | "INVALID_IDENTITY" | "GROUP_NOT_FOUND" | "FORBIDDEN" | "GROUP_NAME_INVALID" | "INVALID_ROLE" | "OWNER_IMMUTABLE" | "TOO_MANY_GROUPS" | "INVITE_NOT_FOUND" | "INVITE_EXPIRED" | "TOO_MANY_INVITES" | "RATE_LIMITED" | "LIST_NOT_FOUND" | "LIST_NAME_INVALID" | "LIST_ICON_INVALID" | "TOO_MANY_LISTS" | "ITEM_NOT_FOUND" | "ITEM_NAME_INVALID" | "ITEM_QUANTITY_INVALID" | "ITEM_UNIT_INVALID" | "ITEM_NOTE_INVALID" | "ITEM_ID_TAKEN" | "LIST_ARCHIVED";
         /** @description Client to server: keeps the connection alive. Sent every 25 seconds; the server disconnects after 60 seconds of silence. */
         PingMessage: {
             /**
@@ -1914,6 +1936,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             500: components["responses"]["Error"];
         };
     };

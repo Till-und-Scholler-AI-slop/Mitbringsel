@@ -20,12 +20,16 @@ const (
 	// checked_at only make sense together with checked, so they travel with
 	// its clock.
 	FieldChecked Field = "checked"
+	// FieldList is the list the item is in: moving an item merges like any
+	// other field. Items created before moving existed have no clock for it,
+	// so their first move always wins.
+	FieldList Field = "listId"
 )
 
 // Valid reports whether f is one of the fields above.
 func (f Field) Valid() bool {
 	switch f {
-	case FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked:
+	case FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked, FieldList:
 		return true
 	}
 	return false

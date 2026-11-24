@@ -186,6 +186,7 @@
     "LIST_ICON_INVALID": "Dieses Symbol gibt es nicht.",
     "TOO_MANY_LISTS": "Dieser Haushalt hat schon 100 Listen, archivierte mitgezählt. Lösche eine, um eine neue anzulegen.",
     "LIST_NOT_FOUND": "Diese Liste gibt es nicht, oder du bist kein Mitglied des Haushalts.",
+    "LIST_ARCHIVED": "Diese Liste ist archiviert. Stelle sie wieder her, um Artikel hineinzuverschieben.",
     "METHOD_NOT_ALLOWED": "Diese Aktion ist hier nicht möglich.",
     "NETWORK": "Der Server ist nicht erreichbar.",
     "NOT_FOUND": "Das gibt es nicht (mehr).",

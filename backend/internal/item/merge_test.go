@@ -65,10 +65,41 @@ func TestMerge(t *testing.T) {
 			want:     Clocks{FieldName: newer},
 		},
 		{
-			name:     "all five fields can win at once",
+			name:     "all six fields can win at once",
 			current:  Clocks{},
-			incoming: Clocks{FieldName: same, FieldQuantity: same, FieldUnit: same, FieldNote: same, FieldChecked: same},
-			want:     Clocks{FieldName: same, FieldQuantity: same, FieldUnit: same, FieldNote: same, FieldChecked: same},
+			incoming: Clocks{FieldName: same, FieldQuantity: same, FieldUnit: same, FieldNote: same, FieldChecked: same, FieldList: same},
+			want:     Clocks{FieldName: same, FieldQuantity: same, FieldUnit: same, FieldNote: same, FieldChecked: same, FieldList: same},
+		},
+		{
+			name:     "a move wins for an item without a listId clock",
+			current:  Clocks{FieldName: newer},
+			incoming: Clocks{FieldList: older},
+			want:     Clocks{FieldList: older},
+		},
+		{
+			name:     "a newer move wins, a rename with an older clock loses",
+			current:  Clocks{FieldName: newer, FieldList: older},
+			incoming: Clocks{FieldName: same, FieldList: newer},
+			want:     Clocks{FieldList: newer},
+		},
+		{
+			name:     "a newer rename wins, an older move loses",
+			current:  Clocks{FieldName: older, FieldList: same},
+			incoming: Clocks{FieldName: newer, FieldList: older},
+			want:     Clocks{FieldName: newer},
+		},
+		{
+			name:     "an equal listId clock does not win, so a repeated move does nothing",
+			current:  Clocks{FieldList: same},
+			incoming: Clocks{FieldList: same},
+			want:     Clocks{},
+		},
+		{
+			name:     "a deleted item accepts no move",
+			current:  Clocks{FieldList: older},
+			incoming: Clocks{FieldList: newer},
+			deleted:  true,
+			want:     Clocks{},
 		},
 		{
 			name:     "no incoming fields",
@@ -249,7 +280,7 @@ func TestMerge_invalidInput(t *testing.T) {
 }
 
 func TestField_Valid(t *testing.T) {
-	for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
+	for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked, FieldList} {
 		if !f.Valid() {
 			t.Errorf("%q is not valid, want valid", f)
 		}

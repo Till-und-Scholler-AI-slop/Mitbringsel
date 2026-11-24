@@ -108,6 +108,9 @@ func (r *fakeRepo) Apply(_ context.Context, itemID uuid.UUID, u Update) (Item, e
 	if err != nil {
 		return Item{}, err
 	}
+	if u.ListID.Set {
+		it.ListID = u.ListID.Value
+	}
 	if u.Name.Set {
 		it.Name = u.Name.Value
 	}
@@ -226,11 +229,14 @@ func (p *fakePublisher) ItemsDeleted(_ context.Context, groupID, listID, actor u
 	p.batches = append(p.batches, publishedBatch{groupID, listID, actor, tombstones})
 }
 
-// fakeLists says which users may see which lists. Every list belongs to
-// fakeGroupID; a user who sees none of them is outside the group.
+// fakeLists says which users may see which lists. A list belongs to
+// fakeGroupID unless groups says otherwise; a user who sees none of them is
+// outside the group.
 type fakeLists struct {
 	access   map[uuid.UUID]map[uuid.UUID]bool
 	archived map[uuid.UUID]bool
+	// groups maps a list to its group, for the lists of another household.
+	groups map[uuid.UUID]uuid.UUID
 	// members are users in the group who see no list at all, so the group is
 	// not "not found" for them; it just has no lists.
 	members map[uuid.UUID]bool
@@ -240,7 +246,15 @@ func (l fakeLists) Get(_ context.Context, actor, listID uuid.UUID) (list.List, e
 	if !l.access[listID][actor] {
 		return list.List{}, list.ErrNotFound
 	}
-	return list.List{ID: listID, GroupID: fakeGroupID}, nil
+	found := list.List{ID: listID, GroupID: fakeGroupID}
+	if g, ok := l.groups[listID]; ok {
+		found.GroupID = g
+	}
+	if l.archived[listID] {
+		archivedAt := at
+		found.ArchivedAt = &archivedAt
+	}
+	return found, nil
 }
 
 func (l fakeLists) ListForGroup(_ context.Context, actor, groupID uuid.UUID, includeArchived bool) ([]list.List, error) {
@@ -291,6 +305,7 @@ func newFixture() fixture {
 			f.otherID: {f.outsider: true},
 		},
 		archived: map[uuid.UUID]bool{},
+		groups:   map[uuid.UUID]uuid.UUID{},
 		members:  map[uuid.UUID]bool{},
 	}
 	f.svc = NewService(f.repo, f.lists, f.pub)
@@ -342,7 +357,7 @@ func TestService_Create(t *testing.T) {
 		if it.UpdatedBy == nil || *it.UpdatedBy != f.member || !it.UpdatedAt.Equal(it.CreatedAt) {
 			t.Errorf("UpdatedBy, UpdatedAt = %v, %v; want %v, %v", it.UpdatedBy, it.UpdatedAt, f.member, it.CreatedAt)
 		}
-		for _, field := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
+		for _, field := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked, FieldList} {
 			if it.Clocks[field] != clock {
 				t.Errorf("clock of %s = %q, want %q", field, it.Clocks[field], clock)
 			}
@@ -1395,6 +1410,378 @@ func TestService_DeleteOldTombstones(t *testing.T) {
 
 		if _, err := f.svc.DeleteOldTombstones(ctx); !errors.Is(err, errRepo) {
 			t.Errorf("DeleteOldTombstones() error = %v, want %v", err, errRepo)
+		}
+	})
+}
+
+// moveFixture adds the lists a move needs to the fixture: a second active
+// list and an archived one in the same household, and one of another
+// household, all visible to the member.
+type moveFixture struct {
+	fixture
+	secondID, archivedID, foreignID uuid.UUID
+}
+
+func newMoveFixture() moveFixture {
+	f := moveFixture{
+		fixture:    newFixture(),
+		secondID:   uuid.New(),
+		archivedID: uuid.New(),
+		foreignID:  uuid.New(),
+	}
+	for _, id := range []uuid.UUID{f.secondID, f.archivedID, f.foreignID} {
+		f.lists.access[id] = map[uuid.UUID]bool{f.member: true}
+	}
+	f.lists.archived[f.archivedID] = true
+	f.lists.groups[f.foreignID] = uuid.New()
+	return f
+}
+
+// createItem is create without the event of the creation, so a test counts
+// only the events of the move.
+func (f moveFixture) createItem(t *testing.T) Item {
+	t.Helper()
+	it := f.create(t)
+	f.pub.events = nil
+	return it
+}
+
+func TestService_Move(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("a move changes the list, takes the clock and publishes once", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		clock := f.clock(t, 1, "ben")
+
+		got, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, clock)
+
+		if err != nil {
+			t.Fatalf("Update() error = %v", err)
+		}
+		if got.ListID != f.secondID || got.Clocks[FieldList] != clock || got.ServerSeq != it.ServerSeq+1 {
+			t.Errorf("Update() = %+v, want the second list, its clock and the next server_seq", got)
+		}
+		if got.UpdatedBy == nil || *got.UpdatedBy != f.member || !got.UpdatedAt.Equal(serverNow) {
+			t.Errorf("UpdatedBy, UpdatedAt = %v, %v; want the member and the server time", got.UpdatedBy, got.UpdatedAt)
+		}
+		// The other fields stay as they were.
+		if got.Name != "Milch" || got.Clocks[FieldName] != f.clock(t, 0, "anna") {
+			t.Errorf("other fields changed: %+v", got)
+		}
+		if len(f.pub.events) != 1 || f.pub.events[0].kind != "changed" ||
+			f.pub.events[0].groupID != fakeGroupID || f.pub.events[0].item.ListID != f.secondID {
+			t.Errorf("events = %+v, want one change with the new list for the group", f.pub.events)
+		}
+	})
+
+	t.Run("a move may come with other fields", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+
+		got, err := f.svc.Update(ctx, f.member, it.ID,
+			Change{ListID: Some(f.secondID), Name: Some("Hafermilch"), Quantity: Some(ptr(3.0))}, f.clock(t, 1, "ben"))
+
+		if err != nil {
+			t.Fatalf("Update() error = %v", err)
+		}
+		if got.ListID != f.secondID || got.Name != "Hafermilch" || *got.Quantity != 3 {
+			t.Errorf("Update() = %+v, want move, name and quantity applied", got)
+		}
+	})
+
+	t.Run("a target that does not exist for the member is LIST_NOT_FOUND", func(t *testing.T) {
+		tests := []struct {
+			name   string
+			target func(moveFixture) uuid.UUID
+		}{
+			{"unknown list", func(moveFixture) uuid.UUID { return uuid.New() }},
+			{"the zero UUID", func(moveFixture) uuid.UUID { return uuid.Nil }},
+			{"a list the member cannot see", func(f moveFixture) uuid.UUID { return f.otherID }},
+			{"a list of another household", func(f moveFixture) uuid.UUID { return f.foreignID }},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f := newMoveFixture()
+				it := f.createItem(t)
+
+				_, err := f.svc.Update(ctx, f.member, it.ID,
+					Change{ListID: Some(tt.target(f)), Name: Some("Neu")}, f.clock(t, 1, "ben"))
+
+				if !errors.Is(err, ErrListNotFound) {
+					t.Errorf("error = %v, want ErrListNotFound", err)
+				}
+				if stored := f.repo.items[it.ID]; !reflect.DeepEqual(stored, it) {
+					t.Errorf("stored item = %+v, want it untouched (also the name)", stored)
+				}
+				if len(f.pub.events) != 0 {
+					t.Errorf("events = %+v, want none", f.pub.events)
+				}
+			})
+		}
+	})
+
+	t.Run("an archived target is LIST_ARCHIVED and nothing of the request is applied", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+
+		_, err := f.svc.Update(ctx, f.member, it.ID,
+			Change{ListID: Some(f.archivedID), Name: Some("Neu")}, f.clock(t, 1, "ben"))
+
+		if !errors.Is(err, ErrListArchived) {
+			t.Errorf("error = %v, want ErrListArchived", err)
+		}
+		if stored := f.repo.items[it.ID]; !reflect.DeepEqual(stored, it) {
+			t.Errorf("stored item = %+v, want it untouched", stored)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("events = %+v, want none", f.pub.events)
+		}
+	})
+
+	t.Run("a move out of an archived list into an active one works", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		f.lists.archived[f.listID] = true
+
+		got, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 1, "ben"))
+
+		if err != nil || got.ListID != f.secondID {
+			t.Errorf("Update() = %+v, %v, want the item in the second list", got, err)
+		}
+	})
+
+	t.Run("a move within the same list counts like any field, also in an archived list", func(t *testing.T) {
+		for _, archived := range []bool{false, true} {
+			f := newMoveFixture()
+			it := f.createItem(t)
+			f.lists.archived[f.listID] = archived
+			clock := f.clock(t, 1, "ben")
+
+			got, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.listID)}, clock)
+
+			if err != nil {
+				t.Fatalf("archived=%v: Update() error = %v", archived, err)
+			}
+			if got.ListID != f.listID || got.Clocks[FieldList] != clock || got.ServerSeq != it.ServerSeq+1 {
+				t.Errorf("archived=%v: Update() = %+v, want the clock stored and a new server_seq", archived, got)
+			}
+			if len(f.pub.events) != 1 {
+				t.Errorf("archived=%v: events = %+v, want one", archived, f.pub.events)
+			}
+		}
+	})
+
+	t.Run("an outdated move is no error and not checked", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		if _, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 5, "anna")); err != nil {
+			t.Fatal(err)
+		}
+		stored := f.repo.items[it.ID]
+		f.pub.events = nil
+
+		got, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.archivedID)}, f.clock(t, 3, "ben"))
+
+		if err != nil {
+			t.Fatalf("Update() error = %v, want none for a move that loses", err)
+		}
+		if !reflect.DeepEqual(got, stored) || !reflect.DeepEqual(f.repo.items[it.ID], stored) {
+			t.Errorf("Update() = %+v, want the item untouched", got)
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("events = %+v, want none", f.pub.events)
+		}
+	})
+
+	t.Run("a move and a rename of different devices both stay, whatever the order", func(t *testing.T) {
+		for _, moveFirst := range []bool{true, false} {
+			f := newMoveFixture()
+			it := f.createItem(t)
+			move := func() error {
+				_, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 2, "anna"))
+				return err
+			}
+			rename := func() error {
+				_, err := f.svc.Update(ctx, f.member, it.ID, Change{Name: Some("Hafermilch")}, f.clock(t, 1, "ben"))
+				return err
+			}
+			first, second := move, rename
+			if !moveFirst {
+				first, second = rename, move
+			}
+
+			if err := first(); err != nil {
+				t.Fatal(err)
+			}
+			if err := second(); err != nil {
+				t.Fatal(err)
+			}
+
+			got := f.repo.items[it.ID]
+			if got.ListID != f.secondID || got.Name != "Hafermilch" {
+				t.Errorf("moveFirst=%v: item = list %v, name %q; want the second list and Hafermilch", moveFirst, got.ListID, got.Name)
+			}
+		}
+	})
+
+	t.Run("of two moves the newer clock wins, whatever the order", func(t *testing.T) {
+		for _, newerFirst := range []bool{true, false} {
+			f := newMoveFixture()
+			it := f.createItem(t)
+			newer := func() error {
+				_, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 2, "ben"))
+				return err
+			}
+			older := func() error {
+				_, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.listID)}, f.clock(t, 1, "anna"))
+				return err
+			}
+			first, second := newer, older
+			if !newerFirst {
+				first, second = older, newer
+			}
+
+			if err := first(); err != nil {
+				t.Fatal(err)
+			}
+			if err := second(); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := f.repo.items[it.ID].ListID; got != f.secondID {
+				t.Errorf("newerFirst=%v: list = %v, want the newer move's target", newerFirst, got)
+			}
+		}
+	})
+
+	t.Run("a deleted item stays deleted and its move is no error", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		if _, err := f.svc.Delete(ctx, f.member, it.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.archivedID)}, f.clock(t, 1, "ben"))
+
+		if err != nil || !got.Deleted() || got.ListID != f.listID {
+			t.Errorf("Update() = %+v, %v, want the tombstone in its list and no error", got, err)
+		}
+	})
+
+	t.Run("a move keeps the checked state", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		checked, err := f.svc.Update(ctx, f.member, it.ID, Change{Checked: Some(true)}, f.clock(t, 1, "anna"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 2, "ben"))
+
+		if err != nil {
+			t.Fatalf("Update() error = %v", err)
+		}
+		if got.ListID != f.secondID || !got.Checked || got.CheckedBy == nil || checked.CheckedBy == nil ||
+			*got.CheckedBy != *checked.CheckedBy || got.CheckedAt == nil || !got.CheckedAt.Equal(*checked.CheckedAt) {
+			t.Errorf("Update() = %+v, want it moved and still checked as before", got)
+		}
+	})
+
+	t.Run("an outsider is not found, whatever the target", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		f.lists.access[f.secondID][f.outsider] = true
+
+		_, err := f.svc.Update(ctx, f.outsider, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 1, "ben"))
+
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("error = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("a failing lookup of the target is an error of its own", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		failing := NewService(f.repo, failingTargetLists{f.lists, f.secondID}, f.pub)
+		failing.now = f.svc.now
+
+		_, err := failing.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 1, "ben"))
+
+		if err == nil || errors.Is(err, ErrListNotFound) || errors.Is(err, ErrListArchived) {
+			t.Errorf("error = %v, want a plain failure", err)
+		}
+	})
+}
+
+// failingTargetLists fails the lookup of one list.
+type failingTargetLists struct {
+	fakeLists
+	failing uuid.UUID
+}
+
+func (l failingTargetLists) Get(ctx context.Context, actor, listID uuid.UUID) (list.List, error) {
+	if listID == l.failing {
+		return list.List{}, errRepo
+	}
+	return l.fakeLists.Get(ctx, actor, listID)
+}
+
+// TestService_CreateAfterMove covers a create that is sent again after
+// someone moved the item: the retry must not look like a stolen ID.
+func TestService_CreateAfterMove(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("a repeated create of a moved item returns the stored item", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		moved, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 1, "ben"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.pub.events = nil
+
+		again, err := f.svc.Create(ctx, f.member, f.listID, NewItem{ID: it.ID, Name: "Etwas anderes"}, f.clock(t, 5, "anna"))
+
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if !reflect.DeepEqual(again, moved) || len(f.repo.items) != 1 {
+			t.Errorf("Create() again = %+v, want the moved item, %d items", again, len(f.repo.items))
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.events)
+		}
+	})
+
+	t.Run("an ID that lives elsewhere is still taken", func(t *testing.T) {
+		tests := []struct {
+			name string
+			item func(f moveFixture) Item
+		}{
+			{"a list of another household", func(f moveFixture) Item {
+				return Item{ID: uuid.New(), ListID: f.foreignID, Name: "Fremd"}
+			}},
+			{"a list the member cannot see", func(f moveFixture) Item {
+				return Item{ID: uuid.New(), ListID: f.otherID, Name: "Fremd"}
+			}},
+			{"a deleted item of another list", func(f moveFixture) Item {
+				deletedAt := at
+				return Item{ID: uuid.New(), ListID: f.secondID, Name: "Weg", DeletedAt: &deletedAt}
+			}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f := newMoveFixture()
+				existing := tt.item(f)
+				f.repo.items[existing.ID] = existing
+
+				_, err := f.svc.Create(ctx, f.member, f.listID, NewItem{ID: existing.ID, Name: "Mehl"}, f.clock(t, 0, "anna"))
+
+				if !errors.Is(err, ErrIDTaken) {
+					t.Errorf("error = %v, want %v", err, ErrIDTaken)
+				}
+			})
 		}
 	})
 }

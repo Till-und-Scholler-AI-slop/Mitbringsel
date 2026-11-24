@@ -371,6 +371,17 @@ describe('localData', () => {
     ])
   })
 
+  it('reads an item stored without a listId clock unchanged', async () => {
+    // Items from before moving existed have no clocks.listId (ADR 0008); it
+    // is optional in ItemClocks, so they load as they are.
+    await data.claim(me(ANNA))
+    const legacy = item('Milk')
+    expect(legacy.clocks.listId).toBeUndefined()
+    await data.writeItems(ANNA, LIST, [legacy])
+
+    expect(await data.readItems(ANNA, LIST)).toEqual([legacy])
+  })
+
   it('upgrades a database of version 1 and keeps its data', async () => {
     // What the app before the outbox stored.
     const old = indexedDB.open('mitbringsel', 1)

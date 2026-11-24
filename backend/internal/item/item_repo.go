@@ -9,9 +9,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"tuolino/internal/platform/db/sqlcgen"
+)
+
+const (
+	// foreignKeyViolation is the SQLSTATE of a violated foreign key.
+	foreignKeyViolation = "23503"
+	// itemsListFK is the constraint that ties items.list_id to lists.
+	itemsListFK = "items_list_id_fkey"
 )
 
 // txStarter is the part of *pgxpool.Pool that begins transactions.
@@ -111,6 +119,8 @@ func (r *PostgresRepository) Apply(ctx context.Context, itemID uuid.UUID, u Upda
 	}
 	row, err := r.q.ApplyItemUpdate(ctx, sqlcgen.ApplyItemUpdateParams{
 		ID:          itemID,
+		SetListID:   u.ListID.Set,
+		ListID:      u.ListID.Value,
 		SetName:     u.Name.Set,
 		Name:        u.Name.Value,
 		SetQuantity: u.Quantity.Set,
@@ -128,6 +138,11 @@ func (r *PostgresRepository) Apply(ctx context.Context, itemID uuid.UUID, u Upda
 		Clocks:      clocks,
 	})
 	if err != nil {
+		// The target of a move was deleted after the service checked it.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation && pgErr.ConstraintName == itemsListFK {
+			return Item{}, ErrListNotFound
+		}
 		return Item{}, notFoundIfNoRows(err)
 	}
 	return fromRow(row)

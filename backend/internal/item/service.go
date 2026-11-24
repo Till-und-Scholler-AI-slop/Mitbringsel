@@ -76,8 +76,10 @@ func NewService(repo Repository, lists ListAccess, pub Publisher) *Service {
 
 // Create adds an item to a list. If an item with this ID already exists in
 // the same list, the request was sent twice (a lost answer, an offline
-// retry), and the stored item is returned unchanged. If the ID belongs to an
-// item elsewhere, it returns ErrIDTaken.
+// retry), and the stored item is returned unchanged. The same holds for an
+// item that is not deleted and now lives in another list of the same
+// household: someone moved it after the first request. If the ID belongs to
+// any other item, it returns ErrIDTaken.
 func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem, clock HLC) (Item, error) {
 	// Access first: an outsider must not learn anything about the rules.
 	l, err := s.requireList(ctx, actor, listID)
@@ -96,7 +98,7 @@ func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem
 	// an edit made before it existed cannot win. Merge also limits a clock
 	// that runs too far ahead.
 	stamps := Clocks{}
-	for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked} {
+	for _, f := range []Field{FieldName, FieldQuantity, FieldUnit, FieldNote, FieldChecked, FieldList} {
 		stamps[f] = clock
 	}
 	clocks, err := Merge(nil, stamps, false, s.now())
@@ -116,8 +118,19 @@ func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem
 	})
 	if errors.Is(err, ErrIDTaken) {
 		existing, getErr := s.repo.Get(ctx, n.ID)
-		if getErr == nil && existing.ListID == listID {
+		if getErr != nil {
+			return Item{}, ErrIDTaken
+		}
+		if existing.ListID == listID {
 			return existing, nil
+		}
+		// The item may have been moved after the first request: then the
+		// retry finds it in another list of the same household.
+		if !existing.Deleted() {
+			elsewhere, err := s.lists.Get(ctx, actor, existing.ListID)
+			if err == nil && elsewhere.GroupID == l.GroupID {
+				return existing, nil
+			}
 		}
 		return Item{}, ErrIDTaken
 	}
@@ -229,6 +242,15 @@ func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Ch
 			result = current
 			return nil
 		}
+		// The target is only checked if the move wins: an outdated move is
+		// no error (docs/sync.md). A move within the same list needs no
+		// check. l.GroupID stays right even if someone moved the item
+		// meanwhile, because moves never leave the household.
+		if _, moves := won[FieldList]; moves && change.ListID.Value != current.ListID {
+			if err := s.requireTarget(ctx, actor, l.GroupID, change.ListID.Value); err != nil {
+				return err
+			}
+		}
 		changed = true
 
 		update := Update{
@@ -245,7 +267,8 @@ func (s *Service) Update(ctx context.Context, actor, itemID uuid.UUID, change Ch
 		return err
 	})
 	if err != nil {
-		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalidHLC) || errors.Is(err, ErrUnknownField) {
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalidHLC) || errors.Is(err, ErrUnknownField) ||
+			errors.Is(err, ErrListNotFound) || errors.Is(err, ErrListArchived) {
 			return Item{}, err
 		}
 		return Item{}, fmt.Errorf("update item: %w", err)
@@ -334,6 +357,25 @@ func (s *Service) requireList(ctx context.Context, actor, listID uuid.UUID) (lis
 		return list.List{}, fmt.Errorf("get list: %w", err)
 	}
 	return l, nil
+}
+
+// requireTarget checks the list an item moves to: one the actor can see, of
+// the same household, and active.
+func (s *Service) requireTarget(ctx context.Context, actor, groupID, listID uuid.UUID) error {
+	t, err := s.lists.Get(ctx, actor, listID)
+	if errors.Is(err, list.ErrNotFound) {
+		return ErrListNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("get target list: %w", err)
+	}
+	if t.GroupID != groupID {
+		return ErrListNotFound
+	}
+	if t.Archived() {
+		return ErrListArchived
+	}
+	return nil
 }
 
 // validateNew checks and cleans the fields of a new item.

@@ -28,9 +28,10 @@ var (
 	// ErrNotFound means the item does not exist or the user is not a member
 	// of its group. Both look the same to the caller.
 	ErrNotFound = errors.New("item not found")
-	// ErrIDTaken means the ID the client chose belongs to an item in
-	// another list. The same ID in the same list is a repeated request and
-	// no error.
+	// ErrIDTaken means the ID the client chose belongs to an item of another
+	// household or a deleted item of another list. The same ID in the same
+	// list, or on a live item moved to another list of the household, is a
+	// repeated request and no error.
 	ErrIDTaken = errors.New("item id already used elsewhere")
 	// ErrGroupNotFound means the group does not exist or the user is not a
 	// member of it.
@@ -51,6 +52,11 @@ var (
 	// ErrTooManyItems means a RemoveChecked names more than MaxRemoveItems
 	// items.
 	ErrTooManyItems = errors.New("too many items")
+	// ErrListNotFound means the target list of a move does not exist, belongs
+	// to another household or the actor cannot see it.
+	ErrListNotFound = errors.New("target list not found")
+	// ErrListArchived means the target list of a move is archived.
+	ErrListArchived = errors.New("target list archived")
 )
 
 // Unit is how a quantity is measured. The set is fixed (docs/data-model.md);
@@ -150,6 +156,8 @@ type Change struct {
 	Unit     Optional[*Unit]
 	Note     Optional[*string]
 	Checked  Optional[bool]
+	// ListID moves the item to another list. The service checks the target.
+	ListID Optional[uuid.UUID]
 }
 
 // clocks returns the clock for every field the change sets.
@@ -169,6 +177,9 @@ func (c Change) clocks(clock HLC) Clocks {
 	}
 	if c.Checked.Set {
 		out[FieldChecked] = clock
+	}
+	if c.ListID.Set {
+		out[FieldList] = clock
 	}
 	return out
 }
@@ -190,6 +201,9 @@ func (c Change) only(won Clocks) Change {
 	}
 	if _, ok := won[FieldChecked]; ok {
 		out.Checked = c.Checked
+	}
+	if _, ok := won[FieldList]; ok {
+		out.ListID = c.ListID
 	}
 	return out
 }
@@ -227,7 +241,8 @@ type Repository interface {
 	ListForList(ctx context.Context, listID uuid.UUID) ([]Item, error)
 	// ListForLists does the same for several lists at once.
 	ListForLists(ctx context.Context, listIDs []uuid.UUID) ([]Item, error)
-	// Apply writes the update and draws a new server_seq.
+	// Apply writes the update and draws a new server_seq. It returns
+	// ErrListNotFound if the target list of a move vanished meanwhile.
 	Apply(ctx context.Context, itemID uuid.UUID, update Update) (Item, error)
 	// MarkDeleted turns the item into a tombstone. For a tombstone already,
 	// it changes nothing.

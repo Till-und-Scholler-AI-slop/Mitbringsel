@@ -51,6 +51,7 @@ const API_ERROR_CODES: Record<ApiErrorCode, true> = {
   TOO_MANY_INVITES: true,
   RATE_LIMITED: true,
   LIST_NOT_FOUND: true,
+  LIST_ARCHIVED: true,
   LIST_NAME_INVALID: true,
   LIST_ICON_INVALID: true,
   TOO_MANY_LISTS: true,
