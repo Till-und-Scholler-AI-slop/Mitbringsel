@@ -2,13 +2,21 @@
 import ContextColumn from '@/components/list/ContextColumn.vue'
 import ItemFormCard from '@/components/list/ItemFormCard.vue'
 import ItemFormDialog from '@/components/list/ItemFormDialog.vue'
-import { useItemFormControl, type ItemFormCardHandle } from '@/composables/useItemFormControl'
+import OverviewCard from '@/components/list/OverviewCard.vue'
+import { useContextOverview } from '@/composables/useContextOverview'
+import {
+  useItemFormControl,
+  type ItemFormCardHandle,
+  type OverviewCardHandle,
+} from '@/composables/useItemFormControl'
 import type { GroupMember, Item, List } from '@/types/api'
 
 // Shows the item form of the control (useItemFormControl): as a dialog, or on
 // a wide screen as a card in the context column, which ListView places as the
 // second column of its grid. The card is always there; without a form opened
-// it offers an empty one for a new item.
+// it offers an empty one for a new item. Above it sits the overview card with
+// the pinned list (if the household has a second list); one of the two cards
+// is collapsed to a bar.
 const props = defineProps<{ list: List; members: GroupMember[] }>()
 
 // Destructured, so the template unwraps the refs: only refs at the top level
@@ -16,6 +24,7 @@ const props = defineProps<{ list: List; members: GroupMember[] }>()
 const {
   columnMode,
   card,
+  overviewCard,
   newItemOpen,
   newItemName,
   newItemKey,
@@ -26,6 +35,7 @@ const {
   expandForm,
   expandOverview,
 } = useItemFormControl()
+const { available: overviewAvailable } = useContextOverview()
 
 // Who added the item; null if unknown (left the household).
 function creatorOf(item: Item) {
@@ -35,6 +45,10 @@ function creatorOf(item: Item) {
 // A function ref, because the card is handed to the control, not kept here.
 function setCard(instance: unknown) {
   card.value = (instance as ItemFormCardHandle | null) ?? null
+}
+
+function setOverviewCard(instance: unknown) {
+  overviewCard.value = (instance as OverviewCardHandle | null) ?? null
 }
 </script>
 
@@ -59,6 +73,13 @@ function setCard(instance: unknown) {
     />
   </template>
   <ContextColumn v-else>
+    <OverviewCard
+      v-if="overviewAvailable"
+      :ref="setOverviewCard"
+      :collapsed="formExpanded"
+      @expand="expandOverview"
+      @collapse="expandForm"
+    />
     <!-- The key starts a new form for another item or after closing; a live
          change of the same item keeps what was typed. -->
     <ItemFormCard
@@ -70,6 +91,7 @@ function setCard(instance: unknown) {
       :creator-name="editing ? creatorOf(editing) : undefined"
       :focus-on-mount="newItemOpen || editing !== undefined"
       :collapsed="!formExpanded"
+      :collapsible="overviewAvailable"
       @close="close"
       @remove="removeEditing"
       @expand="expandForm"

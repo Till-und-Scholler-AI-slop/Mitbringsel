@@ -273,6 +273,17 @@
     },
     "context": {
       "collapse": "Einklappen",
+      "overview": {
+        "label": "Überblick: {name}",
+        "collapse": "Überblick einklappen und Erstellen öffnen"
+      },
+      "second": {
+        "choose": "Welche Liste daneben",
+        "open": "nichts offen | {count} offen | {count} offen",
+        "summary": "{open} · zuletzt {name}",
+        "add": "Artikel zu {list} hinzufügen",
+        "empty": "Hier ist nichts offen."
+      },
       "form": {
         "labelNew": "Erstellen",
         "labelEdit": "Bearbeiten",

@@ -33,6 +33,7 @@ const emit = defineEmits<{ details: [name: string] }>()
 const { t } = useI18n()
 const items = useItemsStore()
 const name = ref('')
+const input = ref<HTMLInputElement | null>(null)
 
 // The field empties at once, so the next item can be typed while this one
 // is on its way; the item shows at once.
@@ -44,6 +45,11 @@ function openDetails() {
 const detailsLabel = computed(() =>
   t(props.opensDialog ? 'list.quickAdd.details' : 'list.quickAdd.detailsCard'),
 )
+
+function focus() {
+  input.value?.focus()
+}
+defineExpose({ focus })
 
 function add() {
   const trimmed = name.value.trim()
@@ -61,6 +67,7 @@ function add() {
     <label class="field">
       <BaseIcon name="plus" :size="compact ? 18 : 22" />
       <input
+        ref="input"
         v-model="name"
         type="text"
         :aria-label="label ?? t('list.quickAdd.label')"

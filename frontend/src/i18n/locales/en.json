@@ -273,6 +273,17 @@
     },
     "context": {
       "collapse": "Collapse",
+      "overview": {
+        "label": "Overview: {name}",
+        "collapse": "Collapse overview and open create"
+      },
+      "second": {
+        "choose": "Which list beside it",
+        "open": "nothing open | {count} open | {count} open",
+        "summary": "{open} · latest {name}",
+        "add": "Add item to {list}",
+        "empty": "Nothing open here."
+      },
       "form": {
         "labelNew": "Create",
         "labelEdit": "Edit",

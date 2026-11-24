@@ -1023,8 +1023,11 @@ describe('ListView: context column on a wide screen', () => {
     vi.unstubAllGlobals()
   })
 
-  const cardOf = (w: Mounted) => w.get('.context-column section')
+  // The form card is the last card of the column; the overview card is above it.
+  const cardOf = (w: Mounted) => w.get('.context-column > section:last-child')
   const titleOf = (w: Mounted) => cardOf(w).get('h2').text()
+  // The form card is a bar while the overview card is open.
+  const formBarOf = (w: Mounted) => cardOf(w).find('.bar')
   const nameField = (w: Mounted) => cardOf(w).get('input').element as HTMLInputElement
   const rows = (w: Mounted) => w.findAll('.open li')
 
@@ -1075,7 +1078,7 @@ describe('ListView: context column on a wide screen', () => {
       'i1',
       expect.objectContaining({ checked: true }),
     )
-    expect(titleOf(wrapper)).toBe('New item')
+    expect(formBarOf(wrapper).exists()).toBe(true)
     expect(wrapper.find('.row--editing').exists()).toBe(false)
     wrapper.unmount()
   })
@@ -1085,15 +1088,20 @@ describe('ListView: context column on a wide screen', () => {
     const { wrapper } = await mountView()
     const details = () => wrapper.get('.add-bar .details')
 
-    expect(details().attributes('aria-pressed')).toBe('true')
+    // The overview card is open after loading, the form card is a bar.
+    expect(details().attributes('aria-pressed')).toBe('false')
     expect(details().attributes('aria-label')).toBe('Add item with quantity and note')
+
+    await details().trigger('click')
+    await flushPromises()
+    expect(details().attributes('aria-pressed')).toBe('true')
 
     await openEdit(wrapper, 0)
     expect(details().attributes('aria-pressed')).toBe('false')
 
     await cardOf(wrapper).get('input').trigger('keydown', { key: 'Escape' })
     await flushPromises()
-    expect(details().attributes('aria-pressed')).toBe('true')
+    expect(details().attributes('aria-pressed')).toBe('false')
     wrapper.unmount()
   })
 
@@ -1101,6 +1109,7 @@ describe('ListView: context column on a wide screen', () => {
     itemsService.list.mockResolvedValue(makeItems())
     const { wrapper } = await mountView()
 
+    await wrapper.get('.add-bar .details').trigger('click')
     await typeName(wrapper, 'Tomaten')
     await wrapper.get('.add-bar .details').trigger('click')
     await flushPromises()
@@ -1110,15 +1119,21 @@ describe('ListView: context column on a wide screen', () => {
     wrapper.unmount()
   })
 
-  it('offers an empty form for a new item next to the list, without taking the focus', async () => {
+  it('offers an empty form for a new item next to the list, opened by its bar', async () => {
     itemsService.list.mockResolvedValue(makeItems())
     const { wrapper } = await mountView()
 
+    expect(formBarOf(wrapper).text()).toContain('New item')
+    expect(formBarOf(wrapper).text()).toContain('In Supermarkt · with quantity, unit and note')
+    expect(nameField(wrapper).value).toBe('')
+    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+
+    await formBarOf(wrapper).trigger('click')
+    await flushPromises()
+
     expect(titleOf(wrapper)).toBe('New item')
     expect(cardOf(wrapper).get('.tag').text()).toBe('New in Supermarkt')
-    expect(nameField(wrapper).value).toBe('')
-    expect(document.activeElement).not.toBe(nameField(wrapper))
-    expect(wrapper.find('dialog[open]').exists()).toBe(false)
+    expect(document.activeElement).toBe(nameField(wrapper))
     wrapper.unmount()
   })
 
@@ -1143,7 +1158,8 @@ describe('ListView: context column on a wide screen', () => {
       name: 'Hafermilch',
       clock: expect.any(String),
     })
-    expect(titleOf(wrapper)).toBe('New item')
+    // The overview is open again, the form card is a bar for a new item.
+    expect(formBarOf(wrapper).text()).toContain('New item')
     expect(nameField(wrapper).value).toBe('')
     expect(wrapper.find('.row--editing').exists()).toBe(false)
     // Back where the user was.
@@ -1202,6 +1218,8 @@ describe('ListView: context column on a wide screen', () => {
     )
     const { wrapper } = await mountView()
 
+    await formBarOf(wrapper).trigger('click')
+    await flushPromises()
     await typeName(wrapper, 'Tomaten')
     await cardOf(wrapper).get('form').trigger('submit')
     await flushPromises()
@@ -1234,7 +1252,7 @@ describe('ListView: context column on a wide screen', () => {
     await cardOf(wrapper).get('input').trigger('keydown', { key: 'Escape' })
     await flushPromises()
 
-    expect(titleOf(wrapper)).toBe('New item')
+    expect(formBarOf(wrapper).text()).toContain('New item')
     expect(document.activeElement).toBe(button)
     wrapper.unmount()
   })
@@ -1247,9 +1265,232 @@ describe('ListView: context column on a wide screen', () => {
     await cardOf(wrapper).get('.remove').trigger('click')
     await flushPromises()
 
-    expect(titleOf(wrapper)).toBe('New item')
+    expect(formBarOf(wrapper).text()).toContain('New item')
     expect(openNames(wrapper)).toEqual(['Brot'])
     expect(wrapper.get('.toast .text').text()).toBe('“Milch” removed')
+    wrapper.unmount()
+  })
+})
+
+describe('ListView: second list in the context column', () => {
+  const l2Items = () => [
+    item('i5', 'Brötchen', { listId: 'l2', note: 'Vollkorn' }),
+    item('i6', 'Kuchen', { listId: 'l2', quantity: 2, unit: 'piece', serverSeq: 2 }),
+    item('i7', 'Altes Brot', { listId: 'l2', checked: true, checkedBy: 'user-1' }),
+  ]
+
+  beforeEach(() => {
+    itemsService.list.mockImplementation(async (listId) =>
+      listId === 'l1' ? [item('i1', 'Milch'), item('i2', 'Brot')] : l2Items(),
+    )
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const overviewOf = (w: Mounted) => w.get('.context-column > section:first-child')
+  const formOf = (w: Mounted) => w.get('.context-column > section:last-child')
+  const pinnedAdd = (w: Mounted) => overviewOf(w).get('input[aria-label="Add item to Baumarkt"]')
+  const sidebarPin = (w: Mounted) =>
+    w.findAll('.side .lists a').flatMap((a) => (a.find('[role="img"]').exists() ? [a.text()] : []))
+
+  it('shows the first other list in the overview card and the form card as a bar', async () => {
+    const { wrapper } = await mountView()
+
+    const overview = overviewOf(wrapper)
+    expect(overview.attributes('aria-label')).toBe('Overview: Baumarkt')
+    expect(overview.find('.bar').exists()).toBe(false)
+    expect(overview.get('h2').text()).toBe('Baumarkt')
+    expect(overview.get('.count').text()).toBe('2 open')
+    expect(overview.findAll('.items .name').map((e) => e.text())).toEqual(['Brötchen', 'Kuchen'])
+    expect(formOf(wrapper).find('.bar').exists()).toBe(true)
+    expect(wrapper.get('.add-bar .details').attributes('aria-pressed')).toBe('false')
+    wrapper.unmount()
+  })
+
+  it('marks the pinned list in the sidebar', async () => {
+    const { wrapper } = await mountView()
+
+    expect(sidebarPin(wrapper)).toHaveLength(1)
+    expect(sidebarPin(wrapper)[0]).toContain('Baumarkt')
+    wrapper.unmount()
+  })
+
+  it('opens the form card by its bar with the focus in the name, and the overview by its bar', async () => {
+    const { wrapper } = await mountView()
+
+    await formOf(wrapper).get('.bar').trigger('click')
+    await flushPromises()
+
+    expect(formOf(wrapper).find('.bar').exists()).toBe(false)
+    expect(overviewOf(wrapper).get('.bar').attributes('aria-expanded')).toBe('false')
+    expect(overviewOf(wrapper).get('.bar-title').text()).toBe('Baumarkt')
+    expect(overviewOf(wrapper).get('.bar-summary').text()).toBe('2 open · latest Kuchen')
+    expect(document.activeElement).toBe(formOf(wrapper).get('input').element)
+    expect(wrapper.get('.add-bar .details').attributes('aria-pressed')).toBe('true')
+
+    await overviewOf(wrapper).get('.bar').trigger('click')
+    await flushPromises()
+
+    expect(formOf(wrapper).get('.bar').attributes('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(pinnedAdd(wrapper).element)
+    wrapper.unmount()
+  })
+
+  it('collapses a card with its button and opens the other', async () => {
+    const { wrapper } = await mountView()
+
+    await overviewOf(wrapper).get('.collapse').trigger('click')
+    await flushPromises()
+    expect(formOf(wrapper).find('.bar').exists()).toBe(false)
+
+    await formOf(wrapper).get('.collapse').trigger('click')
+    await flushPromises()
+    expect(formOf(wrapper).find('.bar').exists()).toBe(true)
+    expect(overviewOf(wrapper).find('.bar').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('opens the overview again after saving or closing the form', async () => {
+    const { wrapper } = await mountView()
+
+    await formOf(wrapper).get('.bar').trigger('click')
+    await flushPromises()
+    await formOf(wrapper).get('input').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+
+    expect(overviewOf(wrapper).find('.bar').exists()).toBe(false)
+    expect(formOf(wrapper).find('.bar').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('adds an item to the pinned list with its own quick-add bar', async () => {
+    itemsService.create.mockImplementation(async (listId, req) =>
+      item(req.id ?? 'i9', req.name, { listId, serverSeq: 3 }),
+    )
+    const { wrapper } = await mountView()
+
+    await pinnedAdd(wrapper).setValue('Croissant')
+    await overviewOf(wrapper).get('form').trigger('submit')
+    await flushPromises()
+
+    expect(itemsService.create).toHaveBeenCalledWith(
+      'l2',
+      expect.objectContaining({ name: 'Croissant' }),
+    )
+    expect(
+      overviewOf(wrapper)
+        .findAll('.items .name')
+        .map((e) => e.text()),
+    ).toContain('Croissant')
+    expect(openNames(wrapper)).toEqual(['Milch', 'Brot'])
+    wrapper.unmount()
+  })
+
+  it('checks off an item of the pinned list, which then leaves the overview', async () => {
+    itemsService.update.mockResolvedValue(
+      item('i5', 'Brötchen', { listId: 'l2', checked: true, checkedBy: 'user-1', serverSeq: 4 }),
+    )
+    const { wrapper } = await mountView()
+
+    await overviewOf(wrapper).get('.items .check').trigger('click')
+    await flushPromises()
+
+    expect(itemsService.update).toHaveBeenCalledWith(
+      'i5',
+      expect.objectContaining({ checked: true }),
+    )
+    expect(
+      overviewOf(wrapper)
+        .findAll('.items .name')
+        .map((e) => e.text()),
+    ).toEqual(['Kuchen'])
+    wrapper.unmount()
+  })
+
+  it('shows what happens on the pinned list live', async () => {
+    const { wrapper } = await mountView()
+
+    serverEvents.emit({
+      type: 'itemChanged',
+      payload: {
+        groupId: 'g1',
+        actorId: 'user-2',
+        item: item('i8', 'Laugenstange', { listId: 'l2', serverSeq: 5 }),
+      },
+    })
+    await flushPromises()
+
+    expect(overviewOf(wrapper).get('.count').text()).toBe('3 open')
+    wrapper.unmount()
+  })
+
+  it('pins another list with its chip and remembers it', async () => {
+    listsService.list.mockResolvedValue([
+      list('l1', 'Supermarkt'),
+      list('l2', 'Baumarkt'),
+      list('l3', 'Apotheke'),
+    ])
+    itemsService.list.mockResolvedValue([])
+    const { wrapper } = await mountView()
+    const chips = () => overviewOf(wrapper).findAll('.chips .chip')
+
+    expect(chips().map((c) => [c.text(), c.attributes('aria-pressed')])).toEqual([
+      ['Baumarkt', 'true'],
+      ['Apotheke', 'false'],
+    ])
+
+    await chips()[1]!.trigger('click')
+    await flushPromises()
+
+    expect(overviewOf(wrapper).get('h2').text()).toBe('Apotheke')
+    expect(sidebarPin(wrapper)[0]).toContain('Apotheke')
+    expect(JSON.parse(localStorage.getItem('mitbringsel.overview')!)).toEqual({
+      g1: { pinnedListId: 'l3' },
+    })
+    wrapper.unmount()
+  })
+
+  it('pins the list that was open when the pinned list becomes the open one', async () => {
+    const { wrapper } = await mountView()
+
+    await wrapper.findAll('main nav.chips .chip--list')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('h1').text()).toBe('Baumarkt')
+    expect(overviewOf(wrapper).get('h2').text()).toBe('Supermarkt')
+    expect(sidebarPin(wrapper)[0]).toContain('Supermarkt')
+    wrapper.unmount()
+  })
+
+  it('shows the form card alone, without collapse button or pin, with one active list', async () => {
+    listsService.list.mockResolvedValue([list('l1', 'Supermarkt')])
+    const { wrapper } = await mountView()
+
+    expect(wrapper.findAll('.context-column > section')).toHaveLength(1)
+    const card = wrapper.get('.context-column > section')
+    expect(card.attributes('aria-label')).toBe('Create')
+    expect(card.find('.bar').exists()).toBe(false)
+    expect(card.find('.collapse').exists()).toBe(false)
+    expect(wrapper.get('.add-bar .details').attributes('aria-pressed')).toBe('true')
+    expect(sidebarPin(wrapper)).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('has no overview card, pin or stored setting below the context column width', async () => {
+    vi.unstubAllGlobals()
+    const { wrapper } = await mountView()
+
+    expect(wrapper.find('.context-column').exists()).toBe(false)
+    expect(sidebarPin(wrapper)).toEqual([])
+    expect(wrapper.find('.add-bar .details').exists()).toBe(true)
+    expect(wrapper.get('.add-bar input').attributes('aria-label')).toBe('Add item')
+    expect(localStorage.getItem('mitbringsel.overview')).toBeNull()
     wrapper.unmount()
   })
 })
