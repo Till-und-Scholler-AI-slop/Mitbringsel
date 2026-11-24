@@ -16,11 +16,18 @@
   "app": {
     "name": "Tuolino"
   },
+  "offline": {
+    "badge": "Offline",
+    "actionHint": "Requires an internet connection.",
+    "householdHint": "Creating or joining a household requires a connection.",
+    "createHouseholdHint": "Creating a household requires a connection.",
+    "listHint": "Lists can only be created or changed online."
+  },
   "start": {
     "greeting": "Hello {name}",
     "offline": {
-      "badge": "Offline",
-      "body": "Without internet you can’t create or change a household right now."
+      "body": "You can still open and edit your households. Changes go out as soon as you are back online.",
+      "bodyEmpty": "Without internet you can’t create or join a household right now. Once you’re back online, you can continue."
     },
     "profile": {
       "label": "Profile of {name}",

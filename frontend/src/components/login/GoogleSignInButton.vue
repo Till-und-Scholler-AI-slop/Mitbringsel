@@ -74,6 +74,8 @@ const { t } = useI18n()
   border-color: var(--color-google-disabled-border);
   background: var(--color-google-disabled-bg);
   color: var(--color-google-disabled-text);
+  /* Google's branding guidelines dim via the colors above and .logo, not whole-button opacity. */
+  opacity: 1;
   cursor: not-allowed;
 }
 

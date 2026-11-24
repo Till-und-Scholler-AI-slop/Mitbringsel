@@ -41,4 +41,21 @@ describe('StartEmpty', () => {
   it('keeps the decoration away from screen readers', () => {
     expect(mountEmpty().get('.badges').attributes('aria-hidden')).toBe('true')
   })
+
+  it('disables both options while offline', async () => {
+    const wrapper = mount(StartEmpty, {
+      props: { offline: true },
+      global: { plugins: [createAppI18n(['en'], null)] },
+    })
+
+    const create = wrapper.get('.option--create')
+    const join = wrapper.get('.option--join')
+    expect(create.attributes('disabled')).toBeDefined()
+    expect(join.attributes('disabled')).toBeDefined()
+
+    await create.trigger('click')
+    await join.trigger('click')
+    expect(wrapper.emitted('create')).toBeUndefined()
+    expect(wrapper.emitted('join')).toBeUndefined()
+  })
 })

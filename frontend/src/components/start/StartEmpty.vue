@@ -4,7 +4,9 @@ import { useI18n } from 'vue-i18n'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 
 // The start page without a household: found one or join one. The dialogs
-// belong to the parent.
+// belong to the parent; offline disables both options while the page shows
+// the offline notice above.
+withDefaults(defineProps<{ offline?: boolean }>(), { offline: false })
 const emit = defineEmits<{ create: []; join: [] }>()
 
 const { t } = useI18n()
@@ -28,6 +30,7 @@ const { t } = useI18n()
         type="button"
         class="option option--create press-sticker"
         aria-haspopup="dialog"
+        :disabled="offline"
         @click="emit('create')"
       >
         <span class="option-icon" aria-hidden="true"
@@ -43,6 +46,7 @@ const { t } = useI18n()
         type="button"
         class="option option--join press-sticker"
         aria-haspopup="dialog"
+        :disabled="offline"
         @click="emit('join')"
       >
         <span class="option-icon" aria-hidden="true"><BaseIcon name="link" :size="24" /></span>
@@ -162,7 +166,6 @@ const { t } = useI18n()
   border: var(--border-width-md) solid var(--color-border);
   border-radius: var(--radius-xl);
   text-align: left;
-  cursor: pointer;
   box-shadow: var(--shadow-sticker);
 }
 

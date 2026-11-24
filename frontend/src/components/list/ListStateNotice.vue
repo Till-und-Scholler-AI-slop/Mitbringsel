@@ -5,8 +5,10 @@ import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseEmptyState from '@/components/base/BaseEmptyState.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useListsStore } from '@/stores/lists'
 
 /** What the list view shows when it shows no list. */
@@ -21,6 +23,7 @@ const emit = defineEmits<{ create: [] }>()
 const { t } = useI18n()
 const router = useRouter()
 const lists = useListsStore()
+const { online } = useOnlineStatus()
 const listsError = useErrorMessage(() => lists.errorCodeOf(props.groupId))
 </script>
 
@@ -54,9 +57,10 @@ const listsError = useErrorMessage(() => lists.errorCodeOf(props.groupId))
     :description="t('list.noLists.description')"
   >
     <template #icon><BaseIcon name="list" :size="24" /></template>
-    <BaseButton aria-haspopup="dialog" @click="emit('create')">
+    <BaseButton aria-haspopup="dialog" :disabled="!online" @click="emit('create')">
       <BaseIcon name="plus" /> {{ t('list.noLists.create') }}
     </BaseButton>
+    <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.listHint')" />
   </BaseEmptyState>
 </template>
 

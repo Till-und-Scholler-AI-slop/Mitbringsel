@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -190,4 +190,41 @@ describe('ListActionsDialog', () => {
     expect(wrapper.props('open')).toBe(true)
     wrapper.unmount()
   })
+
+  it('disables all actions with a hint while offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const wrapper = mountDialog(list())
+
+    expect(wrapper.get('[role="status"]').text()).toBe(
+      'Lists can only be created or changed online.',
+    )
+    const buttons = wrapper.findAll('.action')
+    expect(buttons.map((b) => b.attributes('disabled'))).toEqual(['', '', ''])
+
+    await buttons[0]!.trigger('click')
+    await buttons[1]!.trigger('click')
+    expect(wrapper.emitted('rename')).toBeUndefined()
+    expect(service.setArchived).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('disables confirming deletion if the connection drops, keeping back active', async () => {
+    const wrapper = mountDialog(list())
+    await wrapper.findAll('.action')[2]!.trigger('click')
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(wrapper.get('[role="status"]').text()).toBe(
+      'Lists can only be created or changed online.',
+    )
+    expect(wrapper.get('.delete').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.back').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
