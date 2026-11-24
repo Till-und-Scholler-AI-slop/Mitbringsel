@@ -66,6 +66,19 @@ func newItemResponse(i item.Item) apigen.Item {
 		u := apigen.Unit(*i.Unit)
 		unit = &u
 	}
+	clocks := apigen.ItemClocks{
+		Name:     string(i.Clocks[item.FieldName]),
+		Quantity: string(i.Clocks[item.FieldQuantity]),
+		Unit:     string(i.Clocks[item.FieldUnit]),
+		Note:     string(i.Clocks[item.FieldNote]),
+		Checked:  string(i.Clocks[item.FieldChecked]),
+	}
+	// Items from before moving existed have no listId clock; the key is left
+	// out for them.
+	if c, ok := i.Clocks[item.FieldList]; ok {
+		s := string(c)
+		clocks.ListID = &s
+	}
 	return apigen.Item{
 		ID:        i.ID,
 		ListID:    i.ListID,
@@ -81,13 +94,7 @@ func newItemResponse(i item.Item) apigen.Item {
 		UpdatedBy: i.UpdatedBy,
 		UpdatedAt: i.UpdatedAt.UTC(),
 		ServerSeq: i.ServerSeq,
-		Clocks: apigen.ItemClocks{
-			Name:     string(i.Clocks[item.FieldName]),
-			Quantity: string(i.Clocks[item.FieldQuantity]),
-			Unit:     string(i.Clocks[item.FieldUnit]),
-			Note:     string(i.Clocks[item.FieldNote]),
-			Checked:  string(i.Clocks[item.FieldChecked]),
-		},
+		Clocks:    clocks,
 	}
 }
 
@@ -243,6 +250,8 @@ type updateItemRequest struct {
 	Unit     optionalField[string]  `json:"unit"`
 	Note     optionalField[string]  `json:"note"`
 	Checked  optionalField[bool]    `json:"checked"`
+	// ListID moves the item; a bad UUID string fails the decoding.
+	ListID optionalField[uuid.UUID] `json:"listId"`
 	// Clock is a pointer: nil if the client sent none (or null).
 	Clock *string `json:"clock"`
 }
@@ -276,6 +285,12 @@ func (req updateItemRequest) change() (item.Change, bool) {
 			return item.Change{}, false
 		}
 		c.Checked = item.Some(*req.Checked.value)
+	}
+	if req.ListID.set {
+		if req.ListID.value == nil {
+			return item.Change{}, false
+		}
+		c.ListID = item.Some(*req.ListID.value)
 	}
 	return c, true
 }
@@ -385,6 +400,10 @@ func writeItemError(w http.ResponseWriter, op string, err error) {
 		writeError(w, http.StatusNotFound, apigen.ErrorCodeItemNotFound)
 	case errors.Is(err, item.ErrGroupNotFound):
 		writeError(w, http.StatusNotFound, apigen.ErrorCodeGroupNotFound)
+	case errors.Is(err, item.ErrListNotFound):
+		writeError(w, http.StatusNotFound, apigen.ErrorCodeListNotFound)
+	case errors.Is(err, item.ErrListArchived):
+		writeError(w, http.StatusConflict, apigen.ErrorCodeListArchived)
 	case errors.Is(err, item.ErrIDTaken):
 		writeError(w, http.StatusConflict, apigen.ErrorCodeItemIDTaken)
 	case errors.Is(err, item.ErrInvalidName):
