@@ -273,4 +273,21 @@ const isCurrent = (group: Group) => group.id === props.current.id
     width: min(23.75rem, 100%);
   }
 }
+
+/* Large screens: the name even larger (80rem: CONTEXT_COLUMN_QUERY). */
+@media (min-width: 80rem) {
+  .name {
+    font-size: 2.5rem;
+    line-height: 2.875rem;
+  }
+
+  .toggle {
+    gap: var(--space-1-5);
+  }
+
+  .toggle :deep(svg) {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+}
 </style>

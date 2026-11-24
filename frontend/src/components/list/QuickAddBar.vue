@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
@@ -12,10 +12,13 @@ const MAX_NAME_LENGTH = 100
 // "markt2-liste", "markt2-desktop"). On the phone the bar sits at the bottom,
 // near the thumb; the page places it.
 // "With details" hands what was typed so far to the item form; opensDialog
-// is false when that form is a panel next to the list.
-const props = withDefaults(defineProps<{ listId: string; opensDialog?: boolean }>(), {
-  opensDialog: true,
-})
+// is false when that form is a card next to the list; there the button shows
+// with `pressed` whether the card offers a new item. Without `pressed` it is
+// no toggle and gets no aria-pressed.
+const props = withDefaults(
+  defineProps<{ listId: string; opensDialog?: boolean; pressed?: boolean }>(),
+  { opensDialog: true, pressed: undefined },
+)
 const emit = defineEmits<{ details: [name: string] }>()
 
 const { t } = useI18n()
@@ -28,6 +31,10 @@ function openDetails() {
   emit('details', name.value.trim())
   name.value = ''
 }
+
+const detailsLabel = computed(() =>
+  t(props.opensDialog ? 'list.quickAdd.details' : 'list.quickAdd.detailsCard'),
+)
 
 function add() {
   const trimmed = name.value.trim()
@@ -58,9 +65,10 @@ function add() {
     <button
       type="button"
       class="details press-sticker"
-      :aria-label="t('list.quickAdd.details')"
-      :title="t('list.quickAdd.details')"
+      :aria-label="detailsLabel"
+      :title="detailsLabel"
       :aria-haspopup="opensDialog ? 'dialog' : undefined"
+      :aria-pressed="pressed"
       @click="openDetails"
     >
       <BaseIcon name="sliders" :size="22" />
@@ -169,6 +177,15 @@ input::placeholder {
     color: var(--color-text-muted);
     font-size: 0.8125rem;
     font-weight: var(--font-weight-heavy);
+  }
+}
+
+/* Large screens: the icon as large as in the design (80rem:
+   CONTEXT_COLUMN_QUERY in contextColumn.ts). */
+@media (min-width: 80rem) {
+  .details :deep(svg) {
+    width: 1.5rem;
+    height: 1.5rem;
   }
 }
 </style>

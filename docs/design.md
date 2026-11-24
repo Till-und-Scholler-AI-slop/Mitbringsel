@@ -79,7 +79,8 @@ Immer ist genau eine Karte offen. Sie nimmt die restliche Höhe ein und scrollt 
 
 - Nach dem Laden ist der Überblick offen. Bis es den Überblick gibt (#176), zeigt die Kontextspalte nur die Formular-Karte: ohne geöffneten Artikel ein leeres Formular für einen neuen.
 - Der gewählte Tab und die angepinnte Liste werden pro Gerät und Haushalt gemerkt, nicht synchronisiert. Ohne gemerkten Tab öffnet „Aktivität“, ohne gemerkten Pin ist die erste andere aktive Liste angepinnt. Wird die angepinnte Liste die aktuelle, wechselt der Pin; eine archivierte oder gelöschte Liste wird vergessen. Hat der Haushalt nur eine aktive Liste, ist „Zweite Liste“ deaktiviert. Den Pin in der Seitenleiste gibt es nur, solange „Zweite Liste“ gewählt ist.
-- Der Button am Quick-Add öffnet die Erstellen-Karte, ein Klick auf einen Artikel die Bearbeiten-Karte.
+- Der Button am Quick-Add öffnet die Erstellen-Karte, ein Klick auf einen Artikel die Bearbeiten-Karte. Der Button ist gedrückt (`aria-pressed`), solange die Karte „Neuer Artikel“ zeigt, also bis zu #176 immer, außer wenn ein Artikel bearbeitet wird. Ist sie schon offen und das Quick-Add leer, setzt ein weiterer Klick nur den Fokus ins Namensfeld, statt die Eingabe zu verwerfen.
+- Artikelzeilen: Ab `80rem` ist die Checkbox links ein eigener Button und hakt den Artikel ab, ein Klick auf den Rest der Zeile öffnet die Bearbeiten-Karte. Zwischen `48rem` und `80rem` bleibt es wie auf dem Smartphone: Klick auf die Zeile hakt ab, der Stift bearbeitet. Der bearbeitete Artikel trägt keine Marke „Wird bearbeitet“, sondern heller Hintergrund und oranger Ring; der Text steht nur im Label für Screenreader.
 - Nach „Hinzufügen“ bleibt die Erstellen-Karte offen und leer, der Fokus geht zurück ins Namensfeld.
 - Nach „Speichern“, „Löschen“, „Abbrechen“, Esc und dem Verschieben öffnet der Überblick. „Löschen“ zeigt den bekannten „Rückgängig“-Toast.
 - Verschieben speichert die Werte im Formular mit.

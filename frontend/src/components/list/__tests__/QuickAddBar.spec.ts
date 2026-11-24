@@ -61,9 +61,9 @@ function item(id: string, name: string): Item {
   }
 }
 
-function mountBar(locale: 'de' | 'en' = 'en', opensDialog?: boolean) {
+function mountBar(locale: 'de' | 'en' = 'en', opensDialog?: boolean, pressed?: boolean) {
   return mount(QuickAddBar, {
-    props: { listId: 'l1', opensDialog },
+    props: { listId: 'l1', opensDialog, pressed },
     global: { plugins: [createAppI18n([locale], null)] },
     attachTo: document.body,
   })
@@ -156,5 +156,25 @@ describe('QuickAddBar', () => {
     expect(panel.get('.details').attributes('aria-haspopup')).toBeUndefined()
     dialog.unmount()
     panel.unmount()
+  })
+
+  it('is no toggle without pressed, and says it adds with details', () => {
+    const wrapper = mountBar()
+
+    expect(wrapper.get('.details').attributes('aria-pressed')).toBeUndefined()
+    expect(wrapper.get('.details').attributes('aria-label')).toBe('Add with details')
+    wrapper.unmount()
+  })
+
+  it('shows whether the card offers a new item, and says what it does', () => {
+    const pressed = mountBar('en', false, true)
+    const released = mountBar('en', false, false)
+
+    expect(pressed.get('.details').attributes('aria-pressed')).toBe('true')
+    expect(released.get('.details').attributes('aria-pressed')).toBe('false')
+    expect(pressed.get('.details').attributes('aria-label')).toBe('Add item with quantity and note')
+    expect(pressed.get('.details').attributes('title')).toBe('Add item with quantity and note')
+    pressed.unmount()
+    released.unmount()
   })
 })

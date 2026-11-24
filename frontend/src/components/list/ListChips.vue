@@ -189,4 +189,13 @@ function onClick(list: List) {
     color: var(--color-text);
   }
 }
+
+/* Large screens: the chips sit in the list column (80rem:
+   CONTEXT_COLUMN_QUERY in contextColumn.ts). */
+@media (min-width: 80rem) {
+  .add {
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+}
 </style>

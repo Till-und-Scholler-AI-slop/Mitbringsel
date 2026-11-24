@@ -434,6 +434,15 @@ describe('ListView: header', () => {
     wrapper.unmount()
   })
 
+  it('keeps the chips in the header below the context column width', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.find('header nav.chips').exists()).toBe(true)
+    expect(wrapper.find('main nav.chips').exists()).toBe(false)
+    expect(wrapper.get('.add-bar .details').attributes('aria-pressed')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('marks an archived list', async () => {
     listsService.list.mockResolvedValue([list('l1', 'Supermarkt', '2026-02-01T10:00:00Z')])
     const { wrapper } = await mountView()
@@ -1020,7 +1029,7 @@ describe('ListView: context column on a wide screen', () => {
   const rows = (w: Mounted) => w.findAll('.open li')
 
   async function openEdit(w: Mounted, index: number) {
-    const button = rows(w)[index]!.get('.edit')
+    const button = rows(w)[index]!.get('.open')
     ;(button.element as HTMLElement).focus()
     await button.trigger('click')
     await flushPromises()
@@ -1031,6 +1040,75 @@ describe('ListView: context column on a wide screen', () => {
     nameField(w).value = value
     await cardOf(w).get('input').trigger('input')
   }
+
+  it('puts the chips at the top of the list column, not in the header', async () => {
+    const { wrapper, router } = await mountView()
+
+    expect(wrapper.find('header nav.chips').exists()).toBe(false)
+    expect(wrapper.findAll('main nav.chips')).toHaveLength(1)
+
+    await wrapper.findAll('main nav.chips .chip--list')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.params).toMatchObject({ listId: 'l2' })
+    wrapper.unmount()
+  })
+
+  it('shows the member avatars larger in the header', async () => {
+    const { wrapper } = await mountView()
+
+    expect(wrapper.get('header .member').attributes('style')).toContain('width: 34px')
+    wrapper.unmount()
+  })
+
+  it('checks off with the checkbox without opening the card', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    itemsService.update.mockResolvedValue(
+      item('i1', 'Milch', { checked: true, checkedBy: 'user-1', serverSeq: 2 }),
+    )
+    const { wrapper } = await mountView()
+
+    await rows(wrapper)[0]!.get('.check').trigger('click')
+    await flushPromises()
+
+    expect(itemsService.update).toHaveBeenCalledWith(
+      'i1',
+      expect.objectContaining({ checked: true }),
+    )
+    expect(titleOf(wrapper)).toBe('New item')
+    expect(wrapper.find('.row--editing').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('shows the round button pressed while the card offers a new item', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+    const details = () => wrapper.get('.add-bar .details')
+
+    expect(details().attributes('aria-pressed')).toBe('true')
+    expect(details().attributes('aria-label')).toBe('Add item with quantity and note')
+
+    await openEdit(wrapper, 0)
+    expect(details().attributes('aria-pressed')).toBe('false')
+
+    await cardOf(wrapper).get('input').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(details().attributes('aria-pressed')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('keeps what was typed in the card when the pressed round button is pressed again', async () => {
+    itemsService.list.mockResolvedValue(makeItems())
+    const { wrapper } = await mountView()
+
+    await typeName(wrapper, 'Tomaten')
+    await wrapper.get('.add-bar .details').trigger('click')
+    await flushPromises()
+
+    expect(nameField(wrapper).value).toBe('Tomaten')
+    expect(document.activeElement).toBe(nameField(wrapper))
+    wrapper.unmount()
+  })
 
   it('offers an empty form for a new item next to the list, without taking the focus', async () => {
     itemsService.list.mockResolvedValue(makeItems())
@@ -1054,7 +1132,7 @@ describe('ListView: context column on a wide screen', () => {
     expect(wrapper.find('dialog[open]').exists()).toBe(false)
     expect(titleOf(wrapper)).toBe('Milch')
     expect(document.activeElement).toBe(nameField(wrapper))
-    expect(rows(wrapper)[0]!.get('.editing').text()).toBe('Editing')
+    expect(rows(wrapper)[0]!.classes()).toContain('row--editing')
     expect(button.getAttribute('aria-haspopup')).toBeNull()
 
     await typeName(wrapper, 'Hafermilch')
@@ -1067,7 +1145,7 @@ describe('ListView: context column on a wide screen', () => {
     })
     expect(titleOf(wrapper)).toBe('New item')
     expect(nameField(wrapper).value).toBe('')
-    expect(wrapper.find('.editing').exists()).toBe(false)
+    expect(wrapper.find('.row--editing').exists()).toBe(false)
     // Back where the user was.
     expect(document.activeElement).toBe(button)
     wrapper.unmount()
@@ -1083,7 +1161,7 @@ describe('ListView: context column on a wide screen', () => {
 
     expect(nameField(wrapper).value).toBe('Brot')
     expect(document.activeElement).toBe(nameField(wrapper))
-    expect(rows(wrapper).map((r) => r.find('.editing').exists())).toEqual([false, true])
+    expect(rows(wrapper).map((r) => r.classes().includes('row--editing'))).toEqual([false, true])
     wrapper.unmount()
   })
 
@@ -1112,7 +1190,7 @@ describe('ListView: context column on a wide screen', () => {
     expect(titleOf(wrapper)).toBe('New item')
     expect(nameField(wrapper).value).toBe('Tomaten')
     expect(document.activeElement).toBe(nameField(wrapper))
-    expect(wrapper.find('.editing').exists()).toBe(false)
+    expect(wrapper.find('.row--editing').exists()).toBe(false)
     expect(wrapper.get('.add-bar .details').attributes('aria-haspopup')).toBeUndefined()
     wrapper.unmount()
   })

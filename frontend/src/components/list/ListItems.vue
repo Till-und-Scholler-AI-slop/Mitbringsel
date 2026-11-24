@@ -72,6 +72,7 @@ function toggle(item: Item) {
       class="add-bar"
       :list-id="list.id"
       :opens-dialog="!columnMode"
+      :pressed="columnMode ? editingId === null : undefined"
       @details="openNew"
     />
 
@@ -110,6 +111,7 @@ function toggle(item: Item) {
           :editing="columnMode && editingId === item.id"
           :pending="items.isPending(item.id)"
           :opens-dialog="!columnMode"
+          :selectable="columnMode"
           @toggle="toggle(item)"
           @edit="startEdit(item)"
         />
@@ -196,6 +198,14 @@ function toggle(item: Item) {
 
 .failed-title {
   font-weight: var(--font-weight-black);
+}
+
+/* Large screens: the gap between quick-add, list and done section, as between
+   the chips above (80rem: CONTEXT_COLUMN_QUERY). */
+@media (min-width: 80rem) {
+  .list-items {
+    gap: 1.375rem;
+  }
 }
 
 @media (min-width: 48rem) {
