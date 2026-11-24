@@ -8,10 +8,10 @@ import { onScopeDispose, readonly, ref } from 'vue'
  * early, real failures still come back as NETWORK errors from the API.
  */
 export function useOnlineStatus() {
-  const online = ref(navigator.onLine)
+  const online = ref(navigator.onLine !== false)
 
   const update = () => {
-    online.value = navigator.onLine
+    online.value = navigator.onLine !== false
   }
   window.addEventListener('online', update)
   window.addEventListener('offline', update)

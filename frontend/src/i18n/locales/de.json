@@ -16,11 +16,18 @@
   "app": {
     "name": "Tuolino"
   },
+  "offline": {
+    "badge": "Offline",
+    "actionHint": "Geht nur mit Internetverbindung.",
+    "householdHint": "Haushalte gründen oder beitreten geht nur online.",
+    "createHouseholdHint": "Haushalt gründen geht nur online.",
+    "listHint": "Listen lassen sich nur online anlegen oder ändern."
+  },
   "start": {
     "greeting": "Hallo {name}",
     "offline": {
-      "badge": "Offline",
-      "body": "Ohne Internet kannst du gerade keinen Haushalt gründen oder ändern."
+      "body": "Du kannst deine Haushalte trotzdem öffnen und bearbeiten. Änderungen gehen raus, sobald du wieder online bist.",
+      "bodyEmpty": "Ohne Internet kannst du gerade keinen Haushalt gründen oder beitreten. Sobald du wieder online bist, geht es weiter."
     },
     "profile": {
       "label": "Profil von {name}",

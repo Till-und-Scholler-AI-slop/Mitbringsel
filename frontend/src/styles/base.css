@@ -27,6 +27,17 @@ button {
   font: inherit;
 }
 
+/* Shared pointer and disabled look for native buttons. Components with custom
+   disabled colors (GoogleSignInButton) keep opacity: 1. */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* Visible keyboard focus everywhere (docs/conventions.md: accessibility). */
 :focus-visible {
   outline: var(--border-width-lg) solid var(--color-focus);
