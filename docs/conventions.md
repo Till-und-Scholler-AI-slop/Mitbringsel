@@ -63,6 +63,7 @@ Alles, was mehr als einmal vorkommt, wird eine Komponente in `components/base/` 
 | `BaseSticker` | Listen-Icon als ausgeschnittener Sticker (Daten in `stickers.ts`), immer `aria-hidden` |
 | `BaseEmptyState` | Leere Listen und Gruppen |
 | `BaseSyncIndicator` | Status online, offline, synchronisiert ausstehende Änderungen |
+| `BaseOfflineNotice` | Offline-Hinweis als gestrichelte Karte mit Badge (`card`) oder kompakte Zeile (`inline`, z.B. in Menüs und Dialogen) |
 
 - Props und Emits sind mit TypeScript typisiert (`defineProps<…>()`, `defineEmits<…>()`).
 - Wiederverwendbare Logik liegt in Composables (z.B. `useOnlineStatus`, `useTheme`, `useConfirm`).
