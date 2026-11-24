@@ -1726,3 +1726,62 @@ func (l failingTargetLists) Get(ctx context.Context, actor, listID uuid.UUID) (l
 	}
 	return l.fakeLists.Get(ctx, actor, listID)
 }
+
+// TestService_CreateAfterMove covers a create that is sent again after
+// someone moved the item: the retry must not look like a stolen ID.
+func TestService_CreateAfterMove(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("a repeated create of a moved item returns the stored item", func(t *testing.T) {
+		f := newMoveFixture()
+		it := f.createItem(t)
+		moved, err := f.svc.Update(ctx, f.member, it.ID, Change{ListID: Some(f.secondID)}, f.clock(t, 1, "ben"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.pub.events = nil
+
+		again, err := f.svc.Create(ctx, f.member, f.listID, NewItem{ID: it.ID, Name: "Etwas anderes"}, f.clock(t, 5, "anna"))
+
+		if err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+		if !reflect.DeepEqual(again, moved) || len(f.repo.items) != 1 {
+			t.Errorf("Create() again = %+v, want the moved item, %d items", again, len(f.repo.items))
+		}
+		if len(f.pub.events) != 0 {
+			t.Errorf("published %+v, want nothing", f.pub.events)
+		}
+	})
+
+	t.Run("an ID that lives elsewhere is still taken", func(t *testing.T) {
+		tests := []struct {
+			name string
+			item func(f moveFixture) Item
+		}{
+			{"a list of another household", func(f moveFixture) Item {
+				return Item{ID: uuid.New(), ListID: f.foreignID, Name: "Fremd"}
+			}},
+			{"a list the member cannot see", func(f moveFixture) Item {
+				return Item{ID: uuid.New(), ListID: f.otherID, Name: "Fremd"}
+			}},
+			{"a deleted item of another list", func(f moveFixture) Item {
+				deletedAt := at
+				return Item{ID: uuid.New(), ListID: f.secondID, Name: "Weg", DeletedAt: &deletedAt}
+			}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				f := newMoveFixture()
+				existing := tt.item(f)
+				f.repo.items[existing.ID] = existing
+
+				_, err := f.svc.Create(ctx, f.member, f.listID, NewItem{ID: existing.ID, Name: "Mehl"}, f.clock(t, 0, "anna"))
+
+				if !errors.Is(err, ErrIDTaken) {
+					t.Errorf("error = %v, want %v", err, ErrIDTaken)
+				}
+			})
+		}
+	})
+}

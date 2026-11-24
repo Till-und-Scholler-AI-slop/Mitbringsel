@@ -76,8 +76,10 @@ func NewService(repo Repository, lists ListAccess, pub Publisher) *Service {
 
 // Create adds an item to a list. If an item with this ID already exists in
 // the same list, the request was sent twice (a lost answer, an offline
-// retry), and the stored item is returned unchanged. If the ID belongs to an
-// item elsewhere, it returns ErrIDTaken.
+// retry), and the stored item is returned unchanged. The same holds for an
+// item that is not deleted and now lives in another list of the same
+// household: someone moved it after the first request. If the ID belongs to
+// any other item, it returns ErrIDTaken.
 func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem, clock HLC) (Item, error) {
 	// Access first: an outsider must not learn anything about the rules.
 	l, err := s.requireList(ctx, actor, listID)
@@ -116,8 +118,19 @@ func (s *Service) Create(ctx context.Context, actor, listID uuid.UUID, n NewItem
 	})
 	if errors.Is(err, ErrIDTaken) {
 		existing, getErr := s.repo.Get(ctx, n.ID)
-		if getErr == nil && existing.ListID == listID {
+		if getErr != nil {
+			return Item{}, ErrIDTaken
+		}
+		if existing.ListID == listID {
 			return existing, nil
+		}
+		// The item may have been moved after the first request: then the
+		// retry finds it in another list of the same household.
+		if !existing.Deleted() {
+			elsewhere, err := s.lists.Get(ctx, actor, existing.ListID)
+			if err == nil && elsewhere.GroupID == l.GroupID {
+				return existing, nil
+			}
 		}
 		return Item{}, ErrIDTaken
 	}

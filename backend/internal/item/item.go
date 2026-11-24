@@ -28,9 +28,10 @@ var (
 	// ErrNotFound means the item does not exist or the user is not a member
 	// of its group. Both look the same to the caller.
 	ErrNotFound = errors.New("item not found")
-	// ErrIDTaken means the ID the client chose belongs to an item in
-	// another list. The same ID in the same list is a repeated request and
-	// no error.
+	// ErrIDTaken means the ID the client chose belongs to an item of another
+	// household or a deleted item of another list. The same ID in the same
+	// list, or on a live item moved to another list of the household, is a
+	// repeated request and no error.
 	ErrIDTaken = errors.New("item id already used elsewhere")
 	// ErrGroupNotFound means the group does not exist or the user is not a
 	// member of it.
