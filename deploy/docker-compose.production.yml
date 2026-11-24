@@ -1,0 +1,89 @@
+# Production only, loaded on top of docker-compose.yml: a daily dump of the
+# database. Named after the GitHub Environment, because deploy.yml uploads
+# docker-compose.<environment>.yml.
+#
+# The service uses the same postgres image as db, so pg_dump always matches
+# the server version and gets the same updates. Dumps go to a folder on the
+# host, not into a volume: they survive "docker compose down -v" and can be
+# copied off the server from there.
+#
+# Extra dump by hand, e.g. before a risky migration:
+#   docker compose run --rm backup now
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  backup:
+    image: postgres:18
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # The script runs as "sh -c <script> backup <mode>": $0 is "backup",
+    # $1 is the mode from command ("daily", or "now" for a single dump).
+    # $$ keeps Compose from substituting; the shell in the container does.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        dump() {
+          rm -f /backups/*.tmp
+          file=/backups/$$PGDATABASE-$$(date -u +%Y%m%dT%H%M%SZ).dump
+          # Custom format: compressed, restored with pg_restore. Written to a
+          # .tmp file first, so a broken run never looks like a valid dump.
+          if pg_dump --format=custom --file="$$file.tmp"; then
+            mv "$$file.tmp" "$$file"
+            echo "backup: wrote $$file"
+          else
+            rm -f "$$file.tmp"
+            echo "backup: ERROR pg_dump failed" >&2
+            return 1
+          fi
+          # Keep 14 days: -mtime +13 matches files 14 or more days old.
+          find /backups -name '*.dump' -mtime +13 -print -delete
+        }
+        case $${1:-daily} in
+          now) dump ;;
+          daily)
+            echo "backup: daily at 03:00 UTC"
+            # Stop right away on "docker compose stop". The trap only runs
+            # between commands, so sleep runs in the background and the
+            # shell waits for it with wait, which a signal interrupts. A
+            # running pg_dump still finishes first.
+            trap 'echo "backup: stopped"; exit 0' TERM INT
+            while true; do
+              now=$$(date -u +%s)
+              next=$$(date -u -d 'today 03:00' +%s)
+              [ "$$next" -gt "$$now" ] || next=$$(date -u -d 'tomorrow 03:00' +%s)
+              sleep $$((next - now)) &
+              wait $$!
+              # A failed run is logged; the next one is tried a day later.
+              dump || true
+            done
+            ;;
+          *) echo "backup: unknown mode $$1, use daily or now" >&2; exit 2 ;;
+        esac
+      - backup
+    command: [daily]
+    environment:
+      # Read by pg_dump (libpq), so no credentials on the command line.
+      PGHOST: ${COMPOSE_PROJECT_NAME}-db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+    # Runs as the server user that owns BACKUP_DIR, so the dumps belong to
+    # it and can be copied or deleted without sudo.
+    user: ${BACKUP_USER:?BACKUP_USER is required, e.g. the uid:gid of deploy}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+    # Only the database network: no internet, not reachable by Traefik.
+    networks: [internal]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging

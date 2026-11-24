@@ -118,7 +118,7 @@ jobs:
       - name: Validate compose files
         run: |
           docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.staging.yml config --quiet
-          docker compose --env-file .env.example -f docker-compose.yml config --quiet
+          docker compose --env-file .env.example -f docker-compose.yml -f docker-compose.production.yml config --quiet
 
   # Builds both images on every run, so a broken Dockerfile fails the PR.
   # Only pushes on main, and only after tests and lint passed (needs).
