@@ -115,7 +115,8 @@
     "failed": {
       "title": "That did not work",
       "card": "The invite could not be loaded"
-    }
+    },
+    "offline": "Without internet you can’t open or accept this invite right now. Once you’re back online, you can continue."
   },
   "login": {
     "title": "Sign in",
@@ -374,6 +375,7 @@
   "settings": {
     "title": "Manage household",
     "back": "Back to the household",
+    "offline": "You can view these details, but changes and invites require an internet connection.",
     "loading": "Loading household …",
     "loadFailed": "The household could not be loaded.",
     "missing": {
@@ -464,6 +466,7 @@
         "title": "Open links",
         "count": "{count} of {max}",
         "empty": "No open links.",
+        "offline": "Open links are only visible with an internet connection.",
         "loadFailed": "The open links could not be loaded.",
         "createdBy": "Created by {name}",
         "createdByYou": "Created by you",

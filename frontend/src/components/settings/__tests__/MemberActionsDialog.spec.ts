@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -184,4 +184,35 @@ describe('MemberActionsDialog', () => {
     expect(wrapper.props('open')).toBe(true)
     wrapper.unmount()
   })
+
+  it('disables all actions with a hint while offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const wrapper = mountDialog('owner', 'member')
+
+    expect(wrapper.get('[role="status"]').text()).toBe('Requires an internet connection.')
+    const buttons = wrapper.findAll('.action')
+    expect(buttons.map((b) => b.attributes('disabled'))).toEqual(['', ''])
+
+    await buttons[0]!.trigger('click')
+    expect(service.setMemberRole).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('disables confirming removal if the connection drops, keeping back active', async () => {
+    const wrapper = mountDialog('admin', 'member')
+    await wrapper.get('.action').trigger('click')
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(wrapper.get('[role="status"]').text()).toBe('Requires an internet connection.')
+    expect(wrapper.get('.remove').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.back').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })

@@ -1,22 +1,36 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 
 // A question with a cancel and a dangerous confirm button. The parent runs
 // the action on `confirm` and closes the dialog when it worked; a failure
 // goes in `error` and the dialog stays open.
-defineProps<{
-  title: string
-  message: string
-  confirmLabel: string
-  cancelLabel: string
-  loading?: boolean
-  error?: string | null
-}>()
+// requireOnline: opt-in for actions that need a connection (household leave
+// and delete); off by default so LogoutConfirmDialog (#111) stays unaffected.
+const props = withDefaults(
+  defineProps<{
+    title: string
+    message: string
+    confirmLabel: string
+    cancelLabel: string
+    loading?: boolean
+    error?: string | null
+    requireOnline?: boolean
+  }>(),
+  { loading: false, error: null, requireOnline: false },
+)
 defineEmits<{ confirm: [] }>()
 
 const open = defineModel<boolean>('open', { required: true })
+const { t } = useI18n()
+const { online } = useOnlineStatus()
+const blockedOffline = computed(() => props.requireOnline && !online.value)
 </script>
 
 <template>
@@ -28,6 +42,7 @@ const open = defineModel<boolean>('open', { required: true })
         </span>
         <p class="message-text">{{ message }}</p>
       </div>
+      <BaseOfflineNotice v-if="blockedOffline" variant="inline" :text="t('offline.actionHint')" />
       <p v-if="error" class="problem" role="alert"><BaseIcon name="alert" /> {{ error }}</p>
       <div class="buttons">
         <BaseButton variant="secondary" class="cancel" :disabled="loading" @click="open = false">
@@ -37,6 +52,7 @@ const open = defineModel<boolean>('open', { required: true })
           variant="danger-solid"
           class="confirm"
           :loading="loading"
+          :disabled="blockedOffline"
           @click="$emit('confirm')"
         >
           {{ confirmLabel }}

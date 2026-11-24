@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -149,4 +149,36 @@ describe('OpenInvitesList', () => {
     expect(rows[1]!.get('[role="alert"]').text()).toContain('You are not allowed to do this.')
     expect(wrapper.emitted('revoked')).toBeUndefined()
   })
+
+  it('shows a calm offline notice instead of a load error when offline without links', async () => {
+    service.list.mockRejectedValueOnce(new ApiError('NETWORK'))
+    await useGroupInvitesStore().load('g1')
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+
+    const wrapper = mount(OpenInvitesList, {
+      props: { groupId: 'g1' },
+      global: { plugins: [createAppI18n(['en'], null)] },
+    })
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.find('.count').exists()).toBe(false)
+    expect(wrapper.get('[role="status"]').text()).toBe(
+      'Open links are only visible with an internet connection.',
+    )
+  })
+
+  it('disables revoking loaded links with a hint when going offline', async () => {
+    const wrapper = await mountList([invite('i1', 'Lena'), invite('i2', 'Jonas')])
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(wrapper.findAll('.revoke').map((b) => b.attributes('disabled'))).toEqual(['', ''])
+    expect(wrapper.get('[role="status"]').text()).toBe('Requires an internet connection.')
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })

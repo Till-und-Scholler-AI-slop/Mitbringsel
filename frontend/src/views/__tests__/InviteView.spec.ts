@@ -80,6 +80,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe('InviteView', () => {
@@ -221,5 +222,46 @@ describe('InviteView', () => {
     expect(invitesService.preview).not.toHaveBeenCalled()
     expect(wrapper.get('h2').text()).toBe('WG Kaiserstraße')
     wrapper.unmount()
+  })
+
+  it('shows an offline card instead of a load error when opened offline, and loads once online', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const { wrapper } = await mountView()
+
+    expect(invitesService.preview).not.toHaveBeenCalled()
+    expect(wrapper.get('h1').text()).toBe('You are invited!')
+    expect(wrapper.get('[role="status"]').text()).toContain(
+      'Without internet you can’t open or accept this invite right now.',
+    )
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    window.dispatchEvent(new Event('online'))
+    await flushPromises()
+
+    expect(invitesService.preview).toHaveBeenCalledWith('t1')
+    expect(wrapper.get('h2').text()).toBe('WG Kaiserstraße')
+    wrapper.unmount()
+  })
+
+  it('disables joining and shows the offline card if the connection drops while ready', async () => {
+    const signedIn = await mountView('authenticated')
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(signedIn.wrapper.get('[role="status"]').text()).toContain(
+      'Without internet you can’t open or accept this invite right now.',
+    )
+    expect(signedIn.wrapper.get('.action').attributes('disabled')).toBeDefined()
+    signedIn.wrapper.unmount()
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    const anonymous = await mountView('anonymous')
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(anonymous.wrapper.get('button.google-sign-in').attributes('disabled')).toBeDefined()
+    anonymous.wrapper.unmount()
   })
 })

@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import ConfirmDialog from '@/components/settings/ConfirmDialog.vue'
 import SettingsCard from '@/components/settings/SettingsCard.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { useGroupsStore } from '@/stores/groups'
 import { useListsStore } from '@/stores/lists'
@@ -19,6 +21,7 @@ const { t } = useI18n()
 const router = useRouter()
 const groups = useGroupsStore()
 const lists = useListsStore()
+const { online } = useOnlineStatus()
 
 // The founder cannot leave (OWNER_IMMUTABLE), only delete; everybody else
 // can only leave.
@@ -30,6 +33,13 @@ const kind = computed(() => (props.group.role === 'owner' ? 'delete' : 'leave'))
 // loads them. Until they are there, the text just leaves the numbers out.
 onMounted(() => {
   if (kind.value === 'delete' && lists.statusOf(props.group.id) === 'idle') {
+    lists.load(props.group.id)
+  }
+})
+
+// Reload the list count once back online if the initial load failed offline.
+watch(online, (isOnline) => {
+  if (isOnline && kind.value === 'delete' && lists.statusOf(props.group.id) === 'error') {
     lists.load(props.group.id)
   }
 })
@@ -60,6 +70,7 @@ function ask() {
 }
 
 async function confirm() {
+  if (!online.value) return
   busy.value = true
   errorCode.value = null
   try {
@@ -81,10 +92,11 @@ async function confirm() {
 <template>
   <SettingsCard class="danger" :title="t(`settings.danger.${kind}.title`)" danger>
     <p class="description">{{ t(`settings.danger.${kind}.description`) }}</p>
-    <BaseButton variant="danger" class="open" @click="ask">
+    <BaseButton variant="danger" class="open" :disabled="!online" @click="ask">
       <BaseIcon :name="kind === 'delete' ? 'trash' : 'logOut'" />
       {{ t(`settings.danger.${kind}.open`) }}
     </BaseButton>
+    <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.actionHint')" />
 
     <ConfirmDialog
       v-model:open="confirmOpen"
@@ -94,6 +106,7 @@ async function confirm() {
       :cancel-label="t('settings.danger.cancel')"
       :loading="busy"
       :error="errorCode ? errorMessage : null"
+      require-online
       @confirm="confirm"
     />
   </SettingsCard>

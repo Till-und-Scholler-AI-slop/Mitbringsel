@@ -8,13 +8,18 @@ import { timeAgo, timeLeft } from '@/services/relativeTime'
 import type { Invite } from '@/types/api'
 
 // isMine: the signed-in user made the link. busy: the revoke request of this
-// link is running. error: its message, if it failed.
-const props = defineProps<{
-  invite: Invite
-  isMine: boolean
-  busy: boolean
-  error: string | null
-}>()
+// link is running. disabled: revoking is unavailable (e.g. offline). error:
+// its message, if it failed.
+const props = withDefaults(
+  defineProps<{
+    invite: Invite
+    isMine: boolean
+    busy: boolean
+    disabled?: boolean
+    error: string | null
+  }>(),
+  { disabled: false },
+)
 defineEmits<{ revoke: [] }>()
 
 const { t, locale } = useI18n()
@@ -54,7 +59,7 @@ const revokeLabel = computed(() =>
     <button
       type="button"
       class="revoke"
-      :disabled="busy"
+      :disabled="busy || disabled"
       :aria-busy="busy || undefined"
       :aria-label="revokeLabel"
       @click="$emit('revoke')"
@@ -123,12 +128,6 @@ const revokeLabel = computed(() =>
   color: var(--color-danger-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
-  cursor: pointer;
-}
-
-.revoke:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
 }
 
 .problem {

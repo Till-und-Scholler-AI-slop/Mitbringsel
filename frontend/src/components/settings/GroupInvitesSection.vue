@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import OpenInvitesList from '@/components/settings/OpenInvitesList.vue'
 import InviteLinkBox from '@/components/settings/InviteLinkBox.vue'
 import SettingsCard from '@/components/settings/SettingsCard.vue'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { ApiError, ERROR_CODE_UNKNOWN } from '@/services/api/client'
 import { buildInviteLink } from '@/services/inviteLink'
 import { useGroupInvitesStore } from '@/stores/groupInvites'
@@ -19,6 +21,7 @@ const props = defineProps<{ group: Group }>()
 
 const { t } = useI18n()
 const invites = useGroupInvitesStore()
+const { online } = useOnlineStatus()
 
 const creating = ref(false)
 const errorCode = ref<string | null>(null)
@@ -31,9 +34,22 @@ const link = computed(() =>
     : null,
 )
 
-onMounted(() => invites.load(props.group.id))
+onMounted(() => {
+  if (online.value) invites.load(props.group.id)
+})
+
+// Open invites are not stored locally, so load them once the connection is back.
+watch(online, (isOnline) => {
+  if (
+    isOnline &&
+    (invites.groupId !== props.group.id || invites.status === 'error' || invites.status === 'idle')
+  ) {
+    invites.load(props.group.id)
+  }
+})
 
 async function create() {
+  if (!online.value) return
   creating.value = true
   errorCode.value = null
   try {
@@ -51,9 +67,12 @@ async function create() {
     <p class="description">{{ t('settings.invites.description') }}</p>
 
     <InviteLinkBox v-if="link" :link="link" :group-name="group.name" />
-    <BaseButton v-else class="create" :loading="creating" @click="create">
-      <BaseIcon name="plus" /> {{ t('settings.invites.create') }}
-    </BaseButton>
+    <template v-else>
+      <BaseButton class="create" :loading="creating" :disabled="!online" @click="create">
+        <BaseIcon name="plus" /> {{ t('settings.invites.create') }}
+      </BaseButton>
+      <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.actionHint')" />
+    </template>
 
     <p v-if="errorCode" class="problem" role="alert">
       <BaseIcon name="alert" />
