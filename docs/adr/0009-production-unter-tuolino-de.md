@@ -10,7 +10,7 @@ Die internen Namen (IndexedDB- und `localStorage`-Schlüssel, Datenbank, Images,
 
 ## Entscheidung
 
-- **Production läuft unter `tuolino.de`**, nicht unter `mitbringsel.tinowolter.com`. Kein `www.tuolino.de`, auch keine Weiterleitung; das lässt sich später mit einem Traefik-Router und einem DNS-Eintrag nachrüsten.
+- **Production läuft unter `tuolino.de`**, nicht unter `mitbringsel.tinowolter.com`. `www.tuolino.de` leitet dauerhaft (301) auf `tuolino.de` um, mit Pfad und Query: Viele tippen `www.` aus Gewohnheit und sähen sonst eine Zertifikatswarnung. Die App selbst, der Google-Login und die Cookies gibt es nur unter `tuolino.de`.
 - **Production nutzt von Anfang an die neuen Namen:** Compose-Projekt `tuolino-prod`, Ordner `/opt/personal-projects/slop/tuolino/prod`, PostgreSQL-User und -Datenbank `tuolino`. Später umbenennen hieße, die Datenbank im laufenden Betrieb umzuziehen.
 - **Staging bleibt vorerst bei den alten Namen:** `mitbringsel-dev.tinowolter.com`, Compose-Projekt `mitbringsel-staging`, Ordner `/opt/personal-projects/slop/mitbringsel/staging`. Die Umbenennung folgt mit #195.
 - **Die Images bleiben `mitbringsel-backend` und `mitbringsel-web`.** Staging und Production nutzen dieselben Images ("build once, promote"); ein Release taggt nur um. Umbenennen gehört zu #195.
