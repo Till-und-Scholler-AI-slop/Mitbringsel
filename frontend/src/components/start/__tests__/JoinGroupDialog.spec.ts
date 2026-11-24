@@ -68,6 +68,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('JoinGroupDialog', () => {
@@ -158,6 +159,29 @@ describe('JoinGroupDialog', () => {
     await flushPromises()
 
     expect((wrapper.get('input').element as HTMLInputElement).value).toBe('')
+    wrapper.unmount()
+  })
+
+  it('shows an offline hint and disables submit while offline, keeping the typed link', async () => {
+    const { wrapper } = await mountDialog()
+    await wrapper.get('input').setValue(LINK)
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    window.dispatchEvent(new Event('offline'))
+    await flushPromises()
+
+    expect(wrapper.get('[role="status"]').text()).toBe('Requires an internet connection.')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('form').trigger('submit')
+    expect(service.preview).not.toHaveBeenCalled()
+    expect((wrapper.get('input').element as HTMLInputElement).value).toBe(LINK)
+
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true)
+    window.dispatchEvent(new Event('online'))
+    await flushPromises()
+
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
     wrapper.unmount()
   })
 })

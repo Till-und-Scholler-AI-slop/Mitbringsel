@@ -4,12 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import BaseSticker from '@/components/base/BaseSticker.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import LogoutConfirmDialog from '@/components/layout/LogoutConfirmDialog.vue'
 import ProfileMenu from '@/components/start/ProfileMenu.vue'
 import SyncStatus from '@/components/layout/SyncStatus.vue'
 import { useLogout } from '@/composables/useLogout'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useOpenCounts } from '@/composables/useOpenCounts'
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
@@ -30,6 +32,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const groups = useGroupsStore()
 const lists = useListsStore()
+const { online } = useOnlineStatus()
 const { openInGroup, openInList } = useOpenCounts()
 const {
   logout,
@@ -122,9 +125,22 @@ function onListKeydown(event: KeyboardEvent, list: List) {
         t('nav.listActionsHint')
       }}</span>
 
-      <button type="button" class="create" aria-haspopup="dialog" @click="emit('create')">
+      <button
+        type="button"
+        class="create"
+        aria-haspopup="dialog"
+        :disabled="!online"
+        @click="emit('create')"
+      >
         <BaseIcon name="plus" :size="18" :stroke-width="2.75" /> {{ t('start.create.open') }}
       </button>
+      <BaseOfflineNotice
+        v-if="!online"
+        class="create-offline"
+        variant="inline"
+        on-brand
+        :text="t('offline.createHouseholdHint')"
+      />
     </div>
 
     <span class="spacer" aria-hidden="true" />
@@ -326,7 +342,10 @@ function onListKeydown(event: KeyboardEvent, list: List) {
   color: var(--color-on-brand);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
-  cursor: pointer;
+}
+
+.create-offline {
+  padding: 0 var(--space-1);
 }
 
 .spacer {

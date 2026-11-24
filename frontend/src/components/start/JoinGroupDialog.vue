@@ -7,8 +7,10 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseDialog from '@/components/base/BaseDialog.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import { useCountdown } from '@/composables/useCountdown'
 import { useErrorMessage } from '@/composables/useErrorMessage'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { extractInviteToken } from '@/services/inviteLink'
 import { useInvitesStore } from '@/stores/invites'
 
@@ -21,6 +23,7 @@ const { t } = useI18n()
 const router = useRouter()
 const invites = useInvitesStore()
 const countdown = useCountdown()
+const { online } = useOnlineStatus()
 
 const link = ref('')
 const checking = ref(false)
@@ -64,6 +67,7 @@ async function paste() {
 // Checks the link with the server first, so a dead link is explained here
 // and the user does not land on an error page.
 async function submit() {
+  if (!online.value) return
   const token = extractInviteToken(link.value)
   if (token === null) {
     notALink.value = true
@@ -112,7 +116,13 @@ async function submit() {
         {{ t('join.limit.body', { seconds: countdown.remaining.value }) }}
       </div>
 
-      <BaseButton type="submit" :loading="checking" :disabled="link.trim() === '' || waiting">
+      <BaseOfflineNotice v-if="!online" variant="inline" :text="t('offline.actionHint')" />
+
+      <BaseButton
+        type="submit"
+        :loading="checking"
+        :disabled="link.trim() === '' || waiting || !online"
+      >
         {{ waiting ? t('join.wait', { seconds: countdown.remaining.value }) : t('join.submit') }}
       </BaseButton>
 

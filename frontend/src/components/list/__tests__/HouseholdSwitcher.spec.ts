@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -146,4 +146,25 @@ describe('HouseholdSwitcher', () => {
     expect(panel(wrapper).exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('disables founding and joining with a hint while offline, keeping navigation active', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const { wrapper } = await mountSwitcher()
+    await toggle(wrapper).trigger('click')
+
+    const buttons = wrapper.findAll('button.action')
+    expect(buttons.map((b) => b.attributes('disabled'))).toEqual(['', ''])
+    expect(wrapper.get('.panel [role="status"]').text()).toBe(
+      'Creating or joining a household requires a connection.',
+    )
+    expect(wrapper.findAll('a.action').map((a) => a.attributes('href'))).toEqual([
+      '/groups/g1/settings',
+      '/',
+    ])
+    wrapper.unmount()
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
 import BaseSpinner from '@/components/base/BaseSpinner.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import AppFrame from '@/components/layout/AppFrame.vue'
@@ -37,6 +38,9 @@ const firstName = computed(() => auth.user?.displayName.trim().split(/\s+/)[0] ?
 const loading = computed(() => groups.status === 'loading' && groups.groups.length === 0)
 const failed = computed(() => groups.status === 'error' && groups.groups.length === 0)
 const empty = computed(() => groups.status === 'ready' && groups.groups.length === 0)
+const offlineText = computed(() =>
+  groups.groups.length > 0 ? t('start.offline.body') : t('start.offline.bodyEmpty'),
+)
 
 const {
   logout,
@@ -88,12 +92,7 @@ watch(online, (isOnline) => {
       <main class="content">
         <h1 v-if="firstName" class="greeting">{{ t('start.greeting', { name: firstName }) }}</h1>
 
-        <p v-if="!online" class="offline" role="status">
-          <span class="offline-badge"
-            ><BaseIcon name="cloudOff" /> {{ t('start.offline.badge') }}</span
-          >
-          {{ t('start.offline.body') }}
-        </p>
+        <BaseOfflineNotice v-if="!online" class="offline" :text="offlineText" />
 
         <section class="groups" aria-labelledby="groups-title">
           <h2 id="groups-title" class="section-title">{{ t('start.groups.title') }}</h2>
@@ -110,7 +109,12 @@ watch(online, (isOnline) => {
             </BaseButton>
           </div>
 
-          <StartEmpty v-else-if="empty" @create="createOpen = true" @join="joinOpen = true" />
+          <StartEmpty
+            v-else-if="empty"
+            :offline="!online"
+            @create="createOpen = true"
+            @join="joinOpen = true"
+          />
 
           <template v-else>
             <!-- One grid for the cards and the box: on the desktop the box is a
@@ -122,17 +126,28 @@ watch(online, (isOnline) => {
                 </li>
               </ul>
               <div class="create-box">
-                <BaseButton class="create-button" aria-haspopup="dialog" @click="createOpen = true">
+                <BaseButton
+                  class="create-button"
+                  aria-haspopup="dialog"
+                  :disabled="!online"
+                  @click="createOpen = true"
+                >
                   <BaseIcon name="plus" /> {{ t('start.create.open') }}
                 </BaseButton>
                 <BaseButton
                   variant="secondary"
                   class="create-button"
                   aria-haspopup="dialog"
+                  :disabled="!online"
                   @click="joinOpen = true"
                 >
                   <BaseIcon name="link" /> {{ t('start.join.open') }}
                 </BaseButton>
+                <BaseOfflineNotice
+                  v-if="!online"
+                  variant="inline"
+                  :text="t('offline.householdHint')"
+                />
               </div>
             </div>
           </template>
@@ -194,31 +209,6 @@ watch(online, (isOnline) => {
   line-height: var(--line-height-heading);
   letter-spacing: -0.03em;
   overflow-wrap: break-word;
-}
-
-.offline {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border: var(--border-width-md) dashed var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  font-weight: var(--font-weight-semibold);
-}
-
-.offline-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1-5) var(--space-3);
-  border-radius: var(--radius-full);
-  background: var(--color-offline-bg);
-  color: var(--color-offline-text);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-heavy);
 }
 
 .groups {

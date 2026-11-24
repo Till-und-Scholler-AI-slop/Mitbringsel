@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import BaseIcon from '@/components/base/BaseIcon.vue'
+import BaseOfflineNotice from '@/components/base/BaseOfflineNotice.vue'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import type { Group } from '@/types/api'
 
 // The household name in the head of the list view; it opens a panel to
@@ -16,6 +18,7 @@ const props = defineProps<{ current: Group; groups: Group[] }>()
 const emit = defineEmits<{ create: []; join: [] }>()
 
 const { t } = useI18n()
+const { online } = useOnlineStatus()
 const toggle = useTemplateRef<HTMLButtonElement>('toggle')
 const panelId = useId()
 const open = ref(false)
@@ -92,14 +95,32 @@ const isCurrent = (group: Group) => group.id === props.current.id
         <BaseIcon name="settings" :size="20" />
         {{ t('list.switcher.manage') }}
       </RouterLink>
-      <button type="button" class="entry action" aria-haspopup="dialog" @click="ask('create')">
+      <button
+        type="button"
+        class="entry action"
+        aria-haspopup="dialog"
+        :disabled="!online"
+        @click="ask('create')"
+      >
         <BaseIcon name="plus" :size="20" />
         {{ t('list.switcher.create') }}
       </button>
-      <button type="button" class="entry action" aria-haspopup="dialog" @click="ask('join')">
+      <button
+        type="button"
+        class="entry action"
+        aria-haspopup="dialog"
+        :disabled="!online"
+        @click="ask('join')"
+      >
         <BaseIcon name="link" :size="20" />
         {{ t('list.switcher.join') }}
       </button>
+      <BaseOfflineNotice
+        v-if="!online"
+        class="offline-hint"
+        variant="inline"
+        :text="t('offline.householdHint')"
+      />
       <RouterLink class="entry action" :to="{ name: 'home' }" @click="close">
         <BaseIcon name="arrowLeft" :size="20" />
         {{ t('list.switcher.start') }}
@@ -206,7 +227,10 @@ const isCurrent = (group: Group) => group.id === props.current.id
   color: inherit;
   text-align: left;
   text-decoration: none;
-  cursor: pointer;
+}
+
+.offline-hint {
+  padding: var(--space-1) var(--space-3);
 }
 
 .group {

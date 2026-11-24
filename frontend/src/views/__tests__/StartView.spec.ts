@@ -249,11 +249,44 @@ describe('StartView', () => {
     wrapper.unmount()
   })
 
-  it('says so when the device is offline', async () => {
+  it('explains what works offline and disables founding or joining with households', async () => {
+    setOnline(false)
+    groupsService.list.mockResolvedValue([group('g1', 'WG Kaiserstraße')])
+    const { wrapper } = await mountView()
+
+    const banner = wrapper.get('.offline')
+    expect(banner.text()).toContain('Offline')
+    expect(banner.text()).toContain(
+      'You can still open and edit your households. Changes go out as soon as you are back online.',
+    )
+    expect(wrapper.get('.card').attributes('href')).toBe('/groups/g1')
+    const buttons = wrapper.findAll('.create-box button')
+    expect(buttons.map((b) => b.attributes('disabled'))).toEqual(['', ''])
+    expect(wrapper.get('.create-box [role="status"]').text()).toContain(
+      'Creating or joining a household requires a connection.',
+    )
+
+    setOnline(true)
+    window.dispatchEvent(new Event('online'))
+    await flushPromises()
+
+    expect(wrapper.find('.offline').exists()).toBe(false)
+    expect(wrapper.findAll('.create-box button').map((b) => b.attributes('disabled'))).toEqual([
+      undefined,
+      undefined,
+    ])
+    wrapper.unmount()
+  })
+
+  it('uses an empty-state offline text and disables start options when there is no household', async () => {
     setOnline(false)
     const { wrapper } = await mountView()
 
-    expect(wrapper.get('.offline').text()).toContain('Offline')
+    expect(wrapper.get('.offline').text()).toContain(
+      'Without internet you can’t create or join a household right now.',
+    )
+    expect(wrapper.get('.start-empty .option--create').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.start-empty .option--join').attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 

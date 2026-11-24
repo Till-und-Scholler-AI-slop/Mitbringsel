@@ -465,4 +465,20 @@ describe('AppSidebar', () => {
     expect(onStart.wrapper.get('.sync .hint').text()).toBe('Sending changes …')
     onStart.wrapper.unmount()
   })
+
+  it('disables creating a household and shows an offline hint when offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const { wrapper } = await mountSidebar({ groupId: 'g1', listId: 'l1' })
+
+    const create = wrapper.get('button.create')
+    expect(create.attributes('disabled')).toBeDefined()
+    await create.trigger('click')
+    expect(wrapper.emitted('create')).toBeUndefined()
+    expect(wrapper.get('.create-offline').text()).toBe(
+      'Creating a household requires a connection.',
+    )
+    expect(wrapper.findAll('.groups a').length).toBeGreaterThan(0)
+    vi.restoreAllMocks()
+    wrapper.unmount()
+  })
 })
